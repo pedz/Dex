@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)print.c	1.4";
+static char sccs_id[] = "@(#)print.c	1.5";
 
 #include <stdio.h>
 #include <setjmp.h>
