@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.7";
+static char sccs_id[] = "@(#)gram.y	1.8";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -16,6 +16,7 @@ static char sccs_id[] = "@(#)gram.y	1.7";
 #include "stmt.h"
 #include "unary_expr.h"
 #include "inter.h"
+#include "fcall.h"
 
 #define YYDEBUG 1
 
@@ -82,7 +83,7 @@ static char *save_as_string(int i);
 %}
 
 %union {
-    int val;				/* ints, etc */
+    large_t val;			/* ints, etc */
     double rval;			/* reals */
     char *str;				/* names, etc */
     typeptr type;
@@ -475,7 +476,11 @@ simple_type			/* predefined types */
 	}
     | LONG
 	{
+#ifdef __64BIT__
+	    $$.a_type = find_type(ns_inter, TP_LONG_64);
+#else
 	    $$.a_type = find_type(ns_inter, TP_LONG);
+#endif
 	    $$.a_base = long_type;
 	}
     | UNSIGNED
@@ -520,7 +525,11 @@ simple_type			/* predefined types */
 	}
     | UNSIGNED LONG
 	{
+#ifdef __64BIT__
+	    $$.a_type = find_type(ns_inter, TP_ULONG_64);
+#else
 	    $$.a_type = find_type(ns_inter, TP_ULONG);
+#endif
 	    $$.a_base = ulong_type;
 	}
     ;
@@ -1705,11 +1714,10 @@ non_empty_decl
 %%
 
 #include <stdio.h>
+#include "scan.h"
 
 void yyerror(char *s, ...)
 {
-    extern int yylineno;
-    extern char *yyfilename;
     va_list Argp;
     char smallbuf[256];
     char *f = yyfilename ? yyfilename : "<stdin>";
@@ -1779,7 +1787,11 @@ static symptr gram_enter_sym(anode *attr, int line, cnode_list *init)
 	
 	if (attr->a_class == param_class) {
 	    ret->s_offset = (v_ptr)param_index;
+#if 0
 	    param_index += size;
+#else
+	    param_index += (((size + sizeof(long)-1)/sizeof(long))*sizeof(long));
+#endif
 	} else {
 	    variable_index += size;
 	    ret->s_offset = (v_ptr)-variable_index;
@@ -1807,7 +1819,7 @@ static void decrease_nesting(int new)
 static void start_function(symptr f)
 {
     current_function = f;
-    param_index = sizeof(int);
+    param_index = sizeof(frame_ptr);
     variable_max = variable_index = 0;
 }
 
