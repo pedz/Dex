@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.3";
+static char sccs_id[] = "@(#)sym.c	1.4";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -119,7 +119,27 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
     }
 
     if (old_type = (*ptr)[typeid]) {
+	char *old_name = old_type->t_name;
+	struct type *old_hash = old_type->t_hash;
+
+	if (t->t_name) {		/* if this has a name then we freak */
+	    printf("Replacing %s name of %s:%d\n", t->t_name, t->t_ns->ns_name,
+		   typeid);
+	    exit(1);
+	}
+
 	*old_type = *t;			/* copy new into old */
+	old_type->t_name = old_name;
+	old_type->t_hash = old_hash;
+#if 0
+	/*
+	 * We can copy with the case of one named entry replacing
+	 * another entry that is not named and a non-named entry
+	 * replacing a named entry.  However, I think the first case
+	 * will never happen. i.e. t->t_name will always be null.  The
+	 * code below is a starting point for the second case.  If
+	 * both of them are named, then we have problems for sure.
+	 */
 	if (old_type->t_name) {		/* need to fix the hash link */
 	    int hash_val = hash(t->t_name);
 	    typetabptr ttp = t->t_ns->ns_typedefs;
@@ -142,6 +162,7 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
 	    }
 	    *tp = old_type;
 	}
+#endif
 	return old_type;
     } else
 	(*ptr)[typeid] = t;
@@ -230,6 +251,11 @@ void add_typedef(typeptr t, char *name)
 	return;
     }
 
+    if (t->t_name) {			/* already entered */
+	/* printf("type %s %s\n", name, t->t_ns->ns_name); */
+	return;
+    }
+
     nspace = t->t_ns;
     if (!(ttp = nspace->ns_typedefs)) {
 	ttp = nspace->ns_typedefs = new(struct type_table);
@@ -249,6 +275,11 @@ void add_namedef(typeptr t, char *name)
 	
     if (!t) {
 	fprintf(stderr, "Null namedef pointer %s:%d\n", __FILE__, __LINE__);
+	return;
+    }
+
+    if (t->t_name) {			/* already entered */
+	/* printf("name %s %s\n", name, t->t_ns->ns_name); */
 	return;
     }
 
@@ -566,12 +597,15 @@ void clean_symtable(ns *nspace, int nesting_level)
 	}
 }
 
-symptr enter_sym(ns *nspace, char *name)
+symptr enter_sym(ns *nspace, char *name, int force)
 {
     int hash_val = hash(name);
     symtabptr sytp;
     symptr ret;
     
+    if (!strcmp(name, "mstsave"))
+	printf("name = %s(%08x), nspace = %s\n", name, name, nspace->ns_name);
+
     if (!(sytp = nspace->ns_syms)) {
 	sytp = nspace->ns_syms = new(struct sym_table);
 	bzero(nspace->ns_syms, sizeof(*sytp));
@@ -581,9 +615,10 @@ symptr enter_sym(ns *nspace, char *name)
      * In theory, we can just compare the name pointers because of the
      * string table.
      */
-    for (ret = sytp->sy_hash[hash_val]; ret; ret = ret->s_hash)
-	if (ret->s_name == name)
-	    return ret;
+    if (!force)
+	for (ret = sytp->sy_hash[hash_val]; ret; ret = ret->s_hash)
+	    if (ret->s_name == name)
+		return ret;
 
     ++sytp->sy_count;
     ret = new(struct sym);
@@ -680,4 +715,8 @@ void dump_symtable(void)
     for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	_dump_symtable(nspace, (symtabptr)0);
     dump_stmts();
+}
+
+void dump_types(void)
+{
 }
