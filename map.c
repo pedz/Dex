@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.10";
+static char sccs_id[] = "@(#)map.c	1.11";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -236,7 +236,13 @@ void map_init(void)
 
     s.sa_handler = (void (*)())map_catch;
     sigemptyset(&s.sa_mask);
+
+#ifdef SA_SIGINFO
     s.sa_flags = SA_SIGINFO;
+#else
+    s.sa_flags = 0;
+#endif
+
     if (sigaction(SIGSEGV, &s, (struct sigaction *)0) < 0) {
 	perror("sigaction");
 	exit(1);
