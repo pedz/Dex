@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.10";
+static char sccs_id[] = "@(#)builtins.c	1.11";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +9,6 @@ static char sccs_id[] = "@(#)builtins.c	1.10";
 #include <stdarg.h>
 #include "dex.h"
 #include "map.h"
-#include "dmap.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
@@ -20,6 +19,7 @@ static char sccs_id[] = "@(#)builtins.c	1.10";
 #include "disasm.h"
 #include "builtins.h"
 #include "load.h"
+#define DEBUG_BIT BUILTINS_C_BIT
 
 /*
  * Called as: return_range(char *t_name, char *d_name, void **startp, int *lenp)
@@ -125,41 +125,45 @@ int int_purge_all_pages(expr *n)
 int int_sprintf(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
-    volatile int had_fault;
+    volatile long had_fault;
+    int ret = -1;
 
     BEGIN_PROTECT(&had_fault);
-    vsprintf((char *)(f[1]), (const unsigned char *)(f[2]), (va_list)(f + 3));
+    ret = vsprintf((char *)(f[1]),
+		   (const unsigned char *)(f[2]),
+		   (va_list)(f + 3));
     END_PROTECT();
     if (had_fault)
-	printf("sprintf hit a page fault at %08x\n", had_fault);
-    return 0;
+	printf("sprintf hit a page fault at %s\n", P(had_fault));
+    return ret;
 }
 
 int int_printf(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
-    volatile int had_fault;
+    volatile long had_fault;
+    int ret = -1;
 
     BEGIN_PROTECT(&had_fault);
-    vprintf((const unsigned char *)(f[1]), (va_list)(f + 2));
+    ret = vprintf((const unsigned char *)(f[1]), (va_list)(f + 2));
     END_PROTECT();
     if (had_fault)
-	printf("printf hit a page fault at %08x\n", had_fault);
-    return 0;
+	printf("printf hit a page fault at %s\n", P(had_fault));
+    return ret;
 }
 
-int int_v2f(expr *n)
+long int_v2f(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
 
-    return (int)v2f((void *)(f[1]));
+    return (long)v2f((void *)(f[1]));
 }
 
-int int_f2v(expr *n)
+long int_f2v(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
 
-    return (int)f2v((void *)(f[1]));
+    return (long)f2v((void *)(f[1]));
 }
 
 /*
@@ -213,15 +217,13 @@ int int_dis(expr *n)
 
 int int_load(expr *n)
 {
-    long *f = v2f_type(long *, frame_ptr);
-    char *s = (char *)(f[1]);
+    long *f;
+    char *s;
 
-    load(s, f[2], f[3]);
-    return 0;
-}
-
-static add_entry(char *ss, int (*func)(expr *n), typeptr t)
-{
+    f = v2f_type(long *, frame_ptr);
+    DEBUG_PRINTF(("frame ptr = %s, f = %s\n", P(frame_ptr), P(f)));
+    s = (char *)(f[1]);
+    return load(s, f[2], f[3]);
 }
 
 static void do_int_funcs(void)
@@ -232,7 +234,6 @@ static void do_int_funcs(void)
     };
     struct table tab[] = {
 	{ "dis",     int_dis },
-	{ "f2v",     int_f2v },
 	{ "find",    int_find },
 	{ "load",    int_load },
 	{ "printf",  int_printf },
@@ -244,7 +245,6 @@ static void do_int_funcs(void)
 	{ "strcmp",  int_strcmp },
 	{ "strlen",  int_strlen },
 	{ "strncmp", int_strncmp },
-	{ "v2f",     int_v2f },
     };
     struct table *tp, *tp_end;
     typeptr t = newtype(ns_inter, PROC_TYPE);
@@ -269,6 +269,63 @@ static void do_int_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.i = tp->st_func;
+	DEBUG_PRINTF(("do_int_vars: %s at %d\n", s->s_name,
+		      s->s_stmt));
+    }
+}
+
+long int_addr2seg(expr *n)
+{
+    return 0;
+}
+
+long int_addr2segtest(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+
+    return get_addr2seg(f[1]);
+}
+
+static void do_long_funcs(void)
+{
+    struct table {
+	char *st_name;
+	long (*st_func)(expr *n);
+    };
+    struct table tab[] = {
+	{ "addr2seg",     int_addr2seg },
+	{ "addr2segtest", int_addr2segtest },
+	{ "f2v",          int_f2v },
+	{ "v2f",          int_v2f }
+    };
+    struct table *tp, *tp_end;
+    typeptr t = newtype(ns_inter, PROC_TYPE);
+
+    if (sizeof(long) == 4)
+	t->t_val.val_f.f_typeptr = find_type(ns_inter, TP_LONG);
+    else
+	t->t_val.val_f.f_typeptr = find_type(ns_inter, TP_LONG_64);
+    t->t_val.val_f.f_params = -1;
+    t->t_val.val_f.f_paramlist = 0;
+    for (tp_end = (tp = tab) + A_SIZE(tab); tp < tp_end; ++tp) {
+	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
+	symptr s = enter_sym(ns_inter, name, 0);
+	expr *e = new_expr();
+    
+	/*
+	 * We just blindly assume that this is not a duplicate entry.
+	 */
+	s->s_defined = 1;
+	s->s_base = base_type(t);
+	s->s_type = t;
+	s->s_nesting = 0;
+	s->s_typed = 1;
+	s->s_global = 1;
+	s->s_size = 0;
+	s->s_stmt = mk_return_stmt(e);
+	e->e_func.l = tp->st_func;
+	DEBUG_PRINTF(("do_long funcs: %s at %d\n", s->s_name,
+		      s->s_stmt));
     }
 }
 
@@ -314,6 +371,8 @@ static void do_char_ptr_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.l = (long (*)())tp->st_func;
+	DEBUG_PRINTF(("do_char_ptr_vars: %s at %d\n", s->s_name,
+		      s->s_stmt));
     }
 }
 
@@ -325,8 +384,7 @@ static void do_int_vars(void)
     };
     struct table tab[] = {
 	{ "thread_slot",  &thread_slot },
-	{ "selected_cpu", &selected_cpu },
-	{ "fromdump",     &fromdump }
+	{ "fromdump",     &fromdump },
     };
     struct table *tp, *tp_end;
     typeptr t = find_type(ns_inter, TP_INT);
@@ -346,12 +404,52 @@ static void do_int_vars(void)
 	s->s_global = 1;
 	s->s_size = sizeof(int);
 	s->s_offset = f2v(tp->st_func);
+	DEBUG_PRINTF(("do_int_vars: %s at 0x%0*lx\n", s->s_name,
+		      sizeof(s->s_offset)*2, s->s_offset));
     }
 }
 
-void builtin_init()
+static void do_ulong_vars(void)
+{
+    struct table {
+	char *st_name;
+	unsigned long *st_func;
+    };
+    struct table tab[] = {
+	{ "debug_mask",   &debug_mask }
+    };
+    struct table *tp, *tp_end;
+#ifdef __64BIT__
+    typeptr t = find_type(ns_inter, TP_ULONG_64);
+#else
+    typeptr t = find_type(ns_inter, TP_ULONG);
+#endif
+
+    for (tp_end = (tp = tab) + A_SIZE(tab); tp < tp_end; ++tp) {
+	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
+	symptr s = enter_sym(ns_inter, name, 0);
+    
+	/*
+	 * We just blindly assume that this is not a duplicate entry.
+	 */
+	s->s_defined = 1;
+	s->s_base = base_type(t);
+	s->s_type = t;
+	s->s_nesting = 0;
+	s->s_typed = 1;
+	s->s_global = 1;
+	s->s_size = sizeof(int);
+	s->s_offset = f2v(tp->st_func);
+	DEBUG_PRINTF(("do_ulong_vars: %s at 0x%0*lx\n", s->s_name,
+		      sizeof(s->s_offset)*2, s->s_offset));
+    }
+}
+
+void builtin_init(void)
 {
     do_int_funcs();
+    do_long_funcs();
     do_char_ptr_funcs();
     do_int_vars();
+    do_ulong_vars();
 }
