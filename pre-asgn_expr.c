@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)pre-asgn_expr.c	1.4";
+static char sccs_id[] = "@(#)pre-asgn_expr.c	1.5";
 
 #include "dex.h"
 #include "map.h"
