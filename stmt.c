@@ -1,13 +1,16 @@
-static char sccs_id[] = "@(#)stmt.c	1.7";
+static char sccs_id[] = "@(#)stmt.c	1.8";
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
 #include "dex.h"
-#include "scan.h"
+#include "scan_pre.h"
+#include "fcall.h"
+#define DEBUG_BIT STMT_C_BIT
 
 /*
  * Each statement that can have a break (or a continue) calls
@@ -58,9 +61,12 @@ static stmt_index next_stmt(enum stmt_type t)
 
     if (!statements)
 	statements = smalloc(sizeof(struct stmt) * (current_max = 100));
-    if (current_stmt == current_max)
-	statements = srealloc(statements,
-			      sizeof(struct stmt) * (current_max += 100));
+    if (current_stmt == current_max) {
+	size_t old = current_max * sizeof(struct stmt);
+	size_t new = (current_max += 100) * sizeof(struct stmt);
+	statements = srealloc(statements, new, old);
+    }
+
     s = statements + current_stmt;
     s->stmt_type = t;
     s->stmt_file = yyfilename;
@@ -70,18 +76,12 @@ static stmt_index next_stmt(enum stmt_type t)
 
 static struct nesting *new_nesting(void)
 {
-    struct nesting *ret = new(struct nesting);
-
-    bzero(ret, sizeof(*ret));
-    return ret;
+    return new(struct nesting);
 }
 
 static struct link *new_link(void)
 {
-    struct link *ret = new(struct link);
-
-    bzero(ret, sizeof(*ret));
-    return ret;
+    return new(struct link);
 }
 
 expr *execute_statement(stmt_index s)
@@ -95,6 +95,7 @@ expr *execute_statement(stmt_index s)
 
     sp = statements + s;
     for ( ; ; ) {
+	stmt_stack[cur_stmt_index] = sp - statements;
 	switch (sp->stmt_type) {
 	case NULL_STMT:
 	    sp++;
@@ -350,59 +351,91 @@ static char *stmt_names[LAST_STMT + 1];
 static void dump_init(void)
 {
     stmt_names[NULL_STMT] = "%3d: null\n";
-    stmt_names[EXPR_STMT] = "%3d: expr 0x%08x\n";
-    stmt_names[SWITCH_STMT] = "%3d: switch (0x%08x) <%3d>\n";
+    stmt_names[EXPR_STMT] = "%3d: expr 0x%s\n";
+    stmt_names[SWITCH_STMT] = "%3d: switch (0x%s) <%3d>\n";
     stmt_names[GOTO_STMT] = "%3d: goto <%3d>\n";
-    stmt_names[BR_TRUE] = "%3d: if (0x%08x) <%3d>\n";
-    stmt_names[BR_FALSE] = "%3d: if NOT (0x%08x) <%3d>\n";
-    stmt_names[RETURN_STMT] = "%3d: return (0x%08x)\n";
+    stmt_names[BR_TRUE] = "%3d: if (0x%s) <%3d>\n";
+    stmt_names[BR_FALSE] = "%3d: if NOT (0x%s) <%3d>\n";
+    stmt_names[RETURN_STMT] = "%3d: return (0x%s)\n";
     stmt_names[ALLOC_STMT] = "%3d: alloc %d\n";
-    stmt_names[PRINT_STMT] = "%3d: print %s (0x%08x)\n";
+    stmt_names[PRINT_STMT] = "%3d: print %s (0x%s)\n";
+}
+
+void print_stmt(FILE *f, struct stmt *s)
+{
+    int i = s - statements;
+
+    if (!stmt_names[PRINT_STMT])
+	dump_init();
+
+    switch (s->stmt_type) {
+    case NULL_STMT:
+	break;
+
+    case ALLOC_STMT:
+	fprintf(f, stmt_names[s->stmt_type], i, s->stmt_alloc);
+	break;
+
+    case GOTO_STMT:
+	fprintf(f, stmt_names[s->stmt_type], i, s->stmt_stmt);
+	break;
+
+    case EXPR_STMT:
+    case SWITCH_STMT:
+    case BR_TRUE:
+    case BR_FALSE:
+    case RETURN_STMT:
+	fprintf(f, stmt_names[s->stmt_type], i, P(s->stmt_expr), s->stmt_stmt);
+	if (s->stmt_expr)
+	    tree_dump(f, s->stmt_expr);
+	break;
+
+    case PRINT_STMT:
+	fprintf(f, stmt_names[s->stmt_type], i,
+	       type_2_string[s->stmt_print.c_base], P(s->stmt_print.c_expr));
+	if (s->stmt_print.c_expr)
+	    tree_dump(f, s->stmt_print.c_expr);
+	break;
+    }
 }
 
 void dump_stmts(void)
 {
-    int i = 1;
-    struct stmt *s = statements + i;
+    struct stmt *s = statements + 1;
     struct stmt *send = statements + current_stmt;
 
-    if (!stmt_names[0])
-	dump_init();
-
-    for ( ; s < send; ++s, ++i) {
-	switch (s->stmt_type) {
-	case NULL_STMT:
-	    break;
-
-	case ALLOC_STMT:
-	    printf(stmt_names[s->stmt_type], i, s->stmt_alloc);
-	    break;
-
-	case GOTO_STMT:
-	    printf(stmt_names[s->stmt_type], i, s->stmt_stmt);
-	    break;
-
-	case EXPR_STMT:
-	case SWITCH_STMT:
-	case BR_TRUE:
-	case BR_FALSE:
-	case RETURN_STMT:
-	    printf(stmt_names[s->stmt_type], i, s->stmt_expr, s->stmt_stmt);
-	    if (s->stmt_expr)
-		tree_dump(s->stmt_expr);
-	    break;
-
-	case PRINT_STMT:
-	    printf(stmt_names[s->stmt_type], i,
-		   type_2_string[s->stmt_print.c_base], s->stmt_print.c_expr);
-	    if (s->stmt_print.c_expr)
-		tree_dump(s->stmt_print.c_expr);
-	    break;
-	}
-    }
+    for ( ; s < send; ++s)
+	print_stmt(stdout, s);
 }
 
 void set_alloc(stmt_index s, int alloc)
 {
     statements[s].stmt_alloc = alloc;
+}
+
+extern long frame_ptr;
+extern long stack_ptr;
+extern long last_v;
+
+void fail(int err)
+{
+    static int in_fail;
+    struct stmt *s;
+
+    if (in_fail)
+	exit(err);
+
+    in_fail = 1;
+    fprintf(stderr, "Failure trace back\n");
+    while (cur_stmt_index >= 0) {
+	s = statements + stmt_stack[cur_stmt_index];
+	--cur_stmt_index;
+	fprintf(stderr, "Line %d of %s: ", s->stmt_line, s->stmt_file);
+	print_stmt(stderr, s);
+    }
+    fprintf(stderr, "frame=%s stack=%s\n", P(frame_ptr), P(stack_ptr));
+    fprintf(stderr, "map_top = %s thread_slot = %d\n", P(map_top),
+	    thread_slot);
+    trace_mappings();
+    exit(err);
 }
