@@ -1,6 +1,6 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.2";
+static char sccs_id[] = "@(#)stab.y	1.3";
 
 #include <strings.h>
 #include <stdlib.h>
@@ -74,7 +74,11 @@ static void bogus();
 stab_def
     : /* empty */
     | NAME
+	{
+	}
     | NAME ':' class
+	{
+	}
     | ':' class
     | NAME ':' 't' typeid
 	{
@@ -560,7 +564,10 @@ namedtparamlist
     ;
 
 namedtparam
-    : NAME ':' typeid ',' passby ';' ;
+    : NAME ':' typeid ',' passby ';'
+	{
+	}
+    ;
 
 record
     : 's' numbytes ofieldlist ';'	/* struct */
@@ -668,9 +675,13 @@ rfieldlist
     ;
 
 field
-    : NAME ':' typeid ',' bitoffset ',' numbits ';'
+    : ':' typeid ',' bitoffset ',' numbits ';'
 	{
-	    $$ = newfield($1, $3, $5, $7);
+	    $$ = newfield((char *)0, find_type(cur_ns, $2), $4, $6);
+	}
+    | NAME ':' typeid ',' bitoffset ',' numbits ';'
+	{
+	    $$ = newfield($1, find_type(cur_ns, $3), $5, $7);
 	}
     ;
 
@@ -748,15 +759,23 @@ picstoragetype
 
 editdescription
     : STRING				/* edit characters in an alpha RC */
+	{
+	}
     | INTEGER				/* dec point in numeric pic */
+	{
+	}
     ;
 
 picsize
     : INTEGER				/* number of repeated 9's */
+	{
+	}
     ;
 
 condition
     : NAME ':' INTEGER '=' 'q' conditiontype ',' valuelist ';'
+	{
+	}
     ;
 
 conditiontype
@@ -775,8 +794,16 @@ sign
     | '0'				/* no explicit sign */
     ;
 
-decimalsite : INTEGER ;
-kanjichar : INTEGER ;
+decimalsite
+    : INTEGER
+	{
+	}
+    ;
+kanjichar
+    : INTEGER
+	{
+	}
+    ;
 valuelist
     : value
     | valuelist value
@@ -784,6 +811,8 @@ valuelist
 
 value
     : INTEGER ':' STRING		/* int is length of string */
+	{
+	}
     ;
 
 cobolfiledesc
