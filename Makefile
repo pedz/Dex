@@ -1,4 +1,4 @@
-# @(#)Makefile	1.5
+# @(#)Makefile	1.6
 #
 # COMPONENT_NAME:
 #
@@ -25,8 +25,8 @@ ILIST		= dex
 IDIR		= /usr/sbin/
 
 # CFLAGS		= -D_KERNEL
-CFLAGS		= 
-LIBS		= -ll
+CFLAGS		= -D_AIX41
+LIBS		= -lreadline -ll -lxcurses
 #
 # The -H4096 is prevent the mmap ping pong problem when dex looks at
 # itself to load up its internal symbols.  The STRIP_FLAG is so the
@@ -34,9 +34,10 @@ LIBS		= -ll
 # with the -g option so that it has all of the proc, thread, ppda, etc
 # structures that are pulled in at startup.
 #
-LDFLAGS		= -bloadmap:dex.map -H4096
+LDFLAGS		= -bloadmap:dex.map -H4096 -L/usr/local/lib
 STRIP_FLAG	=
 dmap.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
+scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE -I/usr/local/include
 
 OFILES		= \
 	asgn_expr.o \
@@ -65,6 +66,7 @@ asgn_expr.c : pre-asgn_expr.c
 		/usr/ucb/indent -st | /bin/sed -e '/^#/d' -e '/^$$/d' > $@
 
 scan.o : gram.h
+scan.o : scan.c
 gram.o : gram.c
 stab.o : stab.c
 tree.o : gram.h
