@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.9";
+static char sccs_id[] = "@(#)sym.c	1.10";
 
 #include <stdio.h>
 #include <stdlib.h>
