@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)fcall.c	1.6";
+static char sccs_id[] = "@(#)fcall.c	1.7";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -7,8 +7,17 @@ static char sccs_id[] = "@(#)fcall.c	1.6";
 #include "tree.h"
 #include "stmt.h"
 
-long frame_ptr = (long)h_high;
-long stack_ptr = (long)h_high;
+long frame_ptr;
+long stack_ptr;
+
+int setup_pseudos(void)
+{
+    extern long global_index;
+
+    frame_ptr = h_high;
+    stack_ptr = h_high;
+    global_index = h_base;
+}
 
 static void push(v_ptr a, int size)
 {
