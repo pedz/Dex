@@ -1,11 +1,22 @@
-static char sccs_id[] = "@(#)load.c	1.2";
+static char sccs_id[] = "@(#)load.c	1.3";
 
 #include <a.out.h>
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
+
+/*
+ * I would prefer to use mmap but it has a bug in it right now that
+ * shmat does not have so I'll use shmat for now.
+ */
+#define USE_MMAP
+#ifdef USE_MMAP
 #include <sys/mman.h>
 #include <sys/stat.h>
+#else
+#include <sys/shm.h>
+#endif
+
 #include "map.h"
 #include "sym.h"
 #include "dex.h"
@@ -79,7 +90,6 @@ static typeptr get_ptr_func_int(ns *nspace,
 void load(char *path, int text_base, int data_base)
 {
     int fd;
-    struct stat sbuf;
     caddr_t m;
     struct filehdr *fhdr;
     char *dbx_strings = 0;
@@ -97,11 +107,16 @@ void load(char *path, int text_base, int data_base)
     char *suffix;
     typeptr thistype;
     int haddot;
+#ifdef USE_MMAP
+    struct stat sbuf;
+#endif
 
     if ((fd = open(path, O_RDONLY)) < 0) {
 	perror(path);
 	return;
     }
+
+#ifdef USE_MMAP
     if (fstat(fd, &sbuf) < 0) {
 	perror("stat");
 	close(fd);
@@ -113,6 +128,15 @@ void load(char *path, int text_base, int data_base)
 	close(fd);
 	return;
     }
+#else
+    m = shmat(fd, 0x40000000, SHM_MAP|SHM_RDONLY);
+    if ((int)m == -1) {
+	perror("shmat");
+	close(fd);
+	return;
+    }
+#endif
+
     load_ns = ns_create((ns *)0, path);
     load_base_types(load_ns);
     load_ns->ns_text_start = text_base;
@@ -261,7 +285,7 @@ void load(char *path, int text_base, int data_base)
 				name, lsym->l_scnum);
 
 		    name = store_string(load_ns, name, size, suffix);
-		    s = enter_sym(load_ns, name);
+		    s = enter_sym(load_ns, name, 0);
 		    if (s->s_defined && s->s_offset == (void *)offset)
 			continue;
 		    /*
@@ -277,13 +301,13 @@ void load(char *path, int text_base, int data_base)
 		    if (s->s_defined && s->s_offset != (void *)offset) {
 			if (s->s_haddot != haddot) {
 			    char *n2 = store_string(load_ns, name, 0, "$toc");
-			    symptr s2 = enter_sym(load_ns, n2);
+			    symptr s2 = enter_sym(load_ns, n2, 0);
 			    void *old_offset = s->s_offset;
 			    typeptr thistype2;
 
 			    while (s2->s_defined && s2->s_offset != offset) {
 				n2 = store_string(load_ns, n2, 0, "$dup");
-				s2 = enter_sym(load_ns, n2);
+				s2 = enter_sym(load_ns, n2, 0);
 			    }
 			    if (s2->s_defined)
 				continue;
@@ -311,7 +335,7 @@ void load(char *path, int text_base, int data_base)
 			}
 			while (s->s_defined && s->s_offset != offset) {
 			    name = store_string(load_ns, name, 0, "$dup");
-			    s = enter_sym(load_ns, name);
+			    s = enter_sym(load_ns, name, 0);
 			}
 			if (s->s_defined)
 			    continue;
@@ -413,10 +437,18 @@ void load(char *path, int text_base, int data_base)
 
 	    /*
 	     * If text_base is -1, that means we want only the type
-	     * definitions from this file.
+	     * definitions from this file.  We also need to grok the
+	     * C_FILE entries so that the name spaces do not get
+	     * confused.
 	     */
-	    if (text_base == -1 && s->n_sclass != C_DECL)
-		continue;
+	    if (text_base == -1)
+		switch (s->n_sclass) {
+		case C_DECL:		/* I expext this list to grow */
+		case C_FILE:
+		    break;
+		default:
+		    continue;
+		}
 
 	    if (s->n_numaux)
 		aux = (union auxent *)(base + (AUXESZ * (s->n_numaux - 1)));
@@ -604,7 +636,7 @@ void load(char *path, int text_base, int data_base)
 		if (s->n_numaux < 1)
 		    fprintf(stderr, "No aux entries for %s\n", name);
 
-		sptr = enter_sym(cur_block, name);
+		sptr = enter_sym(cur_block, name, 0);
 		if (sptr->s_defined && sptr->s_offset == (void *)offset)
 		    goto after_enter_sym;
 
@@ -615,13 +647,13 @@ void load(char *path, int text_base, int data_base)
 		if (sptr->s_defined && sptr->s_offset != (void *)offset) {
 		    if (sptr->s_haddot != haddot) {
 			char *n2 = store_string(cur_block, name, 0, "$toc");
-			symptr s2 = enter_sym(cur_block, n2);
+			symptr s2 = enter_sym(cur_block, n2, 0);
 			void *old_offset = sptr->s_offset;
 			typeptr thistype2;
 
 			while (s2->s_defined && s2->s_offset != offset) {
 			    n2 = store_string(cur_block, n2, 0, "$dup");
-			    s2 = enter_sym(cur_block, n2);
+			    s2 = enter_sym(cur_block, n2, 0);
 			}
 			if (s2->s_defined)
 			    goto after_enter_sym;
@@ -649,7 +681,7 @@ void load(char *path, int text_base, int data_base)
 		    }
 		    while (sptr->s_defined && sptr->s_offset != offset) {
 			name = store_string(cur_block, name, 0, "$dup");
-			sptr = enter_sym(cur_block, name);
+			sptr = enter_sym(cur_block, name, 0);
 		    }
 		    if (sptr->s_defined)
 			goto after_enter_sym;
@@ -818,5 +850,7 @@ void load(char *path, int text_base, int data_base)
 #undef Set_cur_block
     }
     (void) close(fd);
+#ifdef USE_MMAP
     (void) munmap(m, sbuf.st_size);
+#endif
 }
