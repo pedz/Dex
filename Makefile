@@ -1,4 +1,4 @@
-# @(#)Makefile	1.7
+# @(#)Makefile	1.8
 #
 # COMPONENT_NAME:
 #
@@ -25,7 +25,8 @@ ILIST		= dex
 IDIR		= /usr/sbin/
 
 # CFLAGS		= -D_KERNEL
-CFLAGS		= -D_AIX41
+# CFLAGS	= -D_AIX41
+CFLAGS		= -D_AIX41 -DPRINTF=
 LIBS		= -lreadline -ll -lxcurses
 #
 # The -H4096 is prevent the mmap ping pong problem when dex looks at
@@ -64,7 +65,7 @@ OFILES		= \
 asgn_expr.o : asgn_expr.c
 asgn_expr.c : pre-asgn_expr.c
 	${_CC_} -E ${_CCFLAGS_} ${pre-asgn_expr.c:P} | \
-		/usr/ucb/indent -st | /bin/sed -e '/^#/d' -e '/^$$/d' > $@
+		/usr/ucb/indent -npro -st -bad -bap -br -cdb -i4 | /bin/sed -e '/^#/d' -e '/^$$/d' > $@
 
 scan.o : gram.h
 scan.o : scan.c
