@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.2 */
+/* @(#)sym.h	1.3 */
 
 #define HASH_SIZE 128
 
@@ -65,7 +65,7 @@ typedef struct typeid_table *tidtabptr;
 struct field {
     struct field *f_next;		/* next field in list */
     char *f_name;			/* name of field */
-    int f_typeid;			/* typeid of field */
+    typeptr f_typeptr;			/* typeid of field */
     int f_offset;			/* offset for field */
     int f_numbits;			/* number of bits for field */
 };
@@ -216,7 +216,7 @@ typeptr name2namedef(ns *nspace, char *name);
 typeptr name2namedef_all(char *name);
 typeptr insert_type(int typeid, typeptr t);
 int typedef2typeid(typeptr t);
-fieldptr newfield(char *name, int typeid, int offset, int numbits);
+fieldptr newfield(char *name, typeptr tptr, int offset, int numbits);
 attrptr newattr(enum attr_type t, int val);
 enumptr newenum(char *name, int val);
 void add_typedef(typeptr t, char *name);
@@ -224,9 +224,6 @@ void add_namedef(typeptr t, char *name);
 typeptr newtype(ns *nspace, enum stab_type t);
 typeptr find_type(ns *nspace, int typeid);
 paramptr newparam(int typeid, int passby);
-void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
-	       char *name);
-void getval(int *i, char *addr, int offset, int size);
 void copy_type(typeptr new, typeptr old);
 char *store_string(ns *nspace, char *name, int len, char *suffix);
 int get_size(typeptr t);
@@ -234,6 +231,8 @@ ns *ns_create(ns *nspace, char *name);
 ns *name2ns(char *name);
 symptr name2userdef(ns *nspace, char *name);
 symptr name2userdef_all(char *name);
+symptr addr2userdef(ns *nspace, void *addr);
+symptr addr2userdef_all(void *addr);
 void clean_symtable(ns *nspace, int nesting_level);
 symptr enter_sym(ns *nspace, char *name);
 void dump_symtable(void);
