@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.5";
+static char sccs_id[] = "@(#)map.c	1.6";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -49,6 +49,7 @@ static char sccs_id[] = "@(#)map.c	1.5";
  * This may change but another change is to make v2f and f2v real
  * functions.  The mappings are created automatically when they are
  * called rather than from map_catch.
+ *
  */
 
 static long v2f_map[16] = {
@@ -60,10 +61,10 @@ static long f2v_map[16] = {
 };
 
 /*
- * Physical segments 5 and up can be used to map virtual segments.
+ * Physical segments 4 and up can be used to map virtual segments.
  * 0-2 can not be used because mmap barfs.  3 is for the dump file.
  */
-static int next_pseg = 5;
+static int next_pseg = 4;
 
 /*
  * right now, all the virtual segments can be used except for 3-6.  We
@@ -116,7 +117,7 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     static volatile int count;
     sigset_t t;
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
-    v_ptr vaddr = f2v(paddr);
+    v_ptr vaddr = f2v((void *)paddr);
 
     if (count >= 10)
 	exit(1);
