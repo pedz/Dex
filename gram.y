@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.6";
+static char sccs_id[] = "@(#)gram.y	1.7";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -1171,6 +1171,7 @@ statement
     | PRINT expression ';'
 	{
 	    $$ = mk_print_stmt(&$2);
+	    PRINTF("did statement\n");
 	}
     | error
 	{
@@ -1376,6 +1377,7 @@ asgn_op
 pvalue
     : lvalue				%prec DOSHIFT
 	{
+	    PRINTF("hit this %d\n", $1.c_expr->e_size);
 	    mk_l2p(&$$, &$1);
 	}
     | '(' expression ')'
@@ -1479,7 +1481,21 @@ lvalue
 	    $$.c_base = base_type($$.c_type);
 	    $$.c_expr = new_expr();
 	    *$$.c_expr = *$2.c_expr;
+	    /*
+	     * O.k.  The change below took a while to figure out and
+	     * it may not be right.  The logic to set the size to the
+	     * size of the type divided by 8 may seem right but
+	     * actually the size of the expression is the size of an
+	     * address since the result is going to be an lvalue (an
+	     * address).  So I changed it to be the size of a
+	     * pointer.  Lets see what that breaks now...
+	     */
+#if 0
 	    $$.c_expr->e_size = get_size($$.c_type) / 8;
+#else
+	    $$.c_expr->e_size = sizeof(void *);
+#endif
+	    PRINTF("* %08x %d\n", $$.c_expr, $$.c_expr->e_size);
 	    $$.c_const = 0;
 	    $$.c_bitfield = 0;
 	}
