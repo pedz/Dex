@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.9";
+static char sccs_id[] = "@(#)dex.c	1.10";
 
 #include <stdio.h>
 #include <strings.h>
@@ -6,19 +6,28 @@ static char sccs_id[] = "@(#)dex.c	1.9";
 #include <sys/stat.h>
 #include <sys/access.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include "map.h"
 #include "sym.h"
 #include "inter.h"
 #include "dex.h"
 #include "load.h"
+#include "tree.h"
+#include "builtins.h"
+#include "fcall.h"
+#include "gram_pre.h"
+
+#define DEBUG_BIT DEX_C_BIT
 
 char *progname;
 char *dumpname = "/dev/mem";
 char *unixname = "/unix";
 void *stack_top;
+unsigned long debug_mask;
 extern int GRAMdebug;
+extern int STABdebug;
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     typeptr t;
     char *s;
@@ -34,20 +43,39 @@ main(int argc, char *argv[])
     --argc;
     ++argv;
 
-    if (GRAMdebug = (argc && !strcmp(argv[0], "-d"))) {	/* optional -d flag */
-	--argc;
-	++argv;
+    /* optional -d flag */
+    if (argc && !strncmp(argv[0], "-d", 2)) {
+	if (strlen(argv[0]) > 2) {
+	    debug_mask = strtoul(argv[0]+2, (char **)0, 0);
+	    --argc;
+	    ++argv;
+	} else {
+	    --argc;
+	    ++argv;
+	    if (debug_mask = strtoul(argv[0], (char **)0, 0)) {
+		--argc;
+		++argv;
+	    } else {
+		debug_mask = -1;
+	    }
+	}
+	GRAMdebug = debug_mask & GRAM_Y_BIT;
+	STABdebug = debug_mask & STAB_Y_BIT;
     }
 
-    if (argc) {				/* Optional first arg is the dump name */
+    if (argc) {				/* Optional first arg: dump */
 	dumpname = argv[0];
 	++argv;
 	--argc;
+    } else {
+	fprintf(stderr, "Usage: %s [-d] dump [unix]\n", progname);
+	return 1;
     }
 
-    if (argc) {				/* Optional second arg is /unix name */
+    if (argc) {				/* Optional second arg: unix */
 	unixname = argv[0];
-	load(unixname, 0, 0);
+	if (load(unixname, 0, 0))
+	    return 1;
 	++argv;
 	--argc;
     }
@@ -55,33 +83,44 @@ main(int argc, char *argv[])
     ns_inter = ns_create((ns *)0, progname);
     load_base_types(ns_inter);
     tree_init();
-    map_init();
+    if (map_init())
+	return 1;
+    DEBUG_PRINTF(("main: map_init done\n"));
     builtin_init();
-    setup_pseudos();
+    if (setup_pseudos())
+	return 1;
     GRAMparse();
     return 0;
 }
 
-void *safe_malloc(int size, char *file, int lineno)
+void *safe_malloc(size_t size, char *file, int lineno)
 {
     char *ret;
 
     /* printf("malloc of %d from %s:%d\n", size, file, lineno); */
     if (!(ret = malloc(size)) && size) {
-	fprintf(stderr, "Out of memory in %s: line %d\n", file, lineno);
+	fprintf(stderr, "%s: Out of memory in %s: line %d for size %ld\n",
+		progname, file, lineno, size);
 	exit(1);
     }
+    fprintf(stderr, "%s:%d allocated %ld\n", file, lineno, size);
+    bzero(ret, size);
     return ret;
 }
 
-void *safe_realloc(void *old, int size, char *file, int lineno)
+void *safe_realloc(void *old, size_t size, size_t old_size, char *file, int lineno)
 {
     char *ret;
 
     if (!(ret = realloc(old, size))) {
-	fprintf(stderr, "Out of memory in %s: line %d\n", file, lineno);
+	fprintf(stderr, "%s: Out of memory in %s: line %d for size %ld\n",
+		progname, file, lineno, size);
 	exit(1);
     }
+    fprintf(stderr, "%s:%d reallocated %ld to %ld\n", file, lineno,
+	    old_size, size);
+    if (size > old_size)
+	bzero(ret + old_size, size - old_size);
     return ret;
 }
 
@@ -95,7 +134,7 @@ int is_zero(char *s)
 
     if (!s)
 	return 1;
-    while ((c = *s++) && (isdigit(c) || c == '-' || c == '+'));
+    while ((c = *s++) && (c == '0' || c == '-' || c == '+'));
     if (!c)
 	return 1;
     return 0;
@@ -116,3 +155,47 @@ large_t  atolarge (char *s) { return strtoll (s, (char **)0, 0); }
 ularge_t atoularge(char *s) { return strtoul(s, (char **)0, 0); }
 large_t  atolarge (char *s) { return strtol (s, (char **)0, 0); }
 #endif
+
+char *print_field(int size, ...)
+{
+    static char print_buf[20*32];
+    static char *ptr = print_buf;
+    char *ret = ptr;
+    va_list Argp;
+    /*
+     * These are unsigned because I don't want sign extension when
+     * they are promoted to int's and passed to sprintf.
+     */
+    unsigned char ac;
+    unsigned short as;
+    unsigned int ai;
+    unsigned long long al;
+
+    va_start(Argp, size);
+
+    switch (size) {
+    case sizeof(char):
+	ac = va_arg(Argp, unsigned char);
+	sprintf(ptr, "%0*x", size*2, ac);
+	break;
+    case sizeof(short):
+	as = va_arg(Argp, unsigned short);
+	sprintf(ptr, "%0*x", size*2, as);
+	break;
+    case sizeof(int):
+	ai = va_arg(Argp, unsigned int);
+	sprintf(ptr, "%0*x", size*2, ai);
+	break;
+    case sizeof(long long):
+	al = va_arg(Argp, unsigned long long);
+	sprintf(ptr, "%0*llx", size*2, al);
+	break;
+    default:
+	fprintf(stderr, "Bad size in print_field %d\n", size);
+	exit(1);
+    }
+    ptr += 20;
+    if ((ptr + 20) > (print_buf + sizeof(print_buf)))
+	ptr = print_buf;
+    return ret;
+}
