@@ -1,4 +1,4 @@
-/* @(#)binary_expr.h	1.2 */
+/* @(#)binary_expr.h	1.3 */
 
 signed char sc_comma(expr *n);
 signed char sc_times(expr *n);
@@ -183,6 +183,52 @@ unsigned long ul_or(expr *n);
 unsigned long ul_andand(expr *n);
 unsigned long ul_oror(expr *n);
 unsigned long ul_qc(expr *n);
+
+long long ll_comma(expr *n);
+long long ll_times(expr *n);
+long long ll_divide(expr *n);
+long long ll_mod(expr *n);
+long long ll_plus(expr *n);
+long long ll_minue(expr *n);
+long long ll_rshift(expr *n);
+long long ll_lshift(expr *n);
+
+int ll_lt(expr *n);
+int ll_gt(expr *n);
+int ll_ge(expr *n);
+int ll_le(expr *n);
+int ll_eq(expr *n);
+int ll_ne(expr *n);
+
+long long ll_and(expr *n);
+long long ll_xor(expr *n);
+long long ll_or(expr *n);
+long long ll_andand(expr *n);
+long long ll_oror(expr *n);
+long long ll_qc(expr *n);
+
+unsigned long long ull_comma(expr *n);
+unsigned long long ull_times(expr *n);
+unsigned long long ull_divide(expr *n);
+unsigned long long ull_mod(expr *n);
+unsigned long long ull_plus(expr *n);
+unsigned long long ull_minue(expr *n);
+unsigned long long ull_rshift(expr *n);
+unsigned long long ull_lshift(expr *n);
+
+int ull_lt(expr *n);
+int ull_gt(expr *n);
+int ull_ge(expr *n);
+int ull_le(expr *n);
+int ull_eq(expr *n);
+int ull_ne(expr *n);
+
+unsigned long long ull_and(expr *n);
+unsigned long long ull_xor(expr *n);
+unsigned long long ull_or(expr *n);
+unsigned long long ull_andand(expr *n);
+unsigned long long ull_oror(expr *n);
+unsigned long long ull_qc(expr *n);
 
 float f_comma(expr *n);
 float f_times(expr *n);
