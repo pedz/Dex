@@ -1,10 +1,16 @@
-static char sccs_id[] = "@(#)pre-asgn_expr.c	1.5";
+static char sccs_id[] = "@(#)pre-asgn_expr.c	1.6";
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
 #include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "base_expr.h"
+#include "asgn_expr.h"
+
+#define DEBUG_BIT PRE_ASGN_EXPR_C_BIT
 
 /*
  * includes all of the assignment ops
@@ -42,6 +48,8 @@ asgn_op(short, s, suffix, op) \
 asgn_op(unsigned short, us, suffix, op) \
 asgn_op(long, l, suffix, op) \
 asgn_op(unsigned long, ul, suffix, op) \
+asgn_op(long long, ll, suffix, op) \
+asgn_op(unsigned long long, ull, suffix, op) \
 asgn_op(float, f, suffix, op) \
 asgn_op(double, d, suffix, op)
 
@@ -53,7 +61,7 @@ st st_asgn(expr *n)
     st *l = v2f_type(st *, st_addr(n->e_left));
     int size = n->e_size;
 
-    bcopy(r, l, size);
+    bcopy((void *)r, (void *)l, size);
     return (st)l;
 }
 
@@ -73,7 +81,9 @@ asgn_op(unsigned int, ui, suffix, op) \
 asgn_op(short, s, suffix, op) \
 asgn_op(unsigned short, us, suffix, op) \
 asgn_op(long, l, suffix, op) \
-asgn_op(unsigned long, ul, suffix, op)
+asgn_op(unsigned long, ul, suffix, op) \
+asgn_op(long long, ll, suffix, op) \
+asgn_op(unsigned long long, ull, suffix, op)
 
 int_op(modasgn, %=)
 int_op(andasgn, &=)
@@ -112,7 +122,9 @@ shift_asgn_op(unsigned int, ui, suffix, op) \
 shift_asgn_op(short, s, suffix, op) \
 shift_asgn_op(unsigned short, us, suffix, op) \
 shift_asgn_op(long, l, suffix, op) \
-shift_asgn_op(unsigned long, ul, suffix, op)
+shift_asgn_op(unsigned long, ul, suffix, op) \
+shift_asgn_op(long long, ll, suffix, op) \
+shift_asgn_op(unsigned long long, ull, suffix, op)
 
 shift_op(lsasgn, <<=)
 shift_op(rsasgn, >>=)
@@ -151,6 +163,8 @@ post_asgn_op(short, s, suffix, op) \
 post_asgn_op(unsigned short, us, suffix, op) \
 post_asgn_op(long, l, suffix, op) \
 post_asgn_op(unsigned long, ul, suffix, op) \
+post_asgn_op(long long, ll, suffix, op) \
+post_asgn_op(unsigned long long, ull, suffix, op) \
 post_asgn_op(float, f, suffix, op) \
 post_asgn_op(double, d, suffix, op)
 
