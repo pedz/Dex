@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)base_expr.c	1.4";
+static char sccs_id[] = "@(#)base_expr.c	1.5";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -18,7 +18,7 @@ unsigned int get_field(void *addr, int offset, int size)
     laddr += (offset / WSIZE);
     offset %= WSIZE;
     if (offset + size > WSIZE) {
-	fprintf(stderr, "getval spans an integer boundry\n");
+	fprintf(stderr, "get_field spans an integer boundry\n");
 	exit(1);
     }
     temp = *laddr;
@@ -35,7 +35,7 @@ void set_field(void *addr, int offset, int size, unsigned int val)
     laddr += (offset / 8);
     offset %= WSIZE;
     if (offset + size > WSIZE) {
-	fprintf(stderr, "getval spans an integer boundry\n");
+	fprintf(stderr, "set_field spans an integer boundry\n");
 	exit(1);
     }
     temp = *(unsigned int *)laddr;
@@ -60,7 +60,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
     typeptr ltptr, rtptr;
     attrptr lattr;
     int val;
-    int index, lower, upper, item_size, range;
+    int index, lower, upper, item_size, range, width;
     char *e_val;
     enumptr eptr;
     ns *nspace = tptr->t_ns;
@@ -157,26 +157,39 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	    break;
 	}
 
+	for (index = upper, width = 0; index; ++width, index /= 10);
+	if (!width)
+	    width = 1;
+
 	for (index = lower; index <= upper; ++index) {
 	    char buf[64];
 
-	    sprintf(buf, "%s[%3i]", name, index);
+	    sprintf(buf, "%s[%*i]", name, width, index);
 	    print_out(ltptr, addr, offset, item_size, indent, buf);
 	    offset += item_size;
 	}
 	break;
 
     case RANGE_TYPE:
+	printf("%*s", indent, "");
+	print_name(name, tptr);
+	printf(" = ");
+
+	while (size > 8 * sizeof(long)) {
+	    val = get_field(addr, offset, 8 * sizeof(long));
+	    printf("%d(0x%08x), ", val);
+	    offset += 8 * sizeof(long);
+	    size -= 8 * sizeof(long);
+	}
+
 	val = get_field(addr, offset, size);
 	if (tptr->t_val.val_r.r_lower < 0) /* signed */
 	    if (val & (1 << (size - 1))) /* test sign big */
 		val |= (-1 << size);	/* smash in sign extension */
-	printf("%*s", indent, "");
-	print_name(name, tptr);
 	if (size == 8)
-	    printf(" = %d(0x%0*x)'%c'\n", val, (size +3) / 4,val, val);
+	    printf("%d(0x%0*x)'%c'\n", val, (size +3) / 4,val, val);
 	else
-	    printf(" = %d(0x%0*x)\n", val, (size + 3) / 4, val);
+	    printf("%d(0x%0*x)\n", val, (size + 3) / 4, val);
 	break;
 
     case PROC_TYPE:
