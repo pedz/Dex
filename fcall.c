@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)fcall.c	1.3";
+static char sccs_id[] = "@(#)fcall.c	1.4";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -130,7 +130,7 @@ static stmt_index basic_fcall(expr *n)
 
 void alloc_stack(int n)
 {
-    stack_ptr -= n;
+    stack_ptr -= (n + sizeof(long) - 1) & (~(sizeof(long) - 1));
 }
 
 #define MK_FCALL(base_type, prefix) \
