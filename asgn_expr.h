@@ -1,5 +1,8 @@
 
-/* @(#)asgn_expr.h	1.4 */
+/* @(#)asgn_expr.h	1.5 */
+
+#ifndef __ASGN_EXPR_H
+#define __ASGN_EXPR_H
 
 signed char sc_asgn(expr *n);
 unsigned char uc_asgn(expr *n);
@@ -10,7 +13,7 @@ unsigned short us_asgn(expr *n);
 long l_asgn(expr *n);
 unsigned long ul_asgn(expr *n);
 long long ll_asgn(expr *n);
-unsigned long ull_asgn(expr *n);
+unsigned long long ull_asgn(expr *n);
 float f_asgn(expr *n);
 double d_asgn(expr *n);
 st st_asgn(expr *n);
@@ -24,7 +27,7 @@ unsigned short us_plusasgn(expr *n);
 long l_plusasgn(expr *n);
 unsigned long ul_plusasgn(expr *n);
 long long ll_plusasgn(expr *n);
-unsigned long ull_plusasgn(expr *n);
+unsigned long long ull_plusasgn(expr *n);
 float f_plusasgn(expr *n);
 double d_plusasgn(expr *n);
 
@@ -37,7 +40,7 @@ unsigned short us_minusasgn(expr *n);
 long l_minusasgn(expr *n);
 unsigned long ul_minusasgn(expr *n);
 long long ll_minusasgn(expr *n);
-unsigned long ull_minusasgn(expr *n);
+unsigned long long ull_minusasgn(expr *n);
 float f_minusasgn(expr *n);
 double d_minusasgn(expr *n);
 
@@ -50,7 +53,7 @@ unsigned short us_timesasgn(expr *n);
 long l_timesasgn(expr *n);
 unsigned long ul_timesasgn(expr *n);
 long long ll_timesasgn(expr *n);
-unsigned long ull_timesasgn(expr *n);
+unsigned long long ull_timesasgn(expr *n);
 float f_timesasgn(expr *n);
 double d_timesasgn(expr *n);
 
@@ -63,7 +66,7 @@ unsigned short us_divasgn(expr *n);
 long l_divasgn(expr *n);
 unsigned long ul_divasgn(expr *n);
 long long ll_divasgn(expr *n);
-unsigned long ull_divasgn(expr *n);
+unsigned long long ull_divasgn(expr *n);
 float f_divasgn(expr *n);
 double d_divasgn(expr *n);
 
@@ -76,7 +79,7 @@ unsigned short us_modasgn(expr *n);
 long l_modasgn(expr *n);
 unsigned long ul_modasgn(expr *n);
 long long ll_modasgn(expr *n);
-unsigned long ull_modasgn(expr *n);
+unsigned long long ull_modasgn(expr *n);
 
 signed char sc_andasgn(expr *n);
 unsigned char uc_andasgn(expr *n);
@@ -87,7 +90,7 @@ unsigned short us_andasgn(expr *n);
 long l_andasgn(expr *n);
 unsigned long ul_andasgn(expr *n);
 long long ll_andasgn(expr *n);
-unsigned long ull_andasgn(expr *n);
+unsigned long long ull_andasgn(expr *n);
 
 signed char sc_orasgn(expr *n);
 unsigned char uc_orasgn(expr *n);
@@ -98,7 +101,7 @@ unsigned short us_orasgn(expr *n);
 long l_orasgn(expr *n);
 unsigned long ul_orasgn(expr *n);
 long long ll_orasgn(expr *n);
-unsigned long ull_orasgn(expr *n);
+unsigned long long ull_orasgn(expr *n);
 
 signed char sc_xorasgn(expr *n);
 unsigned char uc_xorasgn(expr *n);
@@ -109,7 +112,7 @@ unsigned short us_xorasgn(expr *n);
 long l_xorasgn(expr *n);
 unsigned long ul_xorasgn(expr *n);
 long long ll_xorasgn(expr *n);
-unsigned long ull_xorasgn(expr *n);
+unsigned long long ull_xorasgn(expr *n);
 
 signed char sc_lsasgn(expr *n);
 unsigned char uc_lsasgn(expr *n);
@@ -120,7 +123,7 @@ unsigned short us_lsasgn(expr *n);
 long l_lsasgn(expr *n);
 unsigned long ul_lsasgn(expr *n);
 long long ll_lsasgn(expr *n);
-unsigned long ull_lsasgn(expr *n);
+unsigned long long ull_lsasgn(expr *n);
 
 signed char sc_rsasgn(expr *n);
 unsigned char uc_rsasgn(expr *n);
@@ -131,7 +134,7 @@ unsigned short us_rsasgn(expr *n);
 long l_rsasgn(expr *n);
 unsigned long ul_rsasgn(expr *n);
 long long ll_rsasgn(expr *n);
-unsigned long ull_rsasgn(expr *n);
+unsigned long long ull_rsasgn(expr *n);
 
 signed char sc_inc(expr *n);
 unsigned char uc_inc(expr *n);
@@ -142,7 +145,7 @@ unsigned short us_inc(expr *n);
 long l_inc(expr *n);
 unsigned long ul_inc(expr *n);
 long long ll_inc(expr *n);
-unsigned long ull_inc(expr *n);
+unsigned long long ull_inc(expr *n);
 float f_inc(expr *n);
 double d_inc(expr *n);
 
@@ -155,6 +158,8 @@ unsigned short us_dec(expr *n);
 long l_dec(expr *n);
 unsigned long ul_dec(expr *n);
 long long ll_dec(expr *n);
-unsigned long ull_dec(expr *n);
+unsigned long long ull_dec(expr *n);
 float f_dec(expr *n);
 double d_dec(expr *n);
+
+#endif /* __ASGN_EXPR_H */
