@@ -1,5 +1,6 @@
-static char sccs_id[] = "@(#)tree_dump.c	1.3";
+static char sccs_id[] = "@(#)tree_dump.c	1.4";
 
+#include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
@@ -169,6 +170,7 @@ static struct tab name_tab[] = {
     E(int_purge_all_pages), E_INT,
     E(int_purge_user_pages), E_INT,
     E(int_regs_instr), E_INT,
+    E(int_return_range), E_INT,
     E(int_sprintf), E_INT,
     E(int_strcat), E_INT,
     E(int_strchr), E_INT,
@@ -587,7 +589,7 @@ static void internal_tree_dump(expr *e)
 	 t < t_end && t->t_func != e->e_func.i;
 	 ++t);
     if (t == t_end) {			/* not found */
-	printf("expr at 0x%08 not found\n", e);
+	printf("expr at 0x%08x not found\n", e);
 	return;
     }
 
