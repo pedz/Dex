@@ -1,4 +1,4 @@
-/* @(#)cast_expr.h	1.1 */
+/* @(#)cast_expr.h	1.2 */
 
 signed char sc__sc(expr *n);
 signed char sc__uc(expr *n);
