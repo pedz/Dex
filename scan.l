@@ -1,17 +1,18 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.5";
+static char sccs_id[] = "@(#)scan.l	1.6";
 
 #define yylval GRAMlval
 
 #include <stdlib.h>
 #include <string.h>
+#include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
 #include "gram.h"
 #include "inter.h"
-#include "dex.h"
+#include "scan.h"
 
 typedef struct keywords *keyptr;
 struct keywords {
@@ -90,17 +91,17 @@ char *str_ptr;
 }
 
 <normal>[1-9][0-9]* {
-    yylval.val = atoi(yytext);
+    sscanf(yytext, "%lld", &yylval.val);
     return ICON;
 }
 
 <normal>0[0-7]* {
-    sscanf(yytext, "%o", &yylval.val);
+    sscanf(yytext, "%llo", &yylval.val);
     return ICON;
 }
 
 <normal>"0x"[0-9a-fA-F]+ {
-    sscanf(yytext, "%x", &yylval.val);
+    sscanf(yytext, "%llx", &yylval.val);
     return ICON;
 }
 
