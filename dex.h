@@ -1,5 +1,5 @@
 
-/* @(#)dex.h	1.4 */
+/* @(#)dex.h	1.5 */
 
 /* globals */
 extern char *progname;
