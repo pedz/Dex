@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)pre-asgn_expr.c	1.1";
+static char sccs_id[] = "@(#)pre-asgn_expr.c	1.2";
 
 #include "map.h"
 #include "sym.h"
@@ -16,12 +16,10 @@ static char sccs_id[] = "@(#)pre-asgn_expr.c	1.1";
 type prefix ## _ ## suffix (expr *n) \
 { \
     type t = prefix ## _val(n->e_right); \
-    type *l = prefix ## _addr(n->e_left); \
+    type *p = v2f_type(type *, prefix ## _addr(n->e_left)); \
     type x; \
  \
-    v_read(&x, l, sizeof(type)); \
-    x op t; \
-    v_write(&x, l, sizeof(type)); \
+    x = ((*p) op t); \
     return x; \
 }
 
@@ -44,32 +42,12 @@ all_op(asgn, =)
 
 st st_asgn(expr *n)
 {
-    st r = st_val(n->e_right);
-    st *l = st_addr(n->e_left);
-    char buf[PAGESIZE];
-    int i = n->e_size;
-    char *from = (char *)r;
-    char *to = (char *)l;
-    int move;
-    int temp;
+    st r = v2f_type(st, st_val(n->e_right));
+    st *l = v2f_type(st *, st_addr(n->e_left));
+    int size = n->e_size;
 
-    while (i) {
-	move = i;			/* assume we can do the whole thing */
-	if (move > sizeof(buf))		/* move must fit buffer */
-	    move = sizeof(buf);
-	temp = PAGESIZE - ((unsigned long)from & (PAGESIZE - 1));
-	if (move > temp)		/* from can't cross page boundry */
-	    move = temp;
-	temp = PAGESIZE - ((unsigned long)to & (PAGESIZE - 1));
-	if (move > temp)		/* to can't cross page boundry */
-	    move = temp;
-	v_read(buf, from, move);	/* fetch the data */
-	v_write(buf, to, move);		/* stuff the data */
-	i -= move;			/* move to next chunk */
-	from += move;
-	to += move;
-    }
-    return (st)to;
+    bcopy(r, l, size);
+    return (st)l;
 }
 
 all_op(plusasgn, +=)
@@ -103,7 +81,7 @@ int_op(orasgn, |=)
 type prefix ## _ ## suffix (expr *n) \
 { \
     int t = i_val(n->e_right); \
-    type *l = prefix ## _addr(n->e_left); \
+    type *l = v2f_type(type *, prefix ## _addr(n->e_left)); \
     return *l op t; \
 }
 
@@ -131,15 +109,11 @@ shift_op(rsasgn, >>=)
 type prefix ## _ ## suffix (expr *n) \
 { \
     type t = prefix ## _val(n->e_right); \
-    type *l = prefix ## _addr(n->e_left); \
-    type x; \
-    type s; \
+    type *p = v2f_type(type *, prefix ## _addr(n->e_left)); \
+    type x = *p; \
  \
-    v_read(&x, l, sizeof(type)); \
-    s = x; \
-    x op t; \
-    v_write(&x, l, sizeof(type)); \
-    return s; \
+    (*p) op t; \
+    return x; \
 }
 
 /*
