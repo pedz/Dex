@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.7";
+static char sccs_id[] = "@(#)load.c	1.8";
 
 #include <a.out.h>
 #include <string.h>
@@ -112,7 +112,7 @@ static void add_to_buf(char *s, int size)
 	stab_buf[new_stab_buf_size - 1] = 0;
 }
 
-void load(char *path, int text_base, int data_base)
+void load(char *path, long text_base, long data_base)
 {
     int fd;
     caddr_t m;
