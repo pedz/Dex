@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.2";
+static char sccs_id[] = "@(#)gram.y	1.3";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -8,13 +8,16 @@ static char sccs_id[] = "@(#)gram.y	1.2";
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <dbxstclass.h>
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
-#include "base_expr.h"
+#include "unary_expr.h"
 #include "inter.h"
 #include "dex.h"
+
+#define YYDEBUG 1
 
 ns *ns_inter;
 static anode anode_stack[8];
@@ -59,7 +62,6 @@ static arg_list *current_arg_list;
 #define yytoks GRAMtoks
 #define yyreds GRAMreds
 
-#define PROMPT (putchar('>'),putchar(' '),fflush(stdout))
 void yyerror(char *s, ...);
 %}
 
@@ -73,33 +75,34 @@ void yyerror(char *s, ...);
     stmt_index stmt;			/* statement pointer */
     cnode_list *clist;			/* expression list */
     arg_list *alist;			/* argument list */
+    fieldptr field;			/* field list */
+    enumptr elist;			/* enum list */
 }
 
 /* keywords used for the commands of the debugger */
-%token DUMP
-%token LOAD
-%token PRINT
-%token SOURCE
-%token SYM_DUMP
+%token <val> DUMP
+%token <val> PRINT
+%token <val> SOURCE
+%token <val> SYM_DUMP
 
 /* keywords used for C -- all of this might be used at the current time */
 
-%token AUTO
-%token BREAK
-%token CASE CHAR CONTINUE
-%token DEFAULT DO DOUBLE
-%token ELSE ENTRY EXTERN
-%token ENUM
-%token FLOAT FOR
-%token GOTO
-%token IF INT
-%token LONG
-%token REGISTER RETURN
-%token SHORT SIGNED SIZEOF STATIC STRUCT SWITCH
-%token UNION UNSIGNED
-%token VOID
-%token WHILE
-%token TYPEDEF
+%token <val> AUTO
+%token <val> BREAK
+%token <val> CASE CHAR CONTINUE
+%token <val> DEFAULT DO DOUBLE
+%token <val> ELSE ENTRY EXTERN
+%token <val> ENUM
+%token <val> FLOAT FOR
+%token <val> GOTO
+%token <val> IF INT
+%token <val> LONG
+%token <val> REGISTER RETURN
+%token <val> SHORT SIGNED SIZEOF STATIC STRUCT SWITCH
+%token <val> UNION UNSIGNED
+%token <val> VOID
+%token <val> WHILE
+%token <val> TYPEDEF
 
 /*
  *  Token from scanner which should not exist but do to make the
@@ -117,8 +120,7 @@ void yyerror(char *s, ...);
  * such as &&, ||, ->, etc.
  */
 
-%token GTOREQUAL LTOREQUAL LSHIFT RSHIFT INCOP DECOP PTROP OROR ANDAND
-%token EQUALITY NOTEQUAL
+%token <val> INCOP DECOP PTROP
 
 %token <val> ICON
 %token <rval>  RCON
@@ -149,13 +151,13 @@ void yyerror(char *s, ...);
 %type <anode> type simple_type struct_declaration enum_declaration
 %type <anode> type_name non_type_def class non_function_declarator
 %type <anode> function_declarator ptr_function_declarator null_decl
-%type <anode> non_empty_decl
+%type <anode> non_empty_decl str_head enum_head
 
-%type <cnode> constant name lvalue pvalue expression func_call
-%type <cnode> func_name opt_expression nce
+%type <cnode> constant name lvalue pvalue expression
+%type <cnode> opt_expression nce
 
 %type <val> opt_constant_expression constant_expression asgn_op
-%type <val> compound_statement_preamble function_heading
+%type <val> compound_statement_preamble function_heading struct_union
 
 %type <stmt> compound_statement statement_list statement if_preamble
 %type <stmt> else_preamble data_def init_declaration_list
@@ -166,17 +168,22 @@ void yyerror(char *s, ...);
 %type <alist> name_list typed_name_list typed_name arg_declaration
 %type <alist> arg_declaration_list arg_declarator_list
 
+%type <field> type_declaration_list r_type_declaration_list
+%type <field> type_declaration declarator_list declarator
+
+%type <elist> member_list
+
 %start user_input
 
 %%
 user_input
-    : { PROMPT; } command
+    : user_input command
 	{
-	    PROMPT;
+	    prompt();
 	}
-    | user_input command
+    | /* NULL */
 	{
-	    PROMPT;
+	    prompt();
 	}
     ;
 
@@ -188,10 +195,6 @@ command
     | SYM_DUMP ';'
 	{
 	    dump_symtable();
-	}
-    | LOAD STRING ICON ICON ';'
-	{
-	    load($2, $3, $4);
 	}
     | SOURCE STRING ';'
 	{
@@ -213,6 +216,11 @@ data_def			/* a single global definition */
     : attributes init_declaration_list ';'
 	{
 	    $$ = $2;
+	    pop_attributes;
+	}
+    | attributes ';'
+	{
+	    $$ = NO_STMT;
 	    pop_attributes;
 	}
     | attributes function_heading function_body
@@ -338,8 +346,7 @@ attributes			/* forced attrs for arguments and local vars */
     | class
 	{
 	    push_attributes($1);
-	    current_attributes.a_type = mkrange(ns_inter, "int",
-						0x80000000, 0x7fffffff);
+	    current_attributes.a_type = find_type(ns_inter, TP_INT);
 	    current_attributes.a_valid_type = 1;
 	    current_attributes.a_base = int_type;
 	    current_attributes.a_valid_base = 1;
@@ -432,67 +439,67 @@ type				/* data type of a var or func */
 simple_type			/* predefined types */
     : CHAR
 	{
-	    $$.a_type = mkrange(ns_inter, "char", 0, 255);
+	    $$.a_type = find_type(ns_inter, TP_CHAR);
 	    $$.a_base = uchar_type; /* should be an option */
 	}
     | SHORT
 	{
-	    $$.a_type = mkrange(ns_inter, "short", 0xffff8000, 0x00007fff);
+	    $$.a_type = find_type(ns_inter, TP_SHORT);
 	    $$.a_base = short_type;
 	}
     | INT
 	{
-	    $$.a_type = mkrange(ns_inter, "int", 0x80000000, 0x7fffffff);
+	    $$.a_type = find_type(ns_inter, TP_INT);
 	    $$.a_base = int_type;
 	}
     | LONG
 	{
-	    $$.a_type = mkrange(ns_inter, "long", 0x80000000, 0x7fffffff);
+	    $$.a_type = find_type(ns_inter, TP_LONG);
 	    $$.a_base = long_type;
 	}
     | UNSIGNED
 	{
-	    $$.a_type = mkrange(ns_inter, "unsigned", 0, 0xffffffff);
+	    $$.a_type = find_type(ns_inter, TP_UNSIGNED);
 	    $$.a_base = uint_type;
 	}
     | FLOAT
 	{
-	    $$.a_type = mkfloat(ns_inter, "float", sizeof(float));
+	    $$.a_type = find_type(ns_inter, TP_FLOAT);
 	    $$.a_base = float_type;
 	}
     | DOUBLE
 	{
-	    $$.a_type = mkfloat(ns_inter, "double", sizeof(double));
+	    $$.a_type = find_type(ns_inter, TP_DOUBLE);
 	    $$.a_base = double_type;
 	}
     | VOID
 	{
-	    $$.a_type = mkrange(ns_inter, "void", 0, 0);
+	    $$.a_type = find_type(ns_inter, TP_VOID);
 	    $$.a_base = void_type;
 	}
     | UNSIGNED CHAR
 	{
-	    $$.a_type = mkrange(ns_inter, "unsigned char", 0, 255);
+	    $$.a_type = find_type(ns_inter, TP_UCHAR);
 	    $$.a_base = uchar_type;
 	}
     | SIGNED CHAR
 	{
-	    $$.a_type = mkrange(ns_inter, "signed char", -128, 127);
+	    $$.a_type = find_type(ns_inter, TP_SCHAR);
 	    $$.a_base = schar_type;
 	}
     | UNSIGNED SHORT
 	{
-	    $$.a_type = mkrange(ns_inter, "unsigned short", 0, 0xffff);
+	    $$.a_type = find_type(ns_inter, TP_USHORT);
 	    $$.a_base = ushort_type;
 	}
     | UNSIGNED INT
 	{
-	    $$.a_type = mkrange(ns_inter, "unsigned int", 0, 0xffffffff);
+	    $$.a_type = find_type(ns_inter, TP_UINT);
 	    $$.a_base = uint_type;
 	}
     | UNSIGNED LONG
 	{
-	    $$.a_type = mkrange(ns_inter, "unsigned long", 0, 0xffffffff);
+	    $$.a_type = find_type(ns_inter, TP_ULONG);
 	    $$.a_base = ulong_type;
 	}
     ;
@@ -500,9 +507,12 @@ simple_type			/* predefined types */
 enum_declaration
     : enum_head '{' member_list opt_comma '}'
 	{
-	    /* #### enumeration definitions */
-	    yyerror("can't declare enumeration types yet");
-	    YYERROR;
+	    typeptr t = $1.a_type;
+
+	    $$ = $1;
+	    t->t_val.val_e = $3;
+	    if ($1.a_name)
+		add_namedef(t, $1.a_name);
 	}
     | ENUM IDENTIFIER
 	{
@@ -512,6 +522,8 @@ enum_declaration
 		YYERROR;
 	    }
 	    $$.a_base = int_type;
+	    $$.a_valid_type = 1;
+	    $$.a_valid_base = 1;
 	}
     | ENUM error
 	{
@@ -521,25 +533,72 @@ enum_declaration
 
 enum_head
     : ENUM
+	{
+	    $$.a_type = newtype(ns_inter, ENUM_TYPE);
+	    $$.a_valid_type = 1;
+	    $$.a_name = 0;
+	    $$.a_valid_name = 1;
+	    $$.a_base = int_type;
+	    $$.a_valid_base = 1;
+	    $$.a_valid_class = 0;
+	}
     | ENUM IDENTIFIER
+	{
+	    $$.a_type = newtype(ns_inter, ENUM_TYPE);
+	    $$.a_valid_type = 1;
+	    $$.a_name = $2;
+	    $$.a_valid_name = 1;
+	    $$.a_base = int_type;
+	    $$.a_valid_base = 1;
+	    $$.a_valid_class = 0;
+	}
     ;
 
 member_list
-    : member
-    | member_list ',' member
-    ;
-
-member
     : IDENTIFIER
+	{
+	    $$ = newenum($1, 0);
+	}
     | IDENTIFIER '=' constant_expression
+	{
+	    $$ = newenum($1, $3);
+	}
+    | member_list ',' IDENTIFIER
+	{
+	    $$ = newenum($3, $1->e_val + 1);
+	    $$->e_next = $1;
+	}
+    | member_list ',' IDENTIFIER '=' constant_expression
+	{
+	    $$ = newenum($3, $5);
+	    $$->e_next = $1;
+	}
     ;
 
 struct_declaration
-    : str_head '{' type_declaration_list opt_semi '}'
+    : str_head '{' type_declaration_list '}'
 	{
-	    /* #### structure definitions */
-	    yyerror("can't declare structs and unions yet");
-	    YYERROR;
+	    typeptr t = $1.a_type;
+	    int pos = 0;
+	    fieldptr f = $3;
+
+	    t->t_val.val_s.s_fields = f;
+	    if (t->t_type == STRUCT_TYPE) {
+		pos = allocate_fields(f);
+	    } else {
+		for ( ; f; f = f->f_next) {
+		    if (f->f_numbits < 0)
+			f->f_numbits = -f->f_numbits;
+		    if (f->f_numbits > pos)
+			pos = f->f_numbits;
+		}
+	    }
+	    pos += (sizeof(int) * 8) - 1;
+	    pos /= 8;
+	    t->t_val.val_s.s_size = pos;
+	    if ($1.a_name)
+		add_namedef(t, $1.a_name);
+	    $$ = $1;
 	}
     | struct_union IDENTIFIER
 	{
@@ -548,6 +607,8 @@ struct_declaration
 		YYERROR;
 	    }
 	    $$.a_base = struct_type;
+	    $$.a_valid_type = 1;
+	    $$.a_valid_base = 1;
 	}
     | struct_union error
 	{
@@ -557,7 +618,27 @@ struct_declaration
 
 str_head
     : struct_union
+	{
+	    $$.a_type = newtype(ns_inter, (($1 == STRUCT) ?
+					   STRUCT_TYPE : UNION_TYPE));
+	    $$.a_valid_type = 1;
+	    $$.a_name = 0;
+	    $$.a_valid_name = 1;
+	    $$.a_base = struct_type;
+	    $$.a_valid_base = 1;
+	    $$.a_valid_class = 0;
+	}
     | struct_union IDENTIFIER
+	{
+	    $$.a_type = newtype(ns_inter, (($1 == STRUCT) ?
+					   STRUCT_TYPE : UNION_TYPE));
+	    $$.a_valid_type = 1;
+	    $$.a_name = $2;
+	    $$.a_valid_name = 1;
+	    $$.a_base = struct_type;
+	    $$.a_valid_base = 1;
+	    $$.a_valid_class = 0;
+	}
     ;
 
 struct_union
@@ -565,31 +646,79 @@ struct_union
     | UNION
     ;
 
+/*
+ * The fields are flipped into their proper order here.
+ */
 type_declaration_list		/* list of struct fields w/ type */
+    : r_type_declaration_list opt_semi
+	{
+	    register fieldptr last, this, next;
+
+	    last = 0;
+	    this = $1;
+	    do {
+		next = this->f_next;
+		this->f_next = last;
+		last = this;
+		this = next;
+	    } while (this);
+	    $$ = last;
+	}
+    ;
+
+/*
+ * This constructs the list of fields in reverse order
+ */
+r_type_declaration_list
     : type_declaration
-    | type_declaration_list ';' type_declaration
+	{
+	    $$ = $1;
+	}
+    | r_type_declaration_list ';' type_declaration
+	{
+	    $3->f_next = $1;
+	    $$ = $3;
+	}
     ;
 
 type_declaration		/* a struct field w/ type */
-    : type declarator_list	/* #### */
+    : type declarator_list
 	{
+	    $$ = $2;
 	    pop_attributes;
 	}
     | type
 	{
+	    $$ = newfield((char *)0, $1.a_type, 0, get_size($1.a_type));
 	    pop_attributes;
 	}
     ;
 
-declarator_list			/* fields after TYPE for a struct */
+declarator_list		/* fields after TYPE for a struct */
     : declarator
+	{
+	    $$ = $1;
+	}
     | declarator_list ',' declarator
+	{
+	    $3->f_next = $1;
+	    $$ = $3;
+	}
     ;
 
 declarator			/* a single field in a struct */
     : non_function_declarator
+	{
+	    $$ = newfield($1.a_name, $1.a_type, 0, get_size($1.a_type));
+	}
     | non_function_declarator ':' constant_expression
+	{
+	    $$ = newfield($1.a_name, $1.a_type, 0, -$3);
+	}
     | ':' constant_expression
+	{
+	    $$ = newfield((char *)0, (typeptr)0, 0, -$2);
+	}
     ;
 
 non_function_declarator		/* argument, var, or field */
@@ -820,11 +949,11 @@ init_declarator			/* single local or global var */
 		YYERROR;
 	    }
 	    (void) gram_enter_sym(&$1, __LINE__);
-	    if (mkident(&id, $1.a_name)) {
+	    if (mk_ident(&id, $1.a_name)) {
 		yyerror("identifier %s not defined", $1.a_name);
 		YYERROR;
 	    }
-	    if (mkasgn(&asgn, &id, $2, &$3))
+	    if (mk_asgn(&asgn, &id, $2, &$3))
 		YYERROR;
 	    $$ = mk_expr_stmt(asgn.c_expr);
 	}
@@ -845,12 +974,16 @@ init_list
 
 initializer
     : nce
+	{
+	}
     | '{' init_list opt_comma '}'
     ;
 
 opt_comma
     : /* NULL */
     | ','
+	{
+	}
     ;
 
 opt_semi
@@ -907,6 +1040,8 @@ statement
 
 	    (void)link_conts();
 	    br = mk_br_true(cast_to_int(&$3), $6);
+	    if ($6 == NO_STMT)
+		link_stmt(br, br);
 	    link_stmt(link_breaks(), br);
 	    $$ = br;
 	}
@@ -919,6 +1054,8 @@ statement
 	{
 	    (void) link_conts();
 	    $$ = mk_br_true(cast_to_int(&$6), $3);
+	    if ($3 == NO_STMT)
+		link_stmt($$, $$);
 	    (void) link_breaks();
 	}
     | FOR '(' opt_expression ';' opt_expression ';' opt_expression ')'
@@ -960,7 +1097,8 @@ statement
     | RETURN opt_expression ';'
 	{
 	    if (current_function)
-		cast_to(&$2, current_function->s_type, current_function->s_base);
+		cast_to(&$2, current_function->s_type,
+			current_function->s_base);
 	    $$ = mk_return_stmt($2.c_expr);
 	}
     | GOTO IDENTIFIER ';'
@@ -1007,7 +1145,11 @@ else_preamble
 
 label
     : CASE constant_expression ':'
+	{
+	}
     | DEFAULT ':'
+	{
+	}
     ;
 
 /* expression */
@@ -1017,8 +1159,9 @@ opt_expression
 	{
 	    $$.c_type = 0;
 	    $$.c_base = int_type;
-	    $$.c_const = 1;
 	    $$.c_expr = 0;
+	    $$.c_const = 1;
+	    $$.c_bitfield = 0;
 	}
     | expression
     ;
@@ -1037,11 +1180,12 @@ constant_expression
 	    if ($1.c_base != int_type) {
 		yyerror("constant expressions must be integer");
 		YYERROR;
-	    } else if (!$1.c_const) {
+	    }
+	    if (!$1.c_const) {
 		yyerror("expression is not a constant");
 		YYERROR;
-	    } else
-		$$ = i_val($1.c_expr);
+	    }
+	    $$ = i_val($1.c_expr);
 	}
     ;
 
@@ -1049,7 +1193,7 @@ expression
     : nce
     | expression ',' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     ;
@@ -1058,92 +1202,98 @@ expression
 nce
     : nce '*' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '/' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '%' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '+' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '-' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce RSHIFT nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce LSHIFT nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '<' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
+	    change_to_int(&$$);
 	}
     | nce '>' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
+	    change_to_int(&$$);
 	}
     | nce GTOREQUAL nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
+	    change_to_int(&$$);
 	}
     | nce LTOREQUAL nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
+	    change_to_int(&$$);
 	}
     | nce EQUALITY nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
+	    change_to_int(&$$);
 	}
     | nce NOTEQUAL nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
+	    change_to_int(&$$);
 	}
     | nce '&' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '^' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '|' nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce ANDAND nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce OROR nce
 	{
-	    if (mkbinary(&$$, &$1, $2, &$3))
+	    if (mk_binary(&$$, &$1, $2, &$3))
 		YYERROR;
 	}
     | nce '?' nce ':' nce
@@ -1153,12 +1303,8 @@ nce
 	}
     | lvalue asgn_op nce		%prec '='
 	{
-	    if (mkasgn(&$$, &$1, $2, &$3))
+	    if (mk_asgn(&$$, &$1, $2, &$3))
 		YYERROR;
-	}
-    | '(' expression ')'
-	{
-	    $$ = $2;
 	}
     | pvalue				%prec ','
     ;
@@ -1178,17 +1324,65 @@ asgn_op
     ;
 
 pvalue
-    : lvalue				%prec ','
+    : lvalue				%prec DOSHIFT
 	{
-	    mkl2p(&$$, &$1);
+	    mk_l2p(&$$, &$1);
 	}
-    | '(' pvalue ')'
+    | '(' expression ')'
 	{
 	    $$ = $2;
 	}
+    | '(' type_name ')' nce
+	{
+	    $$ = $4;
+	    cast_to(&$$, $2.a_type, $2.a_base);
+	}
+    | '-' pvalue
+	{
+	    if (mk_unary(&$$, &$2, 'u')) {
+		yyerror("Unary minus must be numeric");
+	    }
+	}
+    | '!' pvalue
+	{
+	    if (mk_unary(&$$, &$2, '!')) {
+		yyerror("Logical-not must be numeric");
+	    }
+	    change_to_int(&$$);
+	}
+    | '~' pvalue
+	{
+	    if (mk_unary(&$$, &$2, '~')) {
+		yyerror("Bitwise-not must be integral");
+	    }
+	    change_to_int(&$$);
+	}
+    | constant
+	/* $$ = $1; */
+    | name '(' opt_expression_list ')'
+	{
+	    if ($1.c_type->t_type != PROC_TYPE) {
+		yyerror("function name expected");
+		YYERROR;
+	    }
+	    mk_fcall(&$$, &$1, $3);
+	}
     | '&' lvalue
 	{
-	    mk_f2v(&$$, &$2);
+	    typeptr t1 = newtype($2.c_type->t_ns, RANGE_TYPE);
+	    typeptr t2 = newtype($2.c_type->t_ns, ARRAY_TYPE);
+
+	    t1->t_val.val_r.r_typeptr = 0;
+	    t1->t_val.val_r.r_lower = 0;
+	    t1->t_val.val_r.r_upper = 0;
+	    t2->t_val.val_a.a_typedef = t1;
+	    t2->t_val.val_a.a_typeptr = $2.c_type;
+
+	    $$.c_type = t2;
+	    $$.c_base = base_type($$.c_type);
+	    $$.c_expr = $2.c_expr;
+	    $$.c_const = 1;
+	    $$.c_bitfield = 0;
 	}
     | INCOP lvalue
 	{
@@ -1210,106 +1404,106 @@ pvalue
 	    if (mk_incdec(ns_inter, &$$, &$1, DECOP))
 		YYERROR;
 	}
-    | '(' type_name ')' nce
-	{
-	    $$ = $4;
-	    cast_to(&$$, $2.a_type, $2.a_base);
-	}
-    | '-' pvalue
-	{
-	    $$ = $2;
-	}
-    | '!' pvalue
-	{
-	    $$ = $2;
-	}
-    | '~' pvalue
-	{
-	    $$ = $2;
-	}
-    | constant
-	/* $$ = $1; */
-    | func_call
-	/* $$ = $1; */
     ;
 
 lvalue
-    : name				%prec ','
+    /*
+     * The %prec clause below was changed from DOSHIFT to ELSE to fix
+     * the problem that sizeof(*foo) was not parsing.  It is not clear
+     * if this is a true fix. 950203 - pedz
+     */
+    : name				%prec ELSE
 	{
 	    $$ = $1;
 	}
-    | '(' lvalue ')'
-	{
-	    $$ = $2;
-	}
     | '*' pvalue
 	{
-	    if (mk_v2f(&$$, &$2)) {
+	    if ($2.c_type->t_type == PTR_TYPE) {
+		$$.c_type = $2.c_type->t_val.val_p;
+	    } else if ($2.c_type->t_type == ARRAY_TYPE) {
+		$$.c_type = $2.c_type->t_val.val_a.a_typeptr;
+	    } else {
 		yyerror("pointer type expected");
 		YYERROR;
 	    }
+	    $$.c_base = base_type($$.c_type);
+	    $$.c_expr = new_expr();
+	    *$$.c_expr = *$2.c_expr;
+	    $$.c_expr->e_size = get_size($$.c_type) / 8;
+	    $$.c_const = 0;
+	    $$.c_bitfield = 0;
 	}
     ;
 
 name
     : IDENTIFIER
 	{
-	    if (mkident(&$$, $1)) {
+	    if (mk_ident(&$$, $1)) {
 		yyerror("identifier %s not defined", $1);
 		YYERROR;
 	    }
 	}
-    | '(' name ')'
+    | '(' lvalue ')'
 	{
 	    $$ = $2;
 	}
     | name '.' IDENTIFIER
 	{
-	    if (mkdot(&$$, &$1, $3))
+	    if (mk_dot(&$$, &$1, $3))
 		YYERROR;
 		
 	}
-    | func_call PTROP IDENTIFIER
+    | name '(' opt_expression_list ')' PTROP IDENTIFIER
 	{
-	    if (mkptr(&$$, &$1, $3))
+	    cnode ctemp;
+
+	    if ($1.c_type->t_type != PROC_TYPE) {
+		yyerror("function name expected");
+		YYERROR;
+	    }
+	    mk_fcall(&ctemp, &$1, $3);
+
+	    if (mk_ptr(&$$, &ctemp, $6))
 		YYERROR;
 	}
     | name PTROP IDENTIFIER
 	{
-	    if (mkptr(&$$, &$1, $3))
+	    if (mk_ptr(&$$, &$1, $3))
+		YYERROR;
+	}
+    | '(' expression ')' PTROP IDENTIFIER
+	{
+	    if (mk_ptr(&$$, &$2, $5))
 		YYERROR;
 	}
     | name '[' expression ']'
 	{
-	    if (mkarray(&$$, &$1, &$3))
+	    if (mk_array(&$$, &$1, &$3))
+		YYERROR;
+	}
+    | '(' expression ')' '[' expression ']'
+	{
+	    if (mk_array(&$$, &$2, &$5))
 		YYERROR;
 	}
     | name '.' error
 	{
 	    yyerror("field name expected");
-	    YYERROR;
 	}
     | name PTROP error
 	{
 	    yyerror("field name expected");
-	    YYERROR;
-	}
-    | func_call PTROP error
-	{
-	    yyerror("field name expected");
-	    YYERROR;
 	}
     | name '[' expression error
 	{
 	    yyerror("']' expected");
-	    YYERROR;
 	}
     | '(' lvalue error
 	{
 	    yyerror("')' expected");
-	    YYERROR;
 	}
     ;
+
 
 opt_expression_list
     : /* NULL */
@@ -1337,69 +1531,44 @@ expression_list
 	}
     ;
 
-func_name
-    : name
-    | '(' '*' name ')'
-	{
-	    if ($3.c_type->t_type == PTR_TYPE) {
-		$$ = $3;
-		$$.c_type = $3.c_type->t_val.val_p;
-	    } else {
-		yyerror("pointer type expected");
-		YYERROR;
-	    }
-	}
-    ;
-
-func_call
-    : func_name '(' opt_expression_list ')'
-	{
-	    if ($1.c_type->t_type != PROC_TYPE) {
-		yyerror("function name expected");
-		YYERROR;
-	    } else
-		mk_fcall(&$$, &$1, $3);
-	}
-    | func_name '(' opt_expression_list error
-    ;
-
 constant
     : RCON
 	{
-	    $$.c_type = mkfloat(ns_inter, "double", sizeof(double));
+	    $$.c_type = find_type(ns_inter, TP_DOUBLE);
 	    $$.c_base = double_type;
-	    $$.c_const = 1;
 	    $$.c_expr = new_expr();
 	    $$.c_expr->e_func.d = d_leaf;
 	    $$.c_expr->e_d = $1;
 	    $$.c_expr->e_size = sizeof(double);
+	    $$.c_const = 1;
+	    $$.c_bitfield = 0;
 	}
     | ICON
 	{
-	    mkconst(ns_inter, &$$, $1);
+	    mk_const(ns_inter, &$$, $1);
 	}
     | STRING
 	{
-	    $$.c_type = mkstrtype(ns_inter, strlen($1));
+	    $$.c_type = mk_strtype(ns_inter, strlen($1));
 	    $$.c_base = base_type($$.c_type);
-	    $$.c_const = 1;
 	    $$.c_expr = new_expr();
 	    $$.c_expr->e_func.ul = ul_leaf;
 	    $$.c_expr->e_ul = (unsigned long)$1;
 	    $$.c_expr->e_size = get_size($$.c_type) / 8;
+	    $$.c_const = 1;
+	    $$.c_bitfield = 0;
 	}
     | SIZEOF nce
 	{
-	    mkconst(ns_inter, &$$, get_size($2.c_type) / 8);
+	    mk_const(ns_inter, &$$, get_size($2.c_type) / 8);
 	}
     | SIZEOF '(' type_name ')'
 	{
-	    mkconst(ns_inter, &$$, get_size($3.a_type) / 8);
+	    mk_const(ns_inter, &$$, get_size($3.a_type) / 8);
 	}
     | SIZEOF '(' type_name error
 	{
 	    yyerror("')' expected");
-	    YYERROR;
 	}
     ;
 
@@ -1412,7 +1581,6 @@ type_name
     | error
 	{
 	    yyerror("bad type name");
-	    YYERROR;
 	}
     ;
 
@@ -1608,4 +1776,41 @@ static void do_parameter_allocation(arg_list *old_list, arg_list *args)
 	a1->a_anode.a_valid_class = 1;
 	(void) gram_enter_sym(&a1->a_anode, __LINE__);
     }
+}
+
+static void prompt(void)
+{
+    extern FILE *yyin;
+
+    if (isatty(fileno(yyin))) {
+	putchar('>');
+	putchar(' ');
+	fflush(stdout);
+    }
+}
+
+static int allocate_fields(fieldptr f)
+{
+    int pos = 0;
+
+    for ( ; f; f = f->f_next) {
+	/* if foo : size was specified */
+	if (f->f_numbits < 0)
+	    f->f_numbits = -f->f_numbits;
+	else {
+	    /* No size specified so move to proper boundry */
+	    pos += (f->f_numbits - 1);
+	    pos &= ~(f->f_numbits - 1);
+	}
+	f->f_offset = pos;
+	pos += f->f_numbits;
+    }
+    return pos;
+}
+
+static void change_to_int(cnode *c)
+{
+    c->c_type = find_type(ns_inter, TP_INT);
+    c->c_base = int_type;
+    c->c_expr->e_size = sizeof(int);
 }
