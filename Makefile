@@ -1,4 +1,4 @@
-# @(#)Makefile	1.1
+# @(#)Makefile	1.2
 #
 # COMPONENT_NAME:
 #
@@ -29,24 +29,26 @@ LIBS		= -ll
 LDFLAGS		= -bloadmap:dex.map
 
 OFILES		= \
-	gram.o \
 	asgn_expr.o \
 	base_expr.o \
+	builtins.o \
+	dex.o \
 	dmap.o \
 	fcall.o \
-	dex.o \
-	hmap.o \
+	gram.o \
+	load.o \
 	map.o \
 	scan.o \
 	stab.o \
 	stmt.o \
 	sym.o \
-	tree.o
+	tree.o \
+	tree_dump.o
 
 asgn_expr.o : asgn_expr.c
 asgn_expr.c : pre-asgn_expr.c
 	${_CC_} -E ${_CCFLAGS_} ${pre-asgn_expr.c:P} | \
-		indent -st | sed -e '/^#/d' -e '/^$$/d' > $@
+		/usr/ucb/indent -st | /bin/sed -e '/^#/d' -e '/^$$/d' > $@
 
 scan.o : gram.h
 gram.o : gram.c
