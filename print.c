@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)print.c	1.3";
+static char sccs_id[] = "@(#)print.c	1.4";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -156,8 +156,9 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	break;
 
     case PTR_TYPE: /* pointer to some type but who cares what type it is */
-	if (size != 32) {
-	    fprintf(stderr, "size of pointer not 32 bits for %s\n", name);
+	if (size != sizeof(void *) * 8) {
+	    fprintf(stderr, "size of pointer not %d bits for %s\n",
+		    sizeof(void *) * 8, name);
 	    exit(1);
 	}
 	item_size = get_size(tptr->t_val.val_p);
