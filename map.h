@@ -1,21 +1,41 @@
 
-/* @(#)map.h	1.1 */
+/* @(#)map.h	1.2 */
 
-#include <sys/param.h>
-
-typedef void m_type;
-typedef unsigned int m_size;
-typedef void *v_ptr;
-typedef void *p_ptr;
-typedef m_type (*m_func)(p_ptr, v_ptr, m_size, int);
-
-
-m_type v_read(p_ptr buf, v_ptr addr, m_size size);
-m_type v_write(p_ptr buf, v_ptr addr, m_size size);
-m_type v_mkpage(v_ptr addr, m_func f);
+#define h_base ((v_ptr)0x40000000)
+#define h_high ((v_ptr)(((long)(h_base)) + 0x10000000))
 
 /*
- * Note that we depend upon PAGESIZE and PGSHIFT from param.h
+ * For reference purposes: An address like 0x00000123 in the kernel is
+ * a "virtual" address and it is mapped to a "physical" address which
+ * is actually accessible.
  */
-#define PAGE_MASK (~(PAGESIZE - 1))
+#define v2f(vaddr) ((v_ptr)(((long)(vaddr)) ^ 0x80000000))
+#define f2v(paddr) ((p_ptr)(((long)(paddr)) ^ 0x80000000))
+#define v2f_type(type, vaddr) ((type)v2f(vaddr))
+#define f2v_type(type, vaddr) ((type)f2v(vaddr))
+
+/* The following typedef is system dependant */
+typedef int jmp_type;
+jmp_type *map_jmp_ptr;
+void map_init(void);
+
+typedef void *v_ptr;			/* A virtual address */
+typedef void *p_ptr;			/* A physical address */
+
+#define BEGIN_PROTECT() \
+{ \
+    jmp_type *old; \
+    jmp_buf jbuf; \
+    old = map_jmp_ptr; \
+    map_jmp_ptr = jbuf; \
+    if (setjmp(map_jmp_ptr) == 0) {
+
+#define EXIT_PROTECT(thunk) \
+	map_jmp_ptr = old; \
+	thunk;
+	
+#define END_PROTECT() \
+    } \
+    map_jmp_ptr = old; \
+}
 
