@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.8";
+static char sccs_id[] = "@(#)map.c	1.9";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -56,11 +56,23 @@ static char sccs_id[] = "@(#)map.c	1.8";
  * The number of virtual segments we know about is a power of two.  It
  * is 2 raised to the power of VSEG_POWER.
  */
+#ifdef __64BIT__
+
+#define VSEG_POWER 8
+#define VSEG_BITS  34
+
+#else
+
 #define VSEG_POWER 6
-#define VSEG_SHIFT (32 - (VSEG_POWER))
+#define VSEG_BITS  32
+
+#endif
+
+#define VSEG_SHIFT (VSEG_BITS - (VSEG_POWER))
+#define VSEG_BIT_MASK (((long long)1 << VSEG_BITS) - 1)
 #define VSEGS (1<<(VSEG_POWER))
 #define VSEG_MASK ((VSEGS) - 1)
-#define VSEG_MASK_LO (((unsigned)-1) >> VSEG_POWER)
+#define VSEG_MASK_LO ((((long long)-1) & VSEG_BIT_MASK) >> VSEG_POWER)
 #define VSEG_MASK_HI (~(VSEG_MASK_HI))
 
 static long v2f_map[VSEGS];
@@ -70,18 +82,18 @@ static long f2v_map[VSEGS];
  * Physical segments 4 and up can be used to map virtual segments.
  * 0-2 can not be used because mmap barfs.  3 is for the dump file.
  */
-static int next_pseg = (4 << (VSEG_POWER - 4));
+static int next_pseg = ((0x40000000 >> VSEG_SHIFT) & VSEG_MASK);
 
 /*
  * right now, all the virtual segments can be used except for 3-6.  We
  * give segment 3 to the pseudo variables.
  */
-static int next_vseg = (4 << (VSEG_POWER - 4));
+static int next_vseg = ((0x40000000 >> VSEG_SHIFT) & VSEG_MASK);
 
 p_ptr v2f(v_ptr v)
 {
     unsigned long r = (long)v;
-    int n = (r >> VSEG_SHIFT) & VSEG_MASK;
+    long n = (r >> VSEG_SHIFT) & VSEG_MASK;
 
     if (v2f_map[n] == -1) {
 	if (next_pseg == VSEGS) {
@@ -91,19 +103,19 @@ p_ptr v2f(v_ptr v)
 	v2f_map[n] = next_pseg << VSEG_SHIFT;
 	f2v_map[next_pseg] = n << VSEG_SHIFT;
 #ifdef MAP_DEBUG
-	printf("v2f: map of %0*x, map vseg %d to vseg %d\n", sizeof(long) * 2,
+	printf("v2f: map of %0*lx, map vseg %d to vseg %d\n", sizeof(long) * 2,
 	       r, n, next_pseg);
-	printf("v2f: setting v2f[%0*x] to %0*x\n",
+	printf("v2f: setting v2f[%0*lx] to %0*lx\n",
 	       sizeof(long) * 2, n << VSEG_SHIFT,
 	       sizeof(long) * 2, v2f_map[n]);
-	printf("v2f: setting f2v[%0*x] to %0*x\n",
+	printf("v2f: setting f2v[%0*lx] to %0*lx\n",
 	       sizeof(long) * 2, next_pseg << VSEG_SHIFT,
 	       sizeof(long) * 2, f2v_map[next_pseg]);
 #endif
 	++next_pseg;
     }
 #ifdef MAP_DEBUG_2
-    printf("v2f: map %0*x to %0*x\n",
+    printf("v2f: map %0*lx to %0*lx\n",
 	   sizeof(long) * 2, r,
 	   sizeof(long) * 2, (v2f_map[n] | ((long)v & VSEG_MASK_LO)));
 #endif
@@ -113,57 +125,63 @@ p_ptr v2f(v_ptr v)
 v_ptr f2v(p_ptr p)
 {
     unsigned long r = (long)p;
-    int n = (r >> VSEG_SHIFT) & VSEG_MASK;
+    long n = (r >> VSEG_SHIFT) & VSEG_MASK;
 
     if (f2v_map[n] == -1) {
-	if (next_vseg == 6) {
+	if (next_vseg == ((0x6000000 >> VSEG_SHIFT) & VSEG_MASK)) {
 	    fprintf(stderr, "Out of segments in f2v %d\n", n);
 	    exit(1);
 	}
 	f2v_map[n] = next_vseg << VSEG_SHIFT;
 	v2f_map[next_vseg] = n << VSEG_SHIFT;
 #ifdef MAP_DEBUG
-	printf("f2v: map of %0*x, map fseg %d to vseg %d\n",
+	printf("f2v: map of %0*lx, map fseg %d to vseg %d\n",
 	       sizeof(long) * 2, r, n, next_vseg);
-	printf("f2v: setting f2v[%0*x] to %0*x\n",
+	printf("f2v: setting f2v[%0*lx] to %0*lx\n",
 	       sizeof(long) * 2, n << VSEG_SHIFT,
 	       sizeof(long) * 2, f2v_map[n]);
-	printf("f2v: setting v2f[%0*x] to %0*x\n",
+	printf("f2v: setting v2f[%0*lx] to %0*lx\n",
 	       sizeof(long) * 2, next_vseg << VSEG_SHIFT,
 	       sizeof(long) * 2, v2f_map[next_vseg]);
 #endif
 	next_vseg++;
     }
 #ifdef MAP_DEBUG_2
-    printf("f2v: map %0*x to %0*x\n",
+    printf("f2v: map %0*lx to %0*lx\n",
 	   sizeof(long) * 2, r,
 	   sizeof(long) * 2, (f2v_map[n] | ((long)p & VSEG_MASK_LO)));
 #endif
     return (v_ptr)(f2v_map[n] | ((long)p & VSEG_MASK_LO));
 }
 
+#ifdef __64BIT__
 static void map_catch(int sig, siginfo_t *info, ucontext_t *context)
+#else
+static void map_catch(int sig, int code, struct sigcontext *scp)
+#endif
 {
     static volatile int count;
     sigset_t t;
     /*
      * The documentation says this is not correct but it seems to work for now.
      */
+#ifdef __64BIT__
     long paddr = (long)info->si_band;
+#else
+    long paddr = scp->sc_jmpbuf.jmp_context.except[0];
+#endif
     v_ptr vaddr = f2v((void *)paddr);
 
 #ifdef MAP_DEBUG
-    printf("catch sig:%d info:0x%0*x context:0x%0*x\n\tpaddr:0x%0*x vaddr:0x%0*x\n",
+    printf("catch sig:%d paddr:0x%0*lx vaddr:0x%0*lx\n",
 	   sig,
-	   sizeof(long)*2, info,
-	   sizeof(long)*2, context,
 	   sizeof(long)*2, paddr,
 	   sizeof(long)*2, vaddr);
 #endif
     if (count >= 10)
 	exit(1);
     if (++count >= 10) {
-	fprintf(stderr, "Recursive SIGSEGV padd: %0*x vaddr: %0*x\n",
+	fprintf(stderr, "Recursive SIGSEGV padd: %0*lx vaddr: %0*lx\n",
 		sizeof(long) * 2, paddr,
 		sizeof(long) * 2, vaddr);
 	exit(1);
@@ -180,11 +198,11 @@ static void map_catch(int sig, siginfo_t *info, ucontext_t *context)
     if (vaddr >= h_base && vaddr < h_high) {
 	paddr &= ~(PAGESIZE - 1);
 #ifdef MAP_DEBUG
-	printf("mmap 1 0x%0*x\n", sizeof(long) * 2, paddr);
+	printf("mmap 1 0x%0*lx\n", sizeof(long) * 2, paddr);
 #endif
 	if ((long)mmap((void *)paddr, PAGESIZE, PROT_READ|PROT_WRITE,
 		       MAP_ANONYMOUS|MAP_FIXED|MAP_PRIVATE, -1, 0) != paddr) {
-	    fprintf(stderr, "paddr = %0*x: ", sizeof(long) * 2, paddr);
+	    fprintf(stderr, "paddr = %0*lx: ", sizeof(long) * 2, paddr);
 	    perror("mmap4");
 	    exit(1);
 	}
@@ -203,7 +221,7 @@ static void map_catch(int sig, siginfo_t *info, ucontext_t *context)
 	--count;
 	longjmp(map_jmp_ptr, vaddr);
     }
-    fprintf(stderr, "\nCan not map: paddr=%0*x vaddr=%0*x\n",
+    fprintf(stderr, "\nCan not map: paddr=%0*lx vaddr=%0*lx\n",
 	    sizeof(long) * 2, paddr,
 	    sizeof(long) * 2, vaddr);
     exit(1);
