@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.9";
+static char sccs_id[] = "@(#)map.c	1.10";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -77,6 +77,8 @@ static char sccs_id[] = "@(#)map.c	1.9";
 
 static long v2f_map[VSEGS];
 static long f2v_map[VSEGS];
+long h_base = 0x80000000;
+long h_high = 0x80000000 + (1 << VSEG_SHIFT);
 
 /*
  * Physical segments 4 and up can be used to map virtual segments.
