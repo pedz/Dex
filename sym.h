@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.3 */
+/* @(#)sym.h	1.4 */
 
 #define HASH_SIZE 128
 
@@ -14,7 +14,7 @@ struct type {
     char *t_name;			/* name of type */
     struct attr *t_attrs;		/* attributes */
     enum stab_type t_type;		/* type of the type */
-    char t_typedef;			/* 1 if this is a typedef */
+    unsigned int t_printed : 1;		/* Used in dump_types */
     struct name_space *t_ns;		/* pointer to name space */
     union {
 	struct {			/* 's' struct and 'u' union */
@@ -234,5 +234,6 @@ symptr name2userdef_all(char *name);
 symptr addr2userdef(ns *nspace, void *addr);
 symptr addr2userdef_all(void *addr);
 void clean_symtable(ns *nspace, int nesting_level);
-symptr enter_sym(ns *nspace, char *name);
+symptr enter_sym(ns *nspace, char *name, int force);
 void dump_symtable(void);
+void dump_types(void);
