@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.6";
+static char sccs_id[] = "@(#)map.c	1.7";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -52,64 +52,80 @@ static char sccs_id[] = "@(#)map.c	1.6";
  *
  */
 
-static long v2f_map[16] = {
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-};
+/*
+ * The number of virtual segments we know about is a power of two.  It
+ * is 2 raised to the power of VSEG_POWER.
+ */
+#define VSEG_POWER 6
+#define VSEG_SHIFT (32 - (VSEG_POWER))
+#define VSEGS (1<<(VSEG_POWER))
+#define VSEG_MASK ((VSEGS) - 1)
+#define VSEG_MASK_LO (((unsigned)-1) >> VSEG_POWER)
+#define VSEG_MASK_HI (~(VSEG_MASK_HI))
 
-static long f2v_map[16] = {
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-};
+static long v2f_map[VSEGS];
+static long f2v_map[VSEGS];
 
 /*
  * Physical segments 4 and up can be used to map virtual segments.
  * 0-2 can not be used because mmap barfs.  3 is for the dump file.
  */
-static int next_pseg = 4;
+static int next_pseg = (4 << (VSEG_POWER - 4));
 
 /*
  * right now, all the virtual segments can be used except for 3-6.  We
  * give segment 3 to the pseudo variables.
  */
-static int next_vseg = 4;
+static int next_vseg = (4 << (VSEG_POWER - 4));
 
 p_ptr v2f(v_ptr v)
 {
     unsigned long r = (long)v;
-    int n = (r >> 28) & 0xf;
+    int n = (r >> VSEG_SHIFT) & VSEG_MASK;
 
     if (v2f_map[n] == -1) {
-	if (next_pseg == 16) {
+	if (next_pseg == VSEGS) {
 	    fprintf(stderr, "Out of segments in v2f %d\n", n);
 	    exit(1);
 	}
-	v2f_map[n] = next_pseg << 28;
-	f2v_map[next_pseg++] = n << 28;
-#if 0
+	v2f_map[n] = next_pseg << VSEG_SHIFT;
+	f2v_map[next_pseg] = n << VSEG_SHIFT;
+#ifdef MAP_DEBUG
+	printf("v2f: map of %08x, map vseg %d to vseg %d\n", r, n, next_pseg);
 	printf("v2f: setting v2f[%x] to %x\n", n, v2f_map[n]);
-	printf("v2f: setting f2v[%x] to %x\n", next_pseg-1, f2v_map[next_pseg-1]);
+	printf("v2f: setting f2v[%x] to %x\n", next_pseg, f2v_map[next_pseg]);
 #endif
+	++next_pseg;
     }
-    return (p_ptr)(v2f_map[n] | ((long)v & 0x0fffffff));
+#ifdef MAP_DEBUG_2
+    printf("v2f: map %08x to %08x\n", r, (v2f_map[n] | ((long)v & VSEG_MASK_LO)));
+#endif
+    return (p_ptr)(v2f_map[n] | ((long)v & VSEG_MASK_LO));
 }
 
 v_ptr f2v(p_ptr p)
 {
     unsigned long r = (long)p;
-    int n = (r >> 28) & 0xf;
+    int n = (r >> VSEG_SHIFT) & VSEG_MASK;
 
     if (f2v_map[n] == -1) {
 	if (next_vseg == 6) {
 	    fprintf(stderr, "Out of segments in f2v %d\n", n);
 	    exit(1);
 	}
-	f2v_map[n] = next_vseg << 28;
-	v2f_map[next_vseg++] = n << 28;
-#if 0
+	f2v_map[n] = next_vseg << VSEG_SHIFT;
+	v2f_map[next_vseg] = n << VSEG_SHIFT;
+#ifdef MAP_DEBUG
+	printf("f2v: map of %08x, map fseg %d to vseg %d\n", r, n, next_vseg);
 	printf("f2v: setting f2v[%x] to %x\n", n, f2v_map[n]);
-	printf("f2v: setting v2f[%x] to %x\n", next_vseg-1, v2f_map[next_vseg-1]);
+	printf("f2v: setting v2f[%x] to %x\n", next_vseg, v2f_map[next_vseg]);
 #endif
+	next_vseg++;
     }
-    return (v_ptr)(f2v_map[n] | ((long)p & 0x0fffffff));
+#ifdef MAP_DEBUG_2
+    printf("f2v: map %08x to %08x\n", r, (f2v_map[n] | ((long)p & VSEG_MASK_LO)));
+#endif
+    return (v_ptr)(f2v_map[n] | ((long)p & VSEG_MASK_LO));
 }
 
 static void map_catch(int sig, int code, struct sigcontext *scp)
@@ -119,6 +135,9 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
     v_ptr vaddr = f2v((void *)paddr);
 
+#ifdef MAP_DEBUG
+    printf("catch %d 0x%08x 0x%08x\n", sig, paddr, vaddr);
+#endif
     if (count >= 10)
 	exit(1);
     if (++count >= 10) {
@@ -137,6 +156,9 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
      */
     if (vaddr >= h_base && vaddr < h_high) {
 	paddr &= ~(PAGESIZE - 1);
+#ifdef MAP_DEBUG
+	printf("mmap 1 0x%08x\n", paddr);
+#endif
 	if ((long)mmap((void *)paddr, PAGESIZE, PROT_READ|PROT_WRITE,
 		       MAP_ANONYMOUS|MAP_FIXED|MAP_PRIVATE, -1, 0) != paddr) {
 	    fprintf(stderr, "paddr = %08x: ", paddr);
@@ -166,6 +188,7 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 void map_init(void)
 {
     struct sigaction s;
+    int i;
 
     s.sa_handler = (void (*)())map_catch;
     sigemptyset(&s.sa_mask);
@@ -174,4 +197,6 @@ void map_init(void)
 	perror("sigaction");
 	exit(1);
     }
+    for (i = VSEGS; --i >= 0; )
+	v2f_map[i] = f2v_map[i] = -1;
 }
