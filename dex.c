@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.8";
+static char sccs_id[] = "@(#)dex.c	1.9";
 
 #include <stdio.h>
 #include <strings.h>
@@ -39,14 +39,12 @@ main(int argc, char *argv[])
 	++argv;
     }
 
-    printf("Line %d\n", __LINE__);
     if (argc) {				/* Optional first arg is the dump name */
 	dumpname = argv[0];
 	++argv;
 	--argc;
     }
 
-    printf("Line %d\n", __LINE__);
     if (argc) {				/* Optional second arg is /unix name */
 	unixname = argv[0];
 	load(unixname, 0, 0);
@@ -54,19 +52,13 @@ main(int argc, char *argv[])
 	--argc;
     }
 
-    printf("Line %d\n", __LINE__);
     ns_inter = ns_create((ns *)0, progname);
-    printf("Line %d\n", __LINE__);
     load_base_types(ns_inter);
-    printf("Line %d\n", __LINE__);
     tree_init();
-    printf("Line %d\n", __LINE__);
     map_init();
-    printf("Line %d\n", __LINE__);
     builtin_init();
-    printf("Line %d\n", __LINE__);
+    setup_pseudos();
     GRAMparse();
-    printf("Line %d\n", __LINE__);
     return 0;
 }
 
