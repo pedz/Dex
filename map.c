@@ -1,87 +1,95 @@
-static char sccs_id[] = "@(#)map.c	1.1";
-#include <stdlib.h>
+static char sccs_id[] = "@(#)map.c	1.2";
+#include <sys/param.h>
+#include <sys/signal.h>
+#include <sys/mman.h>
 #include <stdio.h>
 #include "map.h"
-#include "dex.h"
-#include "dmap.h"
 
 /*
- * This is a general purpose virtual memory system.  Given a "virtual"
- * address, it will provide the contents with that address.  I do not
- * believe I am going to provide a virtual address to physical address
- * mapping.  The contents are provided by a routine with an obvious
- * calling sequence.  This routine is specified on a per virtual page
- * bases.  Currently there are two routines.  One for dex's address
- * space and one for crash dumps.  dex's address space consumes
- * 0x80000000 in the virtual space.  (Eventually, this address will be
- * settable by a command line argument.)  So to the interpreter, a
- * pseudo variable will have the address of 0x8000000 and up.  This
- * will get remapped into an address within dex.
+ * This is the second attempt at a general purpose virtual memory
+ * system.  I now provide a v2f function to convert a virtual address
+ * into a "possible" physical address.  It is possible because if we
+ * are coming from a dump, the address might not be in the dump in
+ * which case attempting to access it will give a SIGSEGV trap.
  * 
- * Currently we fill pages which do not exist with 0's and we do this
- * silently.  I haven't put much thought into that problem.
+ * The scheme is key on several RS/6000 specific facts.  mmap seems to
+ * work for segments 3 through C and we need to map kernel segments 0,
+ * 2, B, and E.  We accomplish this by flipping the highest bit (or
+ * making physical address == (virtual address ^ 0x80000000).  This
+ * puts the four segments that we need to map into the range that we
+ * can map them.  The pseudo variables and stack are then put in
+ * virtual address 0x40000000 which makes it physical address
+ * 0xC0000000.
+ *
+ * The scheme works by setting a handler for SIGSEGV.  The handler
+ * looks at the address being accessed and fills in that page using
+ * mmap from the dump.  In the case of a running system, a timer will
+ * be added to flush these pages on a periodic basis so that "fresh"
+ * values are retrieved from the system.
+ *
+ * The plan is to do a longjmp in the case the address being accessed
+ * is not in the dump so that routines can simply do a setjmp and then
+ * go screaming around without doing checks for 0's.
  */
 
-struct page {
-    struct page *p_next;
-    v_ptr p_addr;
-    m_func p_f;
-};
-struct page *hash[128];
-#define HASH_SIZE (sizeof(hash) / sizeof(hash[0]))
-
-static int v_hash(v_ptr addr)
+static void map_catch(int sig, int code, struct sigcontext *scp)
 {
-    unsigned long w = ((unsigned long)addr) >> PGSHIFT;
+    static volatile int count;
+    sigset_t t;
+    long paddr = scp->sc_jmpbuf.jmp_context.except[0];
+    v_ptr vaddr = f2v(paddr);
 
-    w ^= w >> (32 - PGSHIFT);
-    return w % HASH_SIZE;
-}
+    if (++count > 5) {
+	fprintf(stderr, "Recursive SIGSEGV padd: %08x vaddr: %08x\n",
+		paddr, vaddr);
+	exit(1);
+    }
 
-static struct page *v_find(v_ptr addr)
-{
-    struct page *r;
-
-    for (r = hash[v_hash(addr)];
-	 r && r->p_addr != addr;
-	 r = r->p_next);
-    return r;
-}
-
-m_type v_read(p_ptr buf, v_ptr addr, m_size size)
-{
-    struct page *p;
-    m_func f;
-    v_ptr base_addr = (v_ptr)((unsigned long)addr & PAGE_MASK);
-
-    if (p = v_find(base_addr))
-	f = p->p_f;
-    else
-	f = read_dump;
-    (*f)(buf, addr, size, 0);
-}
-
-m_type v_write(p_ptr buf, v_ptr addr, m_size size)
-{
-    struct page *p;
-    v_ptr base_addr = (v_ptr)((unsigned long)addr & PAGE_MASK);
-
-    if (p = v_find(base_addr))
-	(*p->p_f)(buf, addr, size, 1);
-}
-
-m_type v_mkpage(v_ptr addr, m_func f)
-{
-    struct page *p;
-    v_ptr base_addr = (v_ptr)((unsigned long)addr & PAGE_MASK);
-    int h;
-
-    if (p = v_find(base_addr))
+    sigemptyset(&t);
+    sigaddset(&t, SIGSEGV);
+    if (sigprocmask(SIG_UNBLOCK, &t, (sigset_t *)0) < 0)
+	perror("sigprocmask");
+    
+    /*
+     * User pseudo segment -- just map a blank page and continue.
+     */
+    if (vaddr >= h_base && vaddr < h_high) {
+	paddr &= ~(PAGESIZE - 1);
+	if ((long)mmap(paddr, PAGESIZE, PROT_READ|PROT_WRITE,
+		       MAP_ANONYMOUS|MAP_FIXED|MAP_PRIVATE, -1, 0) != paddr) {
+	    perror("mmap");
+	    exit(1);
+	}
+	--count;
 	return;
-    p = new(struct page);
-    p->p_addr = base_addr;
-    p->p_f = f;
-    h = v_hash(base_addr);
-    p->p_next = hash[h];
-    hash[h] = p;
+    }
+    /*
+     * We attempt to map paddr to vaddr.  If this works, we return
+     * happy.  Otherwise we do a longjmp.
+     */
+    if (!map_addr(vaddr)) {
+	--count;
+	return;
+    }
+    if (map_jmp_ptr) {
+	--count;
+	longjmp(map_jmp_ptr, vaddr);
+    }
+    printf("\nCan not map: iar=%08x paddr=%08x vaddr=%08x\n",
+	   scp->sc_jmpbuf.jmp_context.iar, paddr, vaddr);
+    dump_symtable();
+    exit(1);
+}
+
+void map_init(void)
+{
+    struct sigaction s;
+
+    s.sa_handler = (void (*)())map_catch;
+    sigemptyset(&s.sa_mask);
+    s.sa_flags = 0;
+    if (sigaction(SIGSEGV, &s, (struct sigaction *)0) < 0) {
+	perror("sigaction");
+	exit(1);
+    }
 }
