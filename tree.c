@@ -1,9 +1,11 @@
-static char sccs_id[] = "@(#)tree.c	1.9";
+static char sccs_id[] = "@(#)tree.c	1.10";
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/signal.h>
 #include <dbxstclass.h>
+#include <strings.h>
+
 #include "dex.h"
 #include "map.h"
 #include "sym.h"
@@ -17,6 +19,10 @@ static char sccs_id[] = "@(#)tree.c	1.9";
 #include "unary_expr.h"
 #include "inter.h"
 #include "fcall.h"
+#include "print.h"
+#include "gram_pre.h"
+
+#define DEBUG_BIT TREE_C_BIT
 
 /*
  * promotions is indexed with two expr_types to determine the type to
@@ -46,9 +52,7 @@ char *type_2_string[LAST_TYPE + 1];
 
 expr *new_expr(void)
 {
-    expr *ret = new(struct expr);
-    bzero(ret, sizeof(*ret));
-    return ret;
+    return new(struct expr);
 }
 
 int mk_ident(cnode *result, char *s)
@@ -85,7 +89,7 @@ void mk_l2p(cnode *result, cnode *c)
 	eptr->e_func = op_table[c->c_base][tok_2_op['.']];
 	eptr->e_left = c->c_expr;
 	eptr->e_size = c->c_expr->e_size;
-	PRINTF("mk_l2p %d %08x\n", eptr->e_size, eptr);
+	DEBUG_PRINTF(("mk_l2p %d %s\n", eptr->e_size, P(eptr)));
 	if (c->c_bitfield) {
 	    eptr->e_bsize = c->c_size;
 	    eptr->e_boffset = c->c_offset;
@@ -213,9 +217,9 @@ int mk_dot(cnode *result, cnode *c, char *s)
 	 * size is the size of an address.
 	 */
 	result->c_expr->e_size = 
-	  (f->f_typeptr->t_type == ARRAY_TYPE) ?
-	  sizeof(char *) :
-	  f->f_numbits / 8;
+	    (f->f_typeptr->t_type == ARRAY_TYPE) ?
+	    sizeof(char *) :
+	    f->f_numbits / 8;
     }
 
     /* set the result */
@@ -307,7 +311,8 @@ int mk_asgn(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
     eptr->e_func = op_table[lvalue->c_base][tok_2_op[opcode]];
     if (!eptr->e_func.sc) {
 	GRAMerror("`%s' op is illegal for %s's",
-		  op_2_string[tok_2_op[opcode]], type_2_string[lvalue->c_base]);
+		  op_2_string[tok_2_op[opcode]],
+		  type_2_string[lvalue->c_base]);
 	eptr->e_func = null_func[lvalue->c_base];
 	rc = 1;
     }
@@ -607,10 +612,10 @@ void tree_init(void)
     SIGINITSET(s.sa_mask);
     s.sa_flags = 0;
 /*
-    if (sigaction(SIGILL, &s, (struct sigaction *)0) < 0) {
-	perror("sigaction");
-	exit(1);
-    }
+  if (sigaction(SIGILL, &s, (struct sigaction *)0) < 0) {
+  perror("sigaction");
+  exit(1);
+  }
 */
 
 #define do_xy(from_type, to_type) \
@@ -628,6 +633,8 @@ void tree_init(void)
     do_xy(uint_type, uint_type);
     do_xy(long_type, long_type);
     do_xy(ulong_type, ulong_type);
+    do_xy(long_long_type, long_long_type);
+    do_xy(ulong_long_type, ulong_long_type);
     do_xy(float_type, float_type);
     do_xy(double_type, double_type);
 
@@ -657,7 +664,7 @@ void tree_init(void)
 	fprintf(stderr, "TOK_MAX needs to be at least %d\n", operator); \
 	exit(1); \
     } \
-    tok_2_op[operator] = next_op;
+    tok_2_op[operator] = next_op
 
 /*
  * macro to set the function pointer of an expression ENODE based upon
@@ -674,9 +681,11 @@ void tree_init(void)
     table[ushort_type][next_op].us = us_ ## suffix ; \
     table[long_type][next_op].l = l_ ## suffix ; \
     table[ulong_type][next_op].ul = ul_ ## suffix ; \
+    table[long_long_type][next_op].ll = ll_ ## suffix ; \
+    table[ulong_long_type][next_op].ull = ull_ ## suffix ; \
     table[float_type][next_op].f = f_ ## suffix ; \
     table[double_type][next_op].d = d_ ## suffix ; \
-    table[struct_type][next_op].st = st_ ## suffix ;
+    table[struct_type][next_op].st = st_ ## suffix
 
 /*
  * macro to set the function pointer of an expression ENODE based upon
@@ -693,9 +702,11 @@ void tree_init(void)
     table[ushort_type][next_op].usa = us_ ## suffix ; \
     table[long_type][next_op].la = l_ ## suffix ; \
     table[ulong_type][next_op].ula = ul_ ## suffix ; \
+    table[long_long_type][next_op].lla = ll_ ## suffix ; \
+    table[ulong_long_type][next_op].ulla = ull_ ## suffix ; \
     table[float_type][next_op].fa = f_ ## suffix ; \
     table[double_type][next_op].da = d_ ## suffix ; \
-    table[struct_type][next_op].sta = st_ ## suffix ;
+    table[struct_type][next_op].sta = st_ ## suffix
 
 /*
  * Many operators work only on numeric (int and float) types and not
@@ -712,12 +723,14 @@ void tree_init(void)
     table[ushort_type][next_op].us = us_ ## suffix ; \
     table[long_type][next_op].l = l_ ## suffix ; \
     table[ulong_type][next_op].ul = ul_ ## suffix ; \
+    table[long_long_type][next_op].ll = ll_ ## suffix ; \
+    table[ulong_long_type][next_op].ull = ull_ ## suffix ; \
     table[float_type][next_op].f = f_ ## suffix ; \
-    table[double_type][next_op].d = d_ ## suffix ;
+    table[double_type][next_op].d = d_ ## suffix
 
 /*
- * Compare and logical not work on numeric types but produce an
- * integer result.
+ * Compare and logical work on numeric types but produce an integer
+ * result.
  */
 #define setintrtable(table, operator, suffix, str) \
     SET_OP(operator); \
@@ -730,8 +743,10 @@ void tree_init(void)
     table[ushort_type][next_op].i = us_ ## suffix ; \
     table[long_type][next_op].i = l_ ## suffix ; \
     table[ulong_type][next_op].i = ul_ ## suffix ; \
+    table[long_long_type][next_op].i = ll_ ## suffix ; \
+    table[ulong_long_type][next_op].i = ull_ ## suffix ; \
     table[float_type][next_op].i = f_ ## suffix ; \
-    table[double_type][next_op].i = d_ ## suffix ;
+    table[double_type][next_op].i = d_ ## suffix
 
 /*
  * Some operators work only on integral types
@@ -746,7 +761,9 @@ void tree_init(void)
     table[short_type][next_op].s = s_ ## suffix ; \
     table[ushort_type][next_op].us = us_ ## suffix ; \
     table[long_type][next_op].l = l_ ## suffix ; \
-    table[ulong_type][next_op].ul = ul_ ## suffix ;
+    table[ulong_type][next_op].ul = ul_ ## suffix ; \
+    table[long_long_type][next_op].ll = ll_ ## suffix ; \
+    table[ulong_long_type][next_op].ull = ull_ ## suffix
 
     setalltable(op_table, '=', asgn, "=");
     setnumtable(op_table, PLUSEQUAL, plusasgn, "+=");
@@ -805,8 +822,10 @@ void tree_init(void)
     table[ushort_type][from_base].us = us_ ## suffix ; \
     table[long_type][from_base].l = l_ ## suffix ; \
     table[ulong_type][from_base].ul = ul_ ## suffix ; \
+    table[long_long_type][from_base].ll = ll_ ## suffix ; \
+    table[ulong_long_type][from_base].ull = ull_ ## suffix ; \
     table[float_type][from_base].f = f_ ## suffix ; \
-    table[double_type][from_base].d = d_ ## suffix ;
+    table[double_type][from_base].d = d_ ## suffix
 
     setcasttable(cast_table, schar_type, _sc, "signed char");
     setcasttable(cast_table, uchar_type, _uc, "unsigned char");
@@ -816,28 +835,33 @@ void tree_init(void)
     setcasttable(cast_table, ushort_type, _us, "unsigned short");
     setcasttable(cast_table, long_type, _l, "long");
     setcasttable(cast_table, ulong_type, _ul, "unsigned long");
+    setcasttable(cast_table, long_long_type, _ll, "long long");
+    setcasttable(cast_table, ulong_long_type, _ull, "unsigned long long");
     setcasttable(cast_table, float_type, _f, "float");
     setcasttable(cast_table, double_type, _d, "double");
     type_2_string[struct_type] = "structure";
     type_2_string[void_type] = "void";
     type_2_string[bad_type] = "bad";
 
-    null_func[schar_type].sc = sc_null; \
-    null_func[uchar_type].uc = uc_null; \
-    null_func[int_type].i = i_null; \
-    null_func[uint_type].ui = ui_null; \
-    null_func[short_type].s = s_null; \
-    null_func[ushort_type].us = us_null; \
-    null_func[long_type].l = l_null; \
-    null_func[ulong_type].ul = ul_null; \
-    null_func[float_type].f = f_null; \
-    null_func[double_type].d = d_null; \
+    null_func[schar_type].sc = sc_null;
+    null_func[uchar_type].uc = uc_null;
+    null_func[int_type].i = i_null;
+    null_func[uint_type].ui = ui_null;
+    null_func[short_type].s = s_null;
+    null_func[ushort_type].us = us_null;
+    null_func[long_type].l = l_null;
+    null_func[ulong_type].ul = ul_null;
+    null_func[long_long_type].ll = ll_null;
+    null_func[ulong_long_type].ull = ull_null;
+    null_func[float_type].f = f_null;
+    null_func[double_type].d = d_null;
     null_func[struct_type].st = st_null;
 }
 
 enum expr_type base_type(typeptr t)
 {
-    large_t upper;
+    ularge_t upper;
+    ularge_t max;
 
     switch (t->t_type) {
     case STRUCT_TYPE:
@@ -850,20 +874,35 @@ enum expr_type base_type(typeptr t)
 
     case RANGE_TYPE:
 	upper = atolarge(t->t_val.val_r.r_upper);
-	if (!is_zero(t->t_val.val_r.r_lower)) {	/* non-zero lower bound => signed */
-	    if (upper < 128 )
+
+	if (!is_zero(t->t_val.val_r.r_lower)) {/* signed */
+	    max = 128;
+	    if (upper < max)
 		return schar_type;
-	    else if (upper < (128 * 256))
+	    max <<= 8 * (sizeof(short) - sizeof(char));
+	    if (upper < max)
 		return short_type;
-	    else
+	    max <<= 8 * (sizeof(int) - sizeof(short));
+	    if (upper < max)
+		return int_type;
+	    max <<= 8 * (sizeof(long) - sizeof(int));
+	    if (upper < max)
 		return long_type;
-	} else {
-	    if (upper < 256)
+	    return long_long_type;
+	} else {			/* unsigned */
+	    max = 256;
+	    if (upper < max)
 		return uchar_type;
-	    else if (upper < (256 * 256))
+	    max <<= 8 * (sizeof(short) - sizeof(char));
+	    if (upper < max)
 		return ushort_type;
-	    else
+	    max <<= 8 * (sizeof(int) - sizeof(short));
+	    if (upper < max)
+		return uint_type;
+	    max <<= 8 * (sizeof(long) - sizeof(int));
+	    if (upper < max)
 		return ulong_type;
+	    return ulong_long_type;
 	}
 	
     case FLOAT_TYPE:
@@ -890,51 +929,60 @@ enum expr_type base_type(typeptr t)
 
 void eval_all(all *result, cnode *c)
 {
-    PRINTF("eval_all called with %s and evaled to ", type_2_string[c->c_base]);
+    DEBUG_PRINTF(("eval_all called with %s and evaled to ",
+		  type_2_string[c->c_base]));
     switch (c->c_base) {
     case schar_type:
-	result->c = sc_val(c->c_expr);
-	PRINTF("%08x\n", result->c);
+	result->sc = sc_val(c->c_expr);
+	DEBUG_PRINTF(("%s\n", P(result->sc)));
 	break ;
     case uchar_type:
 	result->uc = uc_val(c->c_expr);
-	PRINTF("%08x\n", result->uc);
+	DEBUG_PRINTF(("%s\n", P(result->uc)));
 	break ;
     case int_type:
 	result->i = i_val(c->c_expr);
-	PRINTF("%08x\n", result->i);
+	DEBUG_PRINTF(("%s\n", P(result->i)));
 	break;
     case uint_type:
 	result->ui = ui_val(c->c_expr);
-	PRINTF("%08x\n", result->ui);
+	DEBUG_PRINTF(("%s\n", P(result->ui)));
 	break ;
     case short_type:
 	result->s = s_val(c->c_expr);
-	PRINTF("%08x\n", result->s);
+	DEBUG_PRINTF(("%s\n", P(result->s)));
 	break ;
     case ushort_type:
 	result->us = us_val(c->c_expr);
-	PRINTF("%08x\n", result->us);
+	DEBUG_PRINTF(("%s\n", P(result->us)));
 	break ;
     case long_type:
 	result->l = l_val(c->c_expr);
-	PRINTF("%08x\n", result->l);
+	DEBUG_PRINTF(("%s\n", P(result->l)));
 	break ;
     case ulong_type:
 	result->ul = ul_val(c->c_expr);
-	PRINTF("%08x\n", result->ul);
+	DEBUG_PRINTF(("%s\n", P(result->ul)));
+	break ;
+    case long_long_type:
+	result->ll = ll_val(c->c_expr);
+	DEBUG_PRINTF(("%s\n", P(result->ll)));
+	break ;
+    case ulong_long_type:
+	result->ull = ull_val(c->c_expr);
+	DEBUG_PRINTF(("%s\n", P(result->ull)));
 	break ;
     case float_type:
 	result->f = f_val(c->c_expr);
-	PRINTF("%f\n", result->f);
+	DEBUG_PRINTF(("%f\n", result->f));
 	break ;
     case double_type:
 	result->d = d_val(c->c_expr);
-	PRINTF("%f\n", result->d);
+	DEBUG_PRINTF(("%f\n", result->d));
 	break ;
     case struct_type:
 	result->st = st_val(c->c_expr);
-	PRINTF("%08x\n", result->st);
+	DEBUG_PRINTF(("%s\n", P(result->st)));
 	break;
     case void_type:
     default:
@@ -966,14 +1014,65 @@ typeptr mk_strtype(ns *nspace, int len)
     return ret;
 }
 
-void mk_const(ns *nspace, cnode *c, int value)
+void mk_const(ns *nspace, cnode *c, large_t value, int tval)
 {
-    c->c_type = find_type(nspace, TP_INT);
-    c->c_base = int_type;
+    c->c_type = find_type(nspace, tval);
+    c->c_base = base_type(c->c_type);
     c->c_expr = new_expr();
-    c->c_expr->e_func.i = i_leaf;
-    c->c_expr->e_i = value;
-    c->c_expr->e_size = sizeof(int);
+
+    switch (c->c_base) {
+    case schar_type:
+	c->c_expr->e_sc = value;
+	c->c_expr->e_func.sc = sc_leaf;
+	break;
+
+    case uchar_type:
+	c->c_expr->e_uc = value;
+	c->c_expr->e_func.uc = uc_leaf;
+	break;
+
+    case int_type:
+	c->c_expr->e_i = value;
+	c->c_expr->e_func.i = i_leaf;
+	break;
+
+    case uint_type:
+	c->c_expr->e_ui = value;
+	c->c_expr->e_func.ui = ui_leaf;
+	break;
+
+    case short_type:
+	c->c_expr->e_s = value;
+	c->c_expr->e_func.s = s_leaf;
+	break;
+
+    case ushort_type:
+	c->c_expr->e_us = value;
+	c->c_expr->e_func.us = us_leaf;
+	break;
+
+    case long_type:
+	c->c_expr->e_l = value;
+	c->c_expr->e_func.l = l_leaf;
+	break;
+
+    case ulong_type:
+	c->c_expr->e_ul = value;
+	c->c_expr->e_func.ul = ul_leaf;
+	break;
+
+    case long_long_type:
+	c->c_expr->e_ll = value;
+	c->c_expr->e_func.ll = ll_leaf;
+	break;
+
+    case ulong_long_type:
+	c->c_expr->e_ull = value;
+	c->c_expr->e_func.ull = ull_leaf;
+	break;
+    }
+
+    c->c_expr->e_size = get_size(c->c_type);
     c->c_const = 1;
     c->c_bitfield = 0;
 }
@@ -982,7 +1081,7 @@ int mk_incdec(ns *nspace, cnode *result, cnode *lvalue, int op)
 {
     cnode one;
 
-    mk_const(nspace, &one, 1);
+    mk_const(nspace, &one, 1, TP_INT);
     return mk_asgn(result, lvalue, op, &one);
 }
 
@@ -990,20 +1089,33 @@ void print_expression(cnode *c)
 {
     all value;
     char *p;
-    char numbuf[16];
+    char numbuf[32];
+    typeptr tptr = c->c_type;
 
     eval_all(&value, c);
     numbuf[0] = 0;
     if (c->c_base == struct_type) {
 	p = v2f_type(char *, value.st);
-	sprintf(numbuf, "0x%08x", value.st);
-    } else if (c->c_type->t_type == ARRAY_TYPE ||
-	       c->c_type->t_type == PROC_TYPE)
-	p = v2f_type(char *, value.ul);
+	sprintf(numbuf, "0x%s", P(value.st));
+    } else if (c->c_type->t_type == ARRAY_TYPE) {
+	typeptr rtptr = tptr->t_val.val_a.a_typedef;
+
+	if (rtptr->t_type != RANGE_TYPE) {
+	    printf("bogus typedef for array\n");
+	    return;
+	}
+
+	/* Check if this is actually an & operator */
+	if (!rtptr->t_val.val_r.r_lower && !rtptr->t_val.val_r.r_upper)
+	    p = (char *)&value;
+	else
+	    p = v2f_type(char *, value.ul);
+    } else if (c->c_type->t_type == PROC_TYPE)
+	p = (char *)value.ul;
     else
 	p = (char *)&value;
 
-    print_out(c->c_type, p, 0, 0, 0, numbuf);
+    print_out(tptr, p, 0, 0, 0, numbuf);
 }
 
 void *get_user_sym_addr(char *name)
