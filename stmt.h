@@ -1,5 +1,5 @@
 
-/* @(#)stmt.h	1.2 */
+/* @(#)stmt.h	1.3 */
 
 /*
  * Rather than trying to minimize space, the structure for statements
@@ -31,6 +31,7 @@ struct stmt {
 
 	int su_alloc;			/* alloc statements */
 #define stmt_alloc st_un.su_alloc
+
     } st_un;
 };
 
