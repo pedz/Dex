@@ -1,5 +1,8 @@
 
-/* @(#)fcall.h	1.1 */
+/* @(#)fcall.h	1.2 */
+
+extern long frame_ptr;
+extern long stack_ptr;
 
 void alloc_stack(int n);
 signed char sc_fcall(expr *n);
