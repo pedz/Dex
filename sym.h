@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.8 */
+/* @(#)sym.h	1.9 */
 
 #define HASH_SIZE 128
 
