@@ -1,5 +1,11 @@
 
-/* @(#)tree.h	1.6 */
+/* @(#)tree.h	1.7 */
+
+#ifndef __TREE_H
+#define __TREE_H
+
+#include "dex.h"			/* needed for large_t */
+#include "sym.h"			/* needed for anode */
 
 /*
  * When a struct is evaulated, the address of the structure is
@@ -9,12 +15,14 @@ typedef unsigned long st;
 
 /* This union can contain all of the types known to the interpreter */
 typedef union all {
-    signed char c;
+    signed char sc;
     unsigned char uc;
     int i;
     unsigned int ui;
     long l;
     unsigned long ul;
+    long long ll;
+    unsigned long long ull;
     short s;
     unsigned short us;
     float f;
@@ -22,36 +30,42 @@ typedef union all {
     st st;
 } all;
 
+typedef struct expr expr;
+
 /* A node in the expression tree */
-typedef struct expr {
+struct expr {
     union all_func {
 	/* set of function pointers for pvalues */
-	signed char (*sc)();
-	unsigned char (*uc)();
-	int (*i)();
-	unsigned int (*ui)();
-	short (*s)();
-	unsigned short (*us)();
-	long (*l)();
-	unsigned long (*ul)();
-	float (*f)();
-	double (*d)();
-	st (*st)();
-	void (*v)();
+	signed char (*sc)(expr *);
+	unsigned char (*uc)(expr *);
+	int (*i)(expr *);
+	unsigned int (*ui)(expr *);
+	short (*s)(expr *);
+	unsigned short (*us)(expr *);
+	long (*l)(expr *);
+	unsigned long (*ul)(expr *);
+	long long (*ll)(expr *);
+	unsigned long long (*ull)(expr *);
+	float (*f)(expr *);
+	double (*d)(expr *);
+	st (*st)(expr *);
+	void (*v)(expr *);
 
 	/* set of function pointers for lvalues */
-	signed char *(*sca)();
-	unsigned char *(*uca)();
-	int *(*ia)();
-	unsigned int *(*uia)();
-	short *(*sa)();
-	unsigned short *(*usa)();
-	long *(*la)();
-	unsigned long *(*ula)();
-	float *(*fa)();
-	double *(*da)();
-	st *(*sta)();
-	void *(*va)();
+	signed char *(*sca)(expr *);
+	unsigned char *(*uca)(expr *);
+	int *(*ia)(expr *);
+	unsigned int *(*uia)(expr *);
+	short *(*sa)(expr *);
+	unsigned short *(*usa)(expr *);
+	long *(*la)(expr *);
+	unsigned long *(*ula)(expr *);
+	long long *(*lla)(expr *);
+	unsigned long long *(*ulla)(expr *);
+	float *(*fa)(expr *);
+	double *(*da)(expr *);
+	st *(*sta)(expr *);
+	void *(*va)(expr *);
     } e_func;
     union {
 	struct {			/* binary and unary op nodes */
@@ -72,12 +86,14 @@ typedef struct expr {
 
 	all _e_all;			/* constant leaf nodes */
 #define e_all   e_arg._e_all
-#define e_c     e_all.c
+#define e_sc    e_all.sc
 #define e_uc    e_all.uc
 #define e_i     e_all.i
 #define e_ui    e_all.ui
 #define e_l     e_all.l
 #define e_ul    e_all.ul
+#define e_ll    e_all.ll
+#define e_ull   e_all.ull
 #define e_s     e_all.s
 #define e_us    e_all.us
 #define e_f     e_all.f
@@ -91,37 +107,41 @@ typedef struct expr {
     int e_size : 22;
     int e_boffset : 5;
     int e_bsize : 5;
-} expr;
+};
 
 /* Macros to compute the pvalue of a single node */
-#define sc_val(node) ((*(node)->e_func.sc)(node))
-#define uc_val(node) ((*(node)->e_func.uc)(node))
-#define i_val(node)  ((*(node)->e_func.i)(node))
-#define ui_val(node) ((*(node)->e_func.ui)(node))
-#define s_val(node)  ((*(node)->e_func.s)(node))
-#define us_val(node) ((*(node)->e_func.us)(node))
-#define l_val(node)  ((*(node)->e_func.l)(node))
-#define ul_val(node) ((*(node)->e_func.ul)(node))
-#define p_val(node)  ((*(node)->e_func.p)(node))
-#define d_val(node)  ((*(node)->e_func.d)(node))
-#define f_val(node)  ((*(node)->e_func.f)(node))
-#define st_val(node) ((*(node)->e_func.st)(node))
-#define v_val(node)  ((*(node)->e_func.v)(node))
+#define sc_val(node)  ((*(node)->e_func.sc)(node))
+#define uc_val(node)  ((*(node)->e_func.uc)(node))
+#define i_val(node)   ((*(node)->e_func.i)(node))
+#define ui_val(node)  ((*(node)->e_func.ui)(node))
+#define s_val(node)   ((*(node)->e_func.s)(node))
+#define us_val(node)  ((*(node)->e_func.us)(node))
+#define l_val(node)   ((*(node)->e_func.l)(node))
+#define ul_val(node)  ((*(node)->e_func.ul)(node))
+#define ll_val(node)  ((*(node)->e_func.ll)(node))
+#define ull_val(node) ((*(node)->e_func.ull)(node))
+#define p_val(node)   ((*(node)->e_func.p)(node))
+#define d_val(node)   ((*(node)->e_func.d)(node))
+#define f_val(node)   ((*(node)->e_func.f)(node))
+#define st_val(node)  ((*(node)->e_func.st)(node))
+#define v_val(node)   ((*(node)->e_func.v)(node))
 
 /* Macros to compute the lvalue value of a single node */
-#define sc_addr(node) ((*(node)->e_func.sca)(node))
-#define uc_addr(node) ((*(node)->e_func.uca)(node))
-#define i_addr(node)  ((*(node)->e_func.ia)(node))
-#define ui_addr(node) ((*(node)->e_func.uia)(node))
-#define s_addr(node)  ((*(node)->e_func.sa)(node))
-#define us_addr(node) ((*(node)->e_func.usa)(node))
-#define l_addr(node)  ((*(node)->e_func.la)(node))
-#define ul_addr(node) ((*(node)->e_func.ula)(node))
-#define p_addr(node)  ((*(node)->e_func.pa)(node))
-#define d_addr(node)  ((*(node)->e_func.da)(node))
-#define f_addr(node)  ((*(node)->e_func.fa)(node))
-#define st_addr(node) ((*(node)->e_func.sta)(node))
-#define v_addr(node)  ((*(node)->e_func.va)(node))
+#define sc_addr(node)  ((*(node)->e_func.sca)(node))
+#define uc_addr(node)  ((*(node)->e_func.uca)(node))
+#define i_addr(node)   ((*(node)->e_func.ia)(node))
+#define ui_addr(node)  ((*(node)->e_func.uia)(node))
+#define s_addr(node)   ((*(node)->e_func.sa)(node))
+#define us_addr(node)  ((*(node)->e_func.usa)(node))
+#define l_addr(node)   ((*(node)->e_func.la)(node))
+#define ul_addr(node)  ((*(node)->e_func.ula)(node))
+#define ll_addr(node)  ((*(node)->e_func.lla)(node))
+#define ull_addr(node) ((*(node)->e_func.ulla)(node))
+#define p_addr(node)   ((*(node)->e_func.pa)(node))
+#define d_addr(node)   ((*(node)->e_func.da)(node))
+#define f_addr(node)   ((*(node)->e_func.fa)(node))
+#define st_addr(node)  ((*(node)->e_func.sta)(node))
+#define v_addr(node)   ((*(node)->e_func.va)(node))
 
 typedef struct arg_list {
     struct arg_list *a_next;
@@ -181,8 +201,12 @@ void tree_init(void);
 enum expr_type base_type(typeptr t);
 void eval_all(all *result, cnode *c);
 typeptr mk_strtype(ns *nspace, int len);
-void mk_const(ns *nspace, cnode *c, int value);
+void mk_const(ns *nspace, cnode *c, large_t value, int tval);
 int mk_incdec(ns *nspace, cnode *result, cnode *lvalue, int op);
 void print_expression(cnode *c);
-void do_parameter_allocation(arg_list *old_list, arg_list *args);
 void *get_user_sym_addr(char *name);
+
+/* From tree_dump.h */
+void tree_dump(FILE *f, expr *e);
+
+#endif /* __TREE_H */
