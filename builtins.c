@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.5";
+static char sccs_id[] = "@(#)builtins.c	1.6";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +7,7 @@ static char sccs_id[] = "@(#)builtins.c	1.5";
 #include <string.h>
 #include <a.out.h>
 #include <stdarg.h>
+#include "dex.h"
 #include "map.h"
 #include "dmap.h"
 #include "sym.h"
@@ -15,7 +16,6 @@ static char sccs_id[] = "@(#)builtins.c	1.5";
 #include "asgn_expr.h"
 #include "base_expr.h"
 #include "inter.h"
-#include "dex.h"
 #include "fcall.h"
 #include "disasm.h"
 #include "builtins.h"
@@ -154,6 +154,13 @@ int int_v2f(expr *n)
     return (int)v2f(f[1]);
 }
 
+int int_f2v(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+
+    return (int)f2v(f[1]);
+}
+
 /*
  * called as: find(void *addr, char **func_name_p, void **start_p,
  *                 char **file_name_p, int *lineno_p);
@@ -224,6 +231,7 @@ static void do_int_funcs(void)
     };
     struct table tab[] = {
 	{ "dis",     int_dis },
+	{ "f2v",     int_f2v },
 	{ "find",    int_find },
 	{ "load",    int_load },
 	{ "printf",  int_printf },
