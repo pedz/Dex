@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree.c	1.8";
+static char sccs_id[] = "@(#)tree.c	1.9";
 
 #include <stdio.h>
 #include <stdlib.h>
