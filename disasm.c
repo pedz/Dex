@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)disasm.c	1.1";
+static char sccs_id[] = "@(#)disasm.c	1.2";
 
 #include <sys/types.h>
 #include "map.h"
@@ -121,12 +121,12 @@ struct instr {
  {      "a",     "add", 0x1f, 0x00a,  XO,         "%rt,%ra,%rb",   2},
  {    "abs",         0, 0x1f, 0x168,  XO,             "%rt,%ra",   2},
  {     "ae",    "adde", 0x1f, 0x08a,  XO,         "%rt,%ra,%rb",   2},
- {     "ai",   "addic", 0x0C,     0,   D,         "%rt,%ra,%si",   0},
- {    "ai.",  "addic.", 0x0D,     0,   D,         "%rt,%ra,%si",   0},
+ {     "ai",   "addic", 0x0c,     0,   D,         "%rt,%ra,%si",   0},
+ {    "ai.",  "addic.", 0x0d,     0,   D,         "%rt,%ra,%si",   0},
  {    "ame",   "addme", 0x1f, 0x0ea,  XO,             "%rt,%ra",   2},
  {    "and",     "and", 0x1f, 0x01c,   X,         "%ra,%rs,%rb",   1},
  {   "andc",    "andc", 0x1f, 0x03c,   X,         "%ra,%rs,%rb",   1},
- { "andil.",   "andi.", 0x1c,     0,   D,         "%ra,%rs,%rb",   1},
+ { "andil.",   "andi.", 0x1c,     0,   D,         "%ra,%rs,%ui",   0},
  { "andiu.",  "andis.", 0x1d,     0,   D,         "%ra,%rs,%ui",   0},
  {    "aze",   "addze", 0x1f, 0x0ca,  XO,             "%rt,%ra",   0},
  {      "b",       "b", 0x12,     0,   I,                 "%li",   3},
@@ -345,11 +345,12 @@ struct instr {
  {    "xor",     "xor", 0x1f, 0x13c,   X,         "%ra,%rs,%rb",   1},
  {  "xoril",    "xori", 0x1a,     0,   D,         "%ra,%rs,%ui",   0},
  {  "xoriu",   "xoris", 0x1b,     0,   D,         "%ra,%rs,%ui",   0},
+ {  "bogus",   "bogus", 0x3f, 0x3ff,   D,                    "",   0},
 };
 
-static void err(int line)
+static int err(char *buf, int line)
 {
-    printf("unexpected form %s:%d ", __FILE__, line);
+    return sprintf(buf, "unexpected form %s:%d ", __FILE__, line);
 }
 
 static int tcmp(const void *p1, const void *p2)
@@ -363,444 +364,497 @@ static int tcmp(const void *p1, const void *p2)
     return i1->i_eo - i2->i_eo;
 }
 
-void dis(long *addr, int count)
+static struct instr *find_instr(union inst i)
 {
+    int low, high, mid;
+    int diff;
+    struct instr *t;
     static sorted = 0;
-    union inst i;
-    struct instr *t, *t_end;
 
     if (!sorted) {
 	qsort(table, A_SIZE(table), sizeof(table[0]), tcmp);
 	sorted = 1;
     }
-    for ( ; --count >= 0; ++addr) {
-	char buf[16];
-	char *s, c;
 
-	i._l = *v2f_type(long *, addr);
-	for (t_end = (t = table) + A_SIZE(table); t < t_end; ++t) {
-	    if (i._d_form._opcd != t->i_opcd)
-		continue;
-
+    low = 0;
+    high = A_SIZE(table);
+    while (low <= high) {
+	t = table + (mid = ((low + high) >> 1));
+	if (!(diff = t->i_opcd - i._d_form._opcd))
 	    switch (t->i_form) {
-	    case D:
-		break;
 	    case B:
-		break;
+	    case D:
 	    case I:
-		break;
+	    case M:
 	    case SC:
-		break;
 	    case SVC:
-		break;
+		return t;
 	    case X:
-		if (t->i_eo != i._x_form._eo)
-		    continue;
+		if (!(diff = t->i_eo - i._x_form._eo))
+		    return t;
 		break;
 	    case XL:
-		if (t->i_eo != i._xl_form._eo)
-		    continue;
+		if (!(diff = t->i_eo - i._xl_form._eo))
+		    return t;
 		break;
 	    case XFX:
-		if (t->i_eo != i._xfx_form._eo)
-		    continue;
+		if (!(diff = t->i_eo - i._xfx_form._eo))
+		    return t;
 		break;
 	    case XFL:
-		if (t->i_eo != i._xfl_form._eo)
-		    continue;
+		if (!(diff = t->i_eo - i._xfl_form._eo))
+		    return t;
 		break;
 	    case XO:
-		if (t->i_eo != i._xo_form._eo1)
-		    continue;
+		if (!(diff = t->i_eo - i._xo_form._eo1))
+		    return t;
 		break;
 	    case A:
-		if (t->i_eo != i._a_form._xo)
-		    continue;
-		break;
-	    case M:
+		if (!(diff = t->i_eo - i._a_form._xo))
+		    return t;
 		break;
 	    }
-	    break;
-	}
-	if (t == t_end) {
-	    printf("instruction %08x not found\n", i._l);
+	if (diff < 0)
+	    low = mid + 1;
+	else
+	    high = mid - 1;
+    }
+    return 0;
+}
+
+#define MATCH(s, p) \
+	(!strncmp(s, p, sizeof(p)-1) && \
+	 (!s[sizeof(p)-1] || \
+	  s[sizeof(p)-1] < 'a' || s[sizeof(p)-1] > 'z'))
+
+char *instr(long *addr)
+{
+    static char buf[64];
+    char ibuf[64];
+    char *bufp;
+    union inst i;
+    char *s, c;
+    struct instr *t;
+
+    i._l = *v2f_type(long *, addr);
+    if (!(t = find_instr(i)))
+	return " illegal instruction ";
+    if (t->i_name)
+	strcpy(ibuf, t->i_name);
+    else {
+	strcpy(ibuf, "{");
+	strcat(ibuf, t->i_pname);
+    }
+    switch (t->i_notes) {
+    case 1:
+	if (t->i_form == A) {
+	    if (i._a_form._rc)
+		strcat(ibuf, ".");
+	} else if (t->i_form == M) {
+	    if (i._m_form._rc)
+		strcat(ibuf, ".");
+	} else if (t->i_form == X) {
+	    if (i._x_form._rc)
+		strcat(ibuf, ".");
+	} else if (t->i_form == XFX) {
+	    if (i._xfx_form._rc)
+		strcat(ibuf, ".");
+	} else if (t->i_form == XFL) {
+	    if (i._xfl_form._rc)
+		strcat(ibuf, ".");
+	} else
+	    strcat(ibuf, " note 1 error ");
+	break;
+    case 2:
+	if (t->i_form == XO) {
+	    if (i._xo_form._oe)
+		strcat(ibuf, "o");
+	    if (i._xo_form._rc)
+		strcat(ibuf, ".");
+	} else
+	    strcat(ibuf, " note 2 error ");
+	break;
+    case 3:
+	if (t->i_form == B) {
+	    if (i._b_form._lk)
+		strcat(ibuf, "l");
+	    if (i._b_form._aa)
+		strcat(ibuf, "a");
+	} else if (t->i_form == I) {
+	    if (i._i_form._lk)
+		strcat(ibuf, "l");
+	    if (i._i_form._aa)
+		strcat(ibuf, "a");
+	} else
+	    strcat(ibuf, " note 3 error ");
+	break;
+    case 4:
+	if (t->i_form == SC) {
+	    if (i._sc_form._lk)
+		strcat(ibuf, "l");
+	} else if (t->i_form == SVC) {
+	    if (i._svc_form._lk)
+		strcat(ibuf, "l");
+	} else if (t->i_form == XL) {
+	    if (i._xl_form._lk)
+		strcat(ibuf, "l");
+	} else
+	    strcat(ibuf, " note 4 error ");
+	break;
+    }
+    if (!t->i_name)
+	strcat(ibuf, "}");
+    bufp = buf + sprintf(buf, "%9s   ", ibuf);
+    for (s = t->i_arg; s && (c = *s++); ) {
+	if (c != '%') {
+	    bufp += sprintf(bufp, "%c", c);
 	    continue;
 	}
-	strcpy(buf, t->i_name);
-	switch (t->i_notes) {
-	case 1:
-	    if (t->i_form == A) {
-		if (i._a_form._rc)
-		    strcat(buf, ".");
-	    } else if (t->i_form == M) {
-		if (i._m_form._rc)
-		    strcat(buf, ".");
-	    } else if (t->i_form == X) {
-		if (i._x_form._rc)
-		    strcat(buf, ".");
-	    } else if (t->i_form == XFX) {
-		if (i._xfx_form._rc)
-		    strcat(buf, ".");
-	    } else if (t->i_form == XFL) {
-		if (i._xfl_form._rc)
-		    strcat(buf, ".");
-	    } else
-		printf(" note 1 error ");
-	    break;
-	case 2:
-	    if (t->i_form == XO) {
-		if (i._xo_form._oe)
-		    strcat(buf, "o");
-		if (i._xo_form._rc)
-		    strcat(buf, ".");
-	    } else
-		printf(" note 2 error ");
-	    break;
-	case 3:
+
+	if (MATCH(s, "ba")) {
+	    if (t->i_form == XL)
+		bufp += sprintf(bufp, "cr%d", i._xl_form._ba);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "bb")) {
+	    if (t->i_form == XL)
+		bufp += sprintf(bufp, "cr%d", i._xl_form._bb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "bd")) {
 	    if (t->i_form == B) {
-		if (i._b_form._lk)
-		    strcat(buf, "l");
+		int d = i._b_form._bd;
+		if (d & 0x2000)
+		    d |= 0xffffc000;
 		if (i._b_form._aa)
-		    strcat(buf, "a");
-	    } else if (t->i_form == I) {
-		if (i._i_form._lk)
-		    strcat(buf, "l");
+		    bufp += sprintf(bufp, "0x%x", d << 2);
+		else
+		    bufp += sprintf(bufp, "0x%x", addr + d);
+	    } else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "bf")) {
+	    if (t->i_form == X)
+		bufp += sprintf(bufp, "cr%d", i._x_form._rt >> 2);
+	    else if (t->i_form == XL)
+		bufp += sprintf(bufp, "cr%d", i._xl_form._bt >> 2);
+	    else if (t->i_form == D)
+		bufp += sprintf(bufp, "cr%d", i._d_form._rt >> 2);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "bfa")) {
+	    if (t->i_form == X)
+		bufp += sprintf(bufp, "cr%d", i._x_form._ra >> 2);
+	    else if (t->i_form == XL)
+		bufp += sprintf(bufp, "cr%d", i._xl_form._ba >> 2);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "bi")) {
+	    if (t->i_form == XL)
+		bufp += sprintf(bufp, "%x", i._xl_form._ba);
+	    else if (t->i_form == B)
+		bufp += sprintf(bufp, "%x", i._b_form._bi);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "bo")) {
+	    if (t->i_form == B)
+		bufp += sprintf(bufp, "%d", i._b_form._bo);
+	    else if (t->i_form == XL)
+		bufp += sprintf(bufp, "%d", i._xl_form._bt);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "bt")) {
+	    if (t->i_form == XL)
+		bufp += sprintf(bufp, "cr%d", i._xl_form._bt);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "cr%d", i._x_form._rt);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "d")) {
+	    if (t->i_form == D) {
+		int d = i._d_form._d;
+		if (d >= 0x8000)
+		    d |= 0xffff0000;
+		bufp += sprintf(bufp, "0x%x", d);
+	    } else
+		bufp += err(bufp, __LINE__);
+	    s += 1;
+	} else if (MATCH(s, "fl1")) {
+	    if (t->i_form == SC)
+		bufp += sprintf(bufp, "0x%x", i._sc_form._fl1);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "fl2")) {
+	    if (t->i_form == SC)
+		bufp += sprintf(bufp, "0x%x", i._sc_form._fl2);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "flm")) {
+	    if (t->i_form == XFL)
+		bufp += sprintf(bufp, "fpscr%d", i._xfl_form._flm);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "fra")) {
+	    if (t->i_form == A)
+		bufp += sprintf(bufp, "fpr%d", i._a_form._fra);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "fpr%d", i._x_form._ra);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "frb")) {
+	    if (t->i_form == A)
+		bufp += sprintf(bufp, "fpr%d", i._a_form._frb);
+	    else if (t->i_form == XFL)
+		bufp += sprintf(bufp, "fpr%d", i._xfl_form._frb);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "fpr%d", i._x_form._rb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "frc")) {
+	    if (t->i_form == A)
+		bufp += sprintf(bufp, "fpr%d", i._a_form._frc);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "frs")) {
+	    if (t->i_form == D)
+		bufp += sprintf(bufp, "fpr%d", i._d_form._rt);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "fpr%d", i._x_form._rt);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "frt")) {
+	    if (t->i_form == A)
+		bufp += sprintf(bufp, "fpr%d", i._a_form._frt);
+	    else if (t->i_form == D)
+		bufp += sprintf(bufp, "fpr%d", i._d_form._rt);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "fpr%d", i._x_form._rt);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "fxm")) {
+	    if (t->i_form == XFX)
+		bufp += sprintf(bufp, "cr%d", i._xfx_form._fxm);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "i")) {
+	    if (t->i_form == X)
+		bufp += sprintf(bufp, "0x%x", i._x_form._rb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 1;
+	} else if (MATCH(s, "lev")) {
+	    if (t->i_form == SC)
+		bufp += sprintf(bufp, "0x%x", i._sc_form._lev);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "li")) {
+	    if (t->i_form == I) {
+		int d = i._i_form._li;
+		if (d & 0x00800000)
+		    d |= 0xff000000;
 		if (i._i_form._aa)
-		    strcat(buf, "a");
+		    bufp += sprintf(bufp, "0x%x", d << 2);
+		else
+		    bufp += sprintf(bufp, "0x%x", addr + d);
 	    } else
-		printf(" note 3 error ");
-	    break;
-	case 4:
-	    if (t->i_form == SC) {
-		if (i._sc_form._lk)
-		    strcat(buf, "l");
-	    } else if (t->i_form == SVC) {
-		if (i._svc_form._lk)
-		    strcat(buf, "l");
-	    } else if (t->i_form == XL) {
-		if (i._xl_form._lk)
-		    strcat(buf, "l");
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "mb")) {
+	    if (t->i_form == M)
+		bufp += sprintf(bufp, "%d", i._m_form._mb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "me")) {
+	    if (t->i_form == M)
+		bufp += sprintf(bufp, "%d", i._m_form._me);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "nb")) {
+	    if (t->i_form == X)
+		bufp += sprintf(bufp, "0x%x", i._x_form._rb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "ra")) {
+	    if (t->i_form == D)
+		bufp += sprintf(bufp, "r%d", i._d_form._ra);
+	    else if (t->i_form == M)
+		bufp += sprintf(bufp, "r%d", i._m_form._ra);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "r%d", i._x_form._ra);
+	    else if (t->i_form == XO)
+		bufp += sprintf(bufp, "r%d", i._xo_form._ra);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "rb")) {
+	    if (t->i_form == M)
+		bufp += sprintf(bufp, "r%d", i._m_form._rb);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "r%d", i._x_form._rb);
+	    else if (t->i_form == XO)
+		bufp += sprintf(bufp, "r%d", i._xo_form._rb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "rs")) {
+	    if (t->i_form == M)
+		bufp += sprintf(bufp, "r%d", i._m_form._rs);
+	    else if (t->i_form == D)
+		bufp += sprintf(bufp, "r%d", i._d_form._rt);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "r%d", i._x_form._rt);
+	    else if (t->i_form == XFX)
+		bufp += sprintf(bufp, "r%d", i._xfx_form._rt);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "rt")) {
+	    if (t->i_form == D)
+		bufp += sprintf(bufp, "r%d", i._d_form._rt);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "r%d", i._x_form._rt);
+	    else if (t->i_form == XFX)
+		bufp += sprintf(bufp, "r%d", i._xfx_form._rt);
+	    else if (t->i_form == XO)
+		bufp += sprintf(bufp, "r%d", i._xo_form._rt);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "sa")) {
+	    if (t->i_form == SC)
+		bufp += sprintf(bufp, "0x%x", i._sc_form._sa);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "sh")) {
+	    if (t->i_form == M)
+		bufp += sprintf(bufp, "0x%x", i._m_form._rb);
+	    else if (t->i_form == X)
+		bufp += sprintf(bufp, "0x%x", i._x_form._rb);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "si")) {
+	    if (t->i_form == D) {
+		int d = i._d_form._d;
+		if (d & 0x8000)
+		    d |= 0xffff0000;
+		bufp += sprintf(bufp, "0x%x", d);
 	    } else
-		printf(" note 4 error ");
-	    break;
-	}
-	printf("%08x%9s   ", addr, buf);
-	for (s = t->i_arg; s && (c = *s++); ) {
-	    if (c != '%') {
-		printf("%c", c);
-		continue;
-	    }
-#define MATCH(s, p) \
-	    (!strncmp(s, p, sizeof(p)-1) && \
-	     (!s[sizeof(p)-1] || \
-	      s[sizeof(p)-1] < 'a' || s[sizeof(p)-1] > 'z'))
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "spr")) {
+	    if (t->i_form == X)
+		bufp += sprintf(bufp, "spr%d", i._x_form._ra);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "sr")) {
+	    if (t->i_form == X)
+		bufp += sprintf(bufp, "sr%d", i._x_form._ra);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else if (MATCH(s, "svc")) {
+	    if (t->i_form == SVC)
+		bufp += sprintf(bufp, "0x%x", i._svc_form._sv);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "tbr")) {
+	    bufp += err(bufp, __LINE__);
+	    s += 3;
+	} else if (MATCH(s, "to")) {
+	    int d;
 
-	    if (MATCH(s, "ba")) {
-		if (t->i_form == XL)
-		    printf("cr%d", i._xl_form._ba);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "bb")) {
-		if (t->i_form == XL)
-		    printf("cr%d", i._xl_form._bb);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "bd")) {
-		if (t->i_form == B) {
-		    int d = i._b_form._bd;
-		    if (d & 0x2000)
-			d |= 0xffffc000;
-		    if (i._b_form._aa)
-			printf("0x%x", d << 2);
-		    else
-			printf("0x%x", addr + d);
-		} else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "bf")) {
-		if (t->i_form == X)
-		    printf("cr%d", i._x_form._rt >> 2);
-		else if (t->i_form == XL)
-		    printf("cr%d", i._xl_form._bt >> 2);
-		else if (t->i_form == D)
-		    printf("cr%d", i._d_form._rt >> 2);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "bfa")) {
-		if (t->i_form == X)
-		    printf("cr%d", i._x_form._ra >> 2);
-		else if (t->i_form == XL)
-		    printf("cr%d", i._xl_form._ba >> 2);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "bi")) {
-		if (t->i_form == XL)
-		    printf("%x", i._xl_form._ba);
-		else if (t->i_form == B)
-		    printf("%x", i._b_form._bi);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "bo")) {
-		if (t->i_form == B)
-		    printf("%d", i._b_form._bo);
-		else if (t->i_form == XL)
-		    printf("%d", i._xl_form._bt);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "bt")) {
-		if (t->i_form == XL)
-		    printf("cr%d", i._xl_form._bt);
-		else if (t->i_form == X)
-		    printf("cr%d", i._x_form._rt);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "d")) {
-		if (t->i_form == D) {
-		    int d = i._d_form._d;
-		    if (d >= 0x8000)
-			d |= 0xffff0000;
-		    printf("0x%x", d);
-		} else
-		    err(__LINE__);
-		s += 1;
-	    } else if (MATCH(s, "fl1")) {
-		if (t->i_form == SC)
-		    printf("0x%x", i._sc_form._fl1);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "fl2")) {
-		if (t->i_form == SC)
-		    printf("0x%x", i._sc_form._fl2);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "flm")) {
-		if (t->i_form == XFL)
-		    printf("fpscr%d", i._xfl_form._flm);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "fra")) {
-		if (t->i_form == A)
-		    printf("fpr%d", i._a_form._fra);
-		else if (t->i_form == X)
-		    printf("fpr%d", i._x_form._ra);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "frb")) {
-		if (t->i_form == A)
-		    printf("fpr%d", i._a_form._frb);
-		else if (t->i_form == XFL)
-		    printf("fpr%d", i._xfl_form._frb);
-		else if (t->i_form == X)
-		    printf("fpr%d", i._x_form._rb);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "frc")) {
-		if (t->i_form == A)
-		    printf("fpr%d", i._a_form._frc);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "frs")) {
-		if (t->i_form == D)
-		    printf("fpr%d", i._d_form._rt);
-		else if (t->i_form == X)
-		    printf("fpr%d", i._x_form._rt);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "frt")) {
-		if (t->i_form == A)
-		    printf("fpr%d", i._a_form._frt);
-		else if (t->i_form == D)
-		    printf("fpr%d", i._d_form._rt);
-		else if (t->i_form == X)
-		    printf("fpr%d", i._x_form._rt);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "fxm")) {
-		if (t->i_form == XFX)
-		    printf("cr%d", i._xfx_form._fxm);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "i")) {
-		if (t->i_form == X)
-		    printf("0x%x", i._x_form._rb);
-		else
-		    err(__LINE__);
-		s += 1;
-	    } else if (MATCH(s, "lev")) {
-		if (t->i_form == SC)
-		    printf("0x%x", i._sc_form._lev);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "li")) {
-		if (t->i_form == I) {
-		    int d = i._i_form._li;
-		    if (d & 0x00800000)
-			d |= 0xff000000;
-		    if (i._i_form._aa)
-			printf("0x%x", d << 2);
-		    else
-			printf("0x%x", addr + d);
-		} else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "mb")) {
-		if (t->i_form == M)
-		    printf("%d", i._m_form._mb);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "me")) {
-		if (t->i_form == M)
-		    printf("%d", i._m_form._me);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "nb")) {
-		if (t->i_form == X)
-		    printf("0x%x", i._x_form._rb);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "ra")) {
-		if (t->i_form == D)
-		    printf("r%d", i._d_form._ra);
-		else if (t->i_form == M)
-		    printf("r%d", i._m_form._ra);
-		else if (t->i_form == X)
-		    printf("r%d", i._x_form._ra);
-		else if (t->i_form == XO)
-		    printf("r%d", i._xo_form._ra);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "rb")) {
-		if (t->i_form == M)
-		    printf("r%d", i._m_form._rb);
-		else if (t->i_form == X)
-		    printf("r%d", i._x_form._rb);
-		else if (t->i_form == XO)
-		    printf("r%d", i._xo_form._rb);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "rs")) {
-		if (t->i_form == M)
-		    printf("r%d", i._m_form._rs);
-		else if (t->i_form == D)
-		    printf("r%d", i._d_form._rt);
-		else if (t->i_form == X)
-		    printf("r%d", i._x_form._rt);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "rt")) {
-		if (t->i_form == D)
-		    printf("r%d", i._d_form._rt);
-		else if (t->i_form == X)
-		    printf("r%d", i._x_form._rt);
-		else if (t->i_form == XFX)
-		    printf("r%d", i._xfx_form._rt);
-		else if (t->i_form == XO)
-		    printf("r%d", i._xo_form._rt);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "sa")) {
-		if (t->i_form == SC)
-		    printf("0x%x", i._sc_form._sa);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "sh")) {
-		if (t->i_form == M)
-		    printf("0x%x", i._m_form._rb);
-		else if (t->i_form == X)
-		    printf("0x%x", i._x_form._rb);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "si")) {
-		if (t->i_form == D) {
-		    int d = i._d_form._d;
-		    if (d & 0x8000)
-			d |= 0xffff0000;
-		    printf("0x%x", d);
-		} else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "spr")) {
-		if (t->i_form == X)
-		    printf("spr%d", i._x_form._ra);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "sr")) {
-		if (t->i_form == X)
-		    printf("sr%d", i._x_form._ra);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else if (MATCH(s, "svc")) {
-		if (t->i_form == SVC)
-		    printf("0x%x", i._svc_form._sv);
-		else
-		    err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "tbr")) {
-		err(__LINE__);
-		s += 3;
-	    } else if (MATCH(s, "to")) {
-		int d;
-
-		if (t->i_form == D)
-		    d = i._d_form._rt;
-		else if (t->i_form == X)
-		    d = i._x_form._rt;
-		else
-		    err(__LINE__);
-		switch (d) {
-		case 0x01: printf("lgt");   break;
-		case 0x02: printf("llt");   break;
-		case 0x03: printf("lne");   break;
-		case 0x04: printf("eq");    break;
-		case 0x05: printf("lge");   break;
-		case 0x06: printf("lle");   break;
-		case 0x08: printf("gt");    break;
-		case 0x0c: printf("nl");    break;
-		case 0x10: printf("lt");    break;
-		case 0x14: printf("le");    break;
-		case 0x18: printf("ne");    break;
-		case 0x1f: printf("a");     break;
-		default:   printf("0x%x", d); break;
-		}
-		s += 2;
-	    } else if (MATCH(s, "ui")) {
-		if (t->i_form == D)
-		    printf("0x%x", i._d_form._d);
-		else
-		    err(__LINE__);
-		s += 2;
-	    } else {
-		printf("Confusion with %s", s);
+	    if (t->i_form == D)
+		d = i._d_form._rt;
+	    else if (t->i_form == X)
+		d = i._x_form._rt;
+	    else
+		bufp += err(bufp, __LINE__);
+	    switch (d) {
+	    case 0x01: bufp += sprintf(bufp, "lgt");   break;
+	    case 0x02: bufp += sprintf(bufp, "llt");   break;
+	    case 0x03: bufp += sprintf(bufp, "lne");   break;
+	    case 0x04: bufp += sprintf(bufp, "eq");    break;
+	    case 0x05: bufp += sprintf(bufp, "lge");   break;
+	    case 0x06: bufp += sprintf(bufp, "lle");   break;
+	    case 0x08: bufp += sprintf(bufp, "gt");    break;
+	    case 0x0c: bufp += sprintf(bufp, "nl");    break;
+	    case 0x10: bufp += sprintf(bufp, "lt");    break;
+	    case 0x14: bufp += sprintf(bufp, "le");    break;
+	    case 0x18: bufp += sprintf(bufp, "ne");    break;
+	    case 0x1f: bufp += sprintf(bufp, "a");     break;
+	    default:   bufp += sprintf(bufp, "0x%x", d); break;
 	    }
+	    s += 2;
+	} else if (MATCH(s, "ui")) {
+	    if (t->i_form == D)
+		bufp += sprintf(bufp, "0x%x", i._d_form._d);
+	    else
+		bufp += err(bufp, __LINE__);
+	    s += 2;
+	} else {
+	    bufp += sprintf(bufp, "Confusion with %s", s);
 	}
-	printf("\n");
     }
+    return buf;
+}
+
+void dis(long *addr, int count)
+{
+    for ( ; --count >= 0; ++addr)
+	printf("%08x%s\n", addr, instr(addr));
+}
+
+/*
+ * Returns a bitmap of registers that are changed starting at ADDR for
+ * COUNT instructions.
+ */
+int regs_instr(long *addr, int count)
+{
+    union inst i;
+    struct instr *t;
+    int ret = 0;
+
+    while (--count >= 0) {
+	i._l = *v2f_type(long *, addr++);
+	if ((t = find_instr(i)) && !strncmp(t->i_arg, "%rt", 3))
+	    switch (t->i_form) {
+	    case D:
+		ret |= 1 << i._d_form._rt;
+		break;
+	    case X:
+		ret |= 1 << i._x_form._rt;
+		break;
+	    case XFX:
+		ret |= 1 << i._xfx_form._rt;
+		break;
+	    case XO:
+		ret |= 1 << i._xo_form._rt;
+		break;
+	    }
+    }
+    return ret;
 }
