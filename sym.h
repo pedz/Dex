@@ -1,5 +1,8 @@
 
-/* @(#)sym.h	1.9 */
+/* @(#)sym.h	1.10 */
+
+#ifndef __SYM_H
+#define __SYM_H
 
 #define HASH_SIZE 128
 
@@ -32,7 +35,7 @@ struct type {
 	} val_r;
 	struct {			/* float and complex */
 	    struct type *g_typeptr;	/* type of float */
-	    long g_size;			/* size in bytes */
+	    long g_size;		/* size in bytes */
 	} val_g;
 	struct e_num *val_e;		/* enumeration list */
 	int val_N;			/* pascal stringptr */
@@ -124,9 +127,9 @@ typedef struct string_table *strtabptr;
  */
 enum expr_type {
     schar_type, uchar_type, int_type, uint_type, short_type,
-    ushort_type, long_type, ulong_type, float_type, double_type,
-    struct_type, void_type, bad_type
-    };
+    ushort_type, long_type, ulong_type, long_long_type, ulong_long_type,
+    float_type, double_type, struct_type, void_type, bad_type
+};
 #define FIRST_TYPE schar_type
 #define LAST_TYPE  bad_type
 
@@ -177,8 +180,10 @@ struct sym {
 typedef struct sym *symptr;
     
 struct sym_table {
+    unsigned int sy_addr_sorted : 1;	/* true sy_addr2sym is valid */
     symptr sy_hash[HASH_SIZE];
     int sy_count;
+    symptr **sy_addr2sym;
 };
 typedef struct sym_table *symtabptr;
 
@@ -209,6 +214,7 @@ struct name_space {
     int ns_data_size;
     struct lineno *ns_lines;
     int ns_lineoffset;
+    int ns_lastdup;			/* used to make unique names */
 };
 typedef struct name_space ns;
 
@@ -218,6 +224,7 @@ typeptr name2namedef(ns *nspace, char *name);
 typeptr name2namedef_all(char *name);
 typeptr insert_type(int typeid, typeptr t);
 int typedef2typeid(typeptr t);
+int allocate_fields(fieldptr f);
 fieldptr newfield(char *name, typeptr tptr, int offset, int numbits);
 attrptr newattr(enum attr_type t, int val);
 enumptr newenum(char *name, int val);
@@ -226,19 +233,24 @@ void add_namedef(typeptr t, char *name);
 typeptr newtype(ns *nspace, enum stab_type t);
 typeptr find_type(ns *nspace, int typeid);
 paramptr newparam(int typeid, int passby);
-void copy_type(typeptr new, typeptr old);
 void copy_type_and_record(typeptr new, typeptr old);
+void finish_copies(void);
+void copy_type(typeptr new, typeptr old);
 char *store_string(ns *nspace, char *name, int len, char *suffix);
 int get_size(typeptr t);
 ns *ns_create(ns *nspace, char *name);
+void load_base_types(ns *nspace);
+void new_symbols(ns *nspace);
 ns *name2ns(char *name);
 symptr name2userdef(ns *nspace, char *name);
 symptr name2userdef_all(char *name);
+void xxx(ns *nspace, int indent);
+void view_namespaces(void);
 symptr addr2userdef(ns *nspace, void *addr);
 symptr addr2userdef_all(void *addr);
 void clean_symtable(ns *nspace, int nesting_level);
 symptr enter_sym(ns *nspace, char *name, int force);
 void dump_symtable(void);
 void dump_types(void);
-int allocate_fields(fieldptr f);
-void finish_copies(void);
+
+#endif /* __SYM_H */
