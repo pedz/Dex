@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.1";
+static char sccs_id[] = "@(#)load.c	1.2";
 
 #include <a.out.h>
 #include <string.h>
@@ -169,7 +169,7 @@ void load(char *path, int text_base, int data_base)
 	}
     }
 
-    if (ohdr && ohdr->o_snloader) {
+    if (text_base != -1 && ohdr && ohdr->o_snloader) {
 	struct scnhdr *shdr =
 	    (struct scnhdr *)(m + sizeof(struct filehdr) + fhdr->f_opthdr);
 
@@ -196,11 +196,27 @@ void load(char *path, int text_base, int data_base)
 		     */
 		    switch (MAP(lsym->l_smclas, lsym->l_smtype)) {
 		    case MAP(XMC_DS, XTY_ER): /* import function */
+		    case MAP(XMC_RW, XTY_ER): /* import data */
+		    case MAP(XMC_UA, XTY_ER): /* import data */
 			continue;
 
-		    case MAP(XMC_XO, XTY_ER): /* function */
-		    case MAP(XMC_DS, XTY_SD): /* toc to function */
 		    case MAP(XMC_SV, XTY_SD): /* Supervisor function */
+			suffix = "$sv";
+			thistype = get_ptr_func_int(load_ns,
+						    &int_type,
+						    &func_int_type,
+						    &ptr_func_int_type);
+			break;
+
+		    case MAP(XMC_DS, XTY_SD): /* toc to function */
+			suffix = "$ds";
+			thistype = get_ptr_func_int(load_ns,
+						    &int_type,
+						    &func_int_type,
+						    &ptr_func_int_type);
+			break;
+		    
+		    case MAP(XMC_XO, XTY_ER): /* function */
 			suffix = 0;
 			thistype = get_func_int(load_ns,
 						&int_type,
@@ -213,9 +229,6 @@ void load(char *path, int text_base, int data_base)
 			suffix = 0;
 			thistype = get_int(load_ns, &int_type);
 			break;
-
-		    case MAP(XMC_UA, XTY_ER): /* import data */
-			continue;
 
 		    default:
 			fprintf(stderr,
@@ -324,7 +337,7 @@ void load(char *path, int text_base, int data_base)
     /* Nothing to do with the except section */
     
     /* Relocation information */
-    if (fhdr->f_nscns) {
+    if (text_base != -1 && fhdr->f_nscns) {
 	struct scnhdr *shdr =
 	    (struct scnhdr *)(m + sizeof(struct filehdr) + fhdr->f_opthdr);
 	int i;
@@ -343,7 +356,7 @@ void load(char *path, int text_base, int data_base)
     }
     
     /* Line number information */
-    if (fhdr->f_nscns) {
+    if (text_base != -1 && fhdr->f_nscns) {
 	struct scnhdr *shdr =
 	    (struct scnhdr *)(m + sizeof(struct filehdr) + fhdr->f_opthdr);
 	int i;
@@ -397,6 +410,13 @@ void load(char *path, int text_base, int data_base)
 	    s = (struct syment *)base;
 	    base += SYMESZ;
 	    ++i;
+
+	    /*
+	     * If text_base is -1, that means we want only the type
+	     * definitions from this file.
+	     */
+	    if (text_base == -1 && s->n_sclass != C_DECL)
+		continue;
 
 	    if (s->n_numaux)
 		aux = (union auxent *)(base + (AUXESZ * (s->n_numaux - 1)));
@@ -488,8 +508,10 @@ void load(char *path, int text_base, int data_base)
 		     * opcodes which are at absolute addresses.
 		     */
 		case MAP(XMC_UA, XTY_ER):
+		case MAP(XMC_RW, XTY_ER):
 		case MAP(XMC_DS, XTY_ER):
 		    continue;
+
 		case MAP(XMC_XO, XTY_ER):
 		    suffix = 0;
 		    thistype = get_func_int(cur_block,
