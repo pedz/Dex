@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.7";
+static char sccs_id[] = "@(#)dex.c	1.8";
 
 #include <stdio.h>
 #include <strings.h>
@@ -10,44 +10,13 @@ static char sccs_id[] = "@(#)dex.c	1.7";
 #include "sym.h"
 #include "inter.h"
 #include "dex.h"
+#include "load.h"
 
 char *progname;
 char *dumpname = "/dev/mem";
 char *unixname = "/unix";
 void *stack_top;
 extern int GRAMdebug;
-
-static void retrieve_own_stabs(char *argv0)
-{
-    char buf[10240];
-    char *path;
-    struct stat sbuf;
-    
-    /*
-     * First check whatever argv[0] points to.
-     */
-    if (!(stat(argv0, &sbuf) || !S_ISREG(sbuf.st_mode) || access(argv0, X_OK))) {
-	/* We found it */
-	load(argv0, -1, -1);
-	return;
-    }
-
-    for (path = strtok(getenv("PATH"), ":");
-	 path;
-	 path = strtok((char *)0, ":")) {
-	strcpy(buf, path);
-	strcat(buf, "/");
-	strcat(buf, progname);
-	if (stat(buf, &sbuf) || !S_ISREG(sbuf.st_mode) || access(buf, X_OK))
-	    continue;
-
-	/* We found it */
-	load(buf, -1, -1);
-	return;
-    }
-    printf("Did not find myself\n");
-    return;
-}
 
 main(int argc, char *argv[])
 {
@@ -70,12 +39,14 @@ main(int argc, char *argv[])
 	++argv;
     }
 
+    printf("Line %d\n", __LINE__);
     if (argc) {				/* Optional first arg is the dump name */
 	dumpname = argv[0];
 	++argv;
 	--argc;
     }
 
+    printf("Line %d\n", __LINE__);
     if (argc) {				/* Optional second arg is /unix name */
 	unixname = argv[0];
 	load(unixname, 0, 0);
@@ -83,13 +54,19 @@ main(int argc, char *argv[])
 	--argc;
     }
 
+    printf("Line %d\n", __LINE__);
     ns_inter = ns_create((ns *)0, progname);
+    printf("Line %d\n", __LINE__);
     load_base_types(ns_inter);
+    printf("Line %d\n", __LINE__);
     tree_init();
+    printf("Line %d\n", __LINE__);
     map_init();
+    printf("Line %d\n", __LINE__);
     builtin_init();
-    retrieve_own_stabs(argv0);
+    printf("Line %d\n", __LINE__);
     GRAMparse();
+    printf("Line %d\n", __LINE__);
     return 0;
 }
 
