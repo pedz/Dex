@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)fcall.c	1.4";
+static char sccs_id[] = "@(#)fcall.c	1.5";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -13,7 +13,7 @@ long stack_ptr = (long)h_high;
 static void push(v_ptr a, int size)
 {
     stack_ptr -= size;
-    bcopy(a, v2f(stack_ptr), size);
+    bcopy(a, v2f((void *)stack_ptr), size);
 }
 
 static void mark_stack(void)
