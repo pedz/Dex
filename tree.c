@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree.c	1.7";
+static char sccs_id[] = "@(#)tree.c	1.8";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,6 +96,7 @@ void mk_l2p(cnode *result, cnode *c)
     }
 }
 
+#ifdef Not_Used
 void mk_f2v(cnode *result, cnode *c)
 {
     typeptr t;
@@ -132,6 +133,7 @@ int mk_v2f(cnode *result, cnode *c)
     eptr->e_size = get_size(result->c_type) / 8;
     return 0;
 }
+#endif
 
 int mk_dot(cnode *result, cnode *c, char *s)
 {
@@ -193,7 +195,7 @@ int mk_dot(cnode *result, cnode *c, char *s)
 
 	c_expr = new_expr();
 	c_expr->e_func.ul = ul_leaf;
-	c_expr->e_i = byte_offset;
+	c_expr->e_ul = byte_offset;
 	c_expr->e_size = f->f_numbits / 8;
 
 	/* Make the plus node */
@@ -388,7 +390,11 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
 	/*
 	 * Result will be a long
 	 */
+#ifdef __64BIT__
+	result->c_type = find_type(left.c_type->t_ns, TP_LONG_64);
+#else
 	result->c_type = find_type(left.c_type->t_ns, TP_LONG);
+#endif
 	result->c_base = long_type;
 	result->c_expr = eptr = new_expr();
 	result->c_const = left.c_const && right.c_const;
@@ -778,8 +784,10 @@ void tree_init(void)
     setnumtable(op_table, INCOP, inc, "++");
     setnumtable(op_table, DECOP, dec, "--");
     setalltable(op_table, '?', qc, "?:");
+#ifdef Not_Used
     setalladdr(op_table, 'v', v2f, "*(indirection)");
     setalladdr(op_table, 'f', f2v, "&(address of)");
+#endif
     setalladdr(op_table, 'g', gaddr, "global address");
     setalladdr(op_table, 'l', laddr, "local address");
     setalltable(op_table, 'x', fcall, "function");
