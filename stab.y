@@ -1,6 +1,6 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.5";
+static char sccs_id[] = "@(#)stab.y	1.6";
 
 #include <strings.h>
 #include <stdlib.h>
@@ -43,6 +43,16 @@ static void bogus();
 #define yyval STABval
 #define yytoks STABtoks
 #define yyreds STABreds
+
+static ns *cur_ns;
+static symptr cur_sym;
+static char *parse_line;
+static char *parse_position;
+static char small_buf[32];
+static yylex();
+static yyerror(char *s);
+static void bogus();
+int parse_stab(ns *ns, char *s, int len, symptr *s_out);
 
 %}
 
