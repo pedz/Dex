@@ -1,5 +1,5 @@
 
-/* @(#)map.h	1.5 */
+/* @(#)map.h	1.6 */
 
 #define h_base ((v_ptr)0x30000000)
 #define h_high ((v_ptr)(((long)(h_base)) + 0x10000000))
@@ -43,3 +43,4 @@ extern v_ptr f2v(p_ptr);
     map_jmp_ptr = old; \
 }
 
+#define MAP_DEBUG
