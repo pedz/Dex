@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.3";
+static char sccs_id[] = "@(#)load.c	1.4";
 
 #include <a.out.h>
 #include <string.h>
@@ -87,6 +87,13 @@ static typeptr get_ptr_func_int(ns *nspace,
     return ret;
 }
 
+struct for_ref {
+    struct for_ref *fr_next;
+    int fr_index;
+    symptr fr_sym;
+};
+
+
 void load(char *path, int text_base, int data_base)
 {
     int fd;
@@ -122,7 +129,8 @@ void load(char *path, int text_base, int data_base)
 	close(fd);
 	return;
     }
-    m = mmap(0x40000000, sbuf.st_size, PROT_READ, MAP_FILE|MAP_VARIABLE, fd, 0);
+    m = mmap((void *)0x40000000, sbuf.st_size, PROT_READ,
+	     MAP_FILE|MAP_VARIABLE, fd, 0);
     if ((int)m == -1) {
 	perror("mmap");
 	close(fd);
@@ -167,12 +175,11 @@ void load(char *path, int text_base, int data_base)
 		    load_ns->ns_lines = smalloc(size, __FILE__, __LINE__);
 		    from = m + shdr->s_lnnoptr;
 		    to = (caddr_t)load_ns->ns_lines;
+		    bzero(to, size);
 		    while (--cnt >= 0) {
 			bcopy(from, to, LINESZ);
 			from += LINESZ;
-			to += LINESZ;
-			bzero(to, sizeof(struct lineno) - LINESZ);
-			to += (sizeof(struct lineno) - LINESZ);
+			to += sizeof(LINENO);
 		    }
 		}
 		break;
@@ -413,27 +420,34 @@ void load(char *path, int text_base, int data_base)
 	int end_func = -1;
 	struct syment *s;
 	symptr sptr, dbx_sptr;
-	symptr last_csect;
+	symptr last_csect = 0;
 	int last_csect_index = -1;
+	symptr last_code_csect = 0;
+	int last_code_csect_index = -1;
 	void *static_offset;
-	int i;
+	int static_forward_reference = 0;
+	int sym_index;
+	int cur_index;
+	struct for_ref *ref_head = 0;
 
 #define Set_cur_block(arg) { \
 	cur_block = (arg); \
 	int_type = ptr_int_type = func_int_type = ptr_func_int_type = 0; \
 }
 
-	for (i = 0;
-	     i < fhdr->f_nsyms;
-	     i += s->n_numaux, base += s->n_numaux * SYMESZ) {
+	for (cur_index = 0;
+	     cur_index < fhdr->f_nsyms;
+	     cur_index += s->n_numaux, base += s->n_numaux * SYMESZ) {
 	    union auxent *aux;
 	    char *suffix;
 	    typeptr thistype;
 	    void *offset;
 
 	    s = (struct syment *)base;
+	    sym_index = cur_index;
+
 	    base += SYMESZ;
-	    ++i;
+	    ++cur_index;
 
 	    /*
 	     * If text_base is -1, that means we want only the type
@@ -455,7 +469,7 @@ void load(char *path, int text_base, int data_base)
 	    else
 		aux = 0;
 
-	    if (i == end_func) {
+	    if (sym_index == end_func) {
 		cur_func = 0;
 		Set_cur_block(cur_file);
 		end_func = 0;
@@ -467,9 +481,10 @@ void load(char *path, int text_base, int data_base)
 	    } else {
 		/* Empty names -- skip over these puppies */
 		if (!s->n_offset)
-		    continue;
-		name = ((s->n_sclass & DBXMASK) ? dbx_strings : strings) +
-		    s->n_offset;
+		    name = "$NONAME";	/* code csect typically have no name */
+		else
+		    name = ((s->n_sclass & DBXMASK) ? dbx_strings : strings) +
+			s->n_offset;
 		size = 0;
 	    }
 	    if (haddot = (name[0] == '.')) {
@@ -575,6 +590,7 @@ void load(char *path, int text_base, int data_base)
 						&ptr_func_int_type);
 		    break;
 
+		case MAP(XMC_DS, XTY_LD): /* 3 word descriptor function */
 		case MAP(XMC_DS, XTY_SD): /* 3 word descriptor function */
 		    suffix = "$ds";
 		    thistype = get_ptr_func_int(cur_block,
@@ -583,9 +599,12 @@ void load(char *path, int text_base, int data_base)
 						&ptr_func_int_type);
 		    break;
 		    
+		case MAP(XMC_BS, XTY_CM):
+		    continue;
+
 		default:
 		    fprintf(stderr, "Unknown class/type pair of %d/%d for %s\n",
-			    aux->x_csect.x_smclas, aux->x_csect.x_smtyp,
+			    aux->x_csect.x_smclas, aux->x_csect.x_smtyp & 7,
 			    name);
 		    continue;
 		}
@@ -597,9 +616,9 @@ void load(char *path, int text_base, int data_base)
 	    switch (s->n_sclass) {
 	    case C_BLOCK:
 		if (s->n_numaux != 1)
-		    fprintf(stderr, "Missing aux entry for %d\n", i-1);
+		    fprintf(stderr, "Missing aux entry for %d\n", sym_index);
 		if (!cur_func) {
-		    fprintf(stderr, ".bb outsize of a func at %d\n", i-1);
+		    fprintf(stderr, ".bb outsize of a func at %d\n", sym_index);
 		    continue;
 		}
 		if (!strcmp(name, "bb")) {	/* Begin Block */
@@ -610,7 +629,8 @@ void load(char *path, int text_base, int data_base)
 			((union auxent *)base)->x_sym.x_misc.x_lnsz.x_lnno;
 		} else {			/* End Block */
 		    if (!cur_block) {
-			fprintf(stderr, ".eb without cur_block on %d\n", i-1);
+			fprintf(stderr, ".eb without cur_block on %d\n",
+				sym_index);
 			continue;
 		    }
 		    cur_block->ns_text_size = (text_base + s->n_value) -
@@ -700,7 +720,22 @@ void load(char *path, int text_base, int data_base)
 		if ((aux->x_csect.x_smtyp & 7) == XTY_SD ||
 		    (aux->x_csect.x_smtyp & 7) == XTY_CM) {
 		    last_csect = sptr;
-		    last_csect_index = i-1;
+		    last_csect_index = sym_index;
+		    if (aux->x_csect.x_smclas == XMC_PR) {
+			last_code_csect = sptr;
+			last_code_csect_index = sym_index;
+		    }
+		}
+		/*
+		 * Resolve forward references
+		 */
+		while (ref_head && sym_index == ref_head->fr_index) {
+		    struct for_ref *temp = ref_head;
+
+		    ref_head = ref_head->fr_next;
+		    temp->fr_sym->s_offset = (void *)
+			((ulong)temp->fr_sym->s_offset + (ulong)sptr->s_offset);
+		    free(temp);
 		}
 
 		/*
@@ -716,7 +751,7 @@ void load(char *path, int text_base, int data_base)
 		    union auxent *a1 = (union auxent *)base;
 
 		    if (s->n_scnum != ohdr->o_sntext)
-			fprintf(stderr, "Strange symentry %d\n", i-1);
+			fprintf(stderr, "Strange symentry %d\n", sym_index);
 		    /*
 		     * Another hack... frequently there are two aux
 		     * entries even if there is no debug info so we
@@ -744,11 +779,13 @@ void load(char *path, int text_base, int data_base)
 		     * entries.
 		     */
 		    if (s->n_numaux != 1) {
-			fprintf(stderr, "Missing aux entry for %d\n", i-1);
+			fprintf(stderr, "Missing aux entry for %d\n",
+				sym_index);
 			continue;
 		    }
 		    if (!cur_func) {
-			fprintf(stderr, ".bf outside of function at %d\n", i-1);
+			fprintf(stderr, ".bf outside of function at %d\n",
+				sym_index);
 			continue;
 		    }
 		    cur_func->ns_lineoffset =
@@ -789,10 +826,17 @@ void load(char *path, int text_base, int data_base)
 
 		/* DBX entries */
 	    case C_BSTAT:		/* symbol table index */
-		if (last_csect_index != s->n_value)
-		    fprintf(stderr, "C_BSTAT is confused %d should be %d\n",
-			    last_csect_index, s->n_value);
-		static_offset = last_csect->s_offset;
+		if (last_csect_index != s->n_value) {
+		    if (s->n_value > sym_index) { /* forward reference */
+			static_forward_reference = s->n_value;
+		    } else {		/* backward confused reference */
+			fprintf(stderr, "C_BSTAT is confused %d should be %d\n",
+				last_csect_index, s->n_value);
+		    }
+		} else {		/* normal reference */
+		    static_forward_reference = 0;
+		    static_offset = last_csect->s_offset;
+		}
 		break;
 
 	    case C_ESTAT:		/* 0 */
@@ -808,7 +852,16 @@ void load(char *path, int text_base, int data_base)
 		    load_base_types(cur_file);
 		    need_load = 0;
 		}
-		parse_stab(cur_block, name, size, &dbx_sptr);
+		/*
+		 * Hack number 44892: The dbx stab string for the
+		 * function comes after the C_EXT which means that
+		 * cur_block points to the function and not the file.
+		 * So... in the case of a C_FUN, we pass cur_file to
+		 * parse_stab instead of cur_block.  In pascal, this
+		 * is going to break but... hahahahahahahaha.
+		 */
+		parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block, name,
+			   size, &dbx_sptr);
 
 		/* These guys have an undefined n_value field */
 		if (s->n_sclass == C_DECL || s->n_sclass == C_GSYM)
@@ -816,14 +869,35 @@ void load(char *path, int text_base, int data_base)
 
 		if (!dbx_sptr) {
 		    fprintf(stderr, "Expected dbx_sptr to be set %d\n",
-			    i-1);
+			    sym_index);
 		    break;
 		}
 		if (s->n_sclass == C_FUN) {
-		    offset = (void *)((int)last_csect->s_offset + s->n_value);
+		    offset = (void *)((int)last_code_csect->s_offset +
+				      s->n_value);
 		    dbx_sptr->s_global = 1;
 		} else if (s->n_sclass == C_STSYM) {
-		    offset = (void *)((int)static_offset + s->n_value);
+		    if (static_forward_reference) {
+			struct for_ref *temp = smalloc(sizeof(*temp),
+						       __FILE__, __LINE__);
+			struct for_ref **pp, *p;
+
+			temp->fr_next = 0;
+			temp->fr_index = static_forward_reference;
+			temp->fr_sym = dbx_sptr;
+			/*
+			 * Insert in order
+			 */
+			for (pp = &ref_head;
+			     (p = *pp) && p->fr_index <= static_forward_reference;
+			     pp = &p->fr_next);
+			temp->fr_next = *pp;
+			*pp = temp;
+
+			offset = (void *)s->n_value;
+		    } else {
+			offset = (void *)((int)static_offset + s->n_value);
+		    }
 		    dbx_sptr->s_global = 1;
 		} else { /* C_LSYM or C_PSYM */
 		    offset = (void *)s->n_value;
@@ -836,10 +910,13 @@ void load(char *path, int text_base, int data_base)
 		 * guys.
 		 */
 		if (dbx_sptr->s_defined && dbx_sptr->s_offset != offset)
-		    fprintf(stderr, "Duplicate global symbol %s\n",
-			    dbx_sptr->s_name);
-		dbx_sptr->s_offset = offset;
-		dbx_sptr->s_defined = 1;
+		    fprintf(stderr, "Duplicate global symbol %s at %d %x != %x\n",
+			    dbx_sptr->s_name, sym_index, dbx_sptr->s_offset,
+			    offset);
+		else {
+		    dbx_sptr->s_offset = offset;
+		    dbx_sptr->s_defined = 1;
+		}
 		break;
 
 	    default:
@@ -847,6 +924,9 @@ void load(char *path, int text_base, int data_base)
 		break;
 	    }
 	}
+	if (ref_head)
+	    fprintf(stderr, "ref_head still points to something.\n");
+
 #undef Set_cur_block
     }
     (void) close(fd);
