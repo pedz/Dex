@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.4 */
+/* @(#)sym.h	1.5 */
 
 #define HASH_SIZE 128
 
@@ -155,6 +155,7 @@ typedef unsigned int stmt_index;
 struct sym {
     struct sym *s_hash;			/* hash chain */
     char *s_name;			/* name of symbol */
+    struct name_space *s_ns;		/* pointer back to name space */
     enum expr_type s_base;		/* base type of symbol */
     typeptr s_type;			/* type */
     union {
