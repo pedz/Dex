@@ -1,10 +1,11 @@
-static char sccs_id[] = "@(#)dex.c	1.5";
+static char sccs_id[] = "@(#)dex.c	1.6";
 
 #include <stdio.h>
 #include <strings.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/access.h>
+#include <ctype.h>
 #include "map.h"
 #include "sym.h"
 #include "inter.h"
@@ -115,3 +116,35 @@ void *safe_realloc(void *old, int size, char *file, int lineno)
     }
     return ret;
 }
+
+/*
+ * Returns true if the digit string pointed to by s is either null or has
+ * nothing but 0's.  We know the string is a valid "integer" string.
+ */
+int is_zero(char *s)
+{
+    int c;
+
+    if (!s)
+	return 1;
+    while ((c = *s++) && (isdigit(c) || c == '-' || c == '+'));
+    if (!c)
+	return 1;
+    return 0;
+}
+
+/*
+ * Returns true if s is non-null and the first character is '-'
+ */
+int is_neg(char *s)
+{
+    return s && (*s == '-');
+}
+
+#ifdef _LONG_LONG
+ularge_t atoularge(char *s) { return strtoull(s, (char **)0, 0); }
+large_t  atolarge (char *s) { return strtoll (s, (char **)0, 0); }
+#else
+ularge_t atoularge(char *s) { return strtoul(s, (char **)0, 0); }
+large_t  atolarge (char *s) { return strtol (s, (char **)0, 0); }
+#endif
