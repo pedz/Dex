@@ -1,4 +1,4 @@
-# @(#)Makefile	1.3
+# @(#)Makefile	1.4
 #
 # COMPONENT_NAME:
 #
@@ -24,9 +24,19 @@ PROGRAMS	= dex
 ILIST		= dex
 IDIR		= /usr/sbin/
 
-CFLAGS		= -D_KERNEL -g
+# CFLAGS		= -D_KERNEL
+CFLAGS		= 
 LIBS		= -ll
-LDFLAGS		= -bloadmap:dex.map
+#
+# The -H4096 is prevent the mmap ping pong problem when dex looks at
+# itself to load up its internal symbols.  The STRIP_FLAG is so the
+# symbols do not get stripped.  We also add in that dmap.o is compiled
+# with the -g option so that it has all of the proc, thread, ppda, etc
+# structures that are pulled in at startup.
+#
+LDFLAGS		= -bloadmap:dex.map -H4096
+STRIP_FLAG	=
+dmap.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
 
 OFILES		= \
 	asgn_expr.o \
