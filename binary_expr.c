@@ -1,10 +1,10 @@
-static char sccs_id[] = "@(#)binary_expr.c	1.2";
+static char sccs_id[] = "@(#)binary_expr.c	1.3";
 
 #include <stdio.h>
 #include "map.h"
-#include "sym.h"
 #include "tree.h"
 #include "binary_expr.h"
+#define DEBUG_BIT BINARY_EXPR_C_BIT
 
 /*
  * All the binary operators crossed with all of the base types.  The
@@ -14,10 +14,6 @@ static char sccs_id[] = "@(#)binary_expr.c	1.2";
  * This file also contains a complete cross matrix of cast functions
  * e.g. c__i casts an int into a char.  All of these might not be
  * needed but if we have all of them we won't ever need more.
- * 
- * At the current time, the relational operators return the same
- * result type as the argument types.  They should return int instead.
- * I don't know what to do about this at this time.
  */
 
 signed char sc_comma(expr *n)  { return sc_val(n->e_left) ,  sc_val(n->e_right); }
@@ -242,6 +238,62 @@ unsigned long ul_qc(expr *n)
     return i_val(n->e_left) ?
 	ul_val(n->e_right->e_left) :
 	    ul_val(n->e_right->e_right);
+}
+
+long long ll_comma(expr *n)  { return ll_val(n->e_left) ,  ll_val(n->e_right); }
+long long ll_times(expr *n)  { return ll_val(n->e_left) *  ll_val(n->e_right); }
+long long ll_divide(expr *n) { return ll_val(n->e_left) /  ll_val(n->e_right); }
+long long ll_mod(expr *n)    { return ll_val(n->e_left) %  ll_val(n->e_right); }
+long long ll_plus(expr *n)   { return ll_val(n->e_left) +  ll_val(n->e_right); }
+long long ll_minue(expr *n)  { return ll_val(n->e_left) -  ll_val(n->e_right); }
+long long ll_rshift(expr *n) { return ll_val(n->e_left) >> i_val(n->e_right); }
+long long ll_lshift(expr *n) { return ll_val(n->e_left) << i_val(n->e_right); }
+
+int ll_lt(expr *n)     { return ll_val(n->e_left) <  ll_val(n->e_right); }
+int ll_gt(expr *n)     { return ll_val(n->e_left) >  ll_val(n->e_right); }
+int ll_ge(expr *n)     { return ll_val(n->e_left) >= ll_val(n->e_right); }
+int ll_le(expr *n)     { return ll_val(n->e_left) <= ll_val(n->e_right); }
+int ll_eq(expr *n)     { return ll_val(n->e_left) == ll_val(n->e_right); }
+int ll_ne(expr *n)     { return ll_val(n->e_left) != ll_val(n->e_right); }
+
+long long ll_and(expr *n)    { return ll_val(n->e_left) &  ll_val(n->e_right); }
+long long ll_xor(expr *n)    { return ll_val(n->e_left) ^  ll_val(n->e_right); }
+long long ll_or(expr *n)     { return ll_val(n->e_left) |  ll_val(n->e_right); }
+long long ll_andand(expr *n) { return ll_val(n->e_left) && ll_val(n->e_right); }
+long long ll_oror(expr *n)   { return ll_val(n->e_left) || ll_val(n->e_right); }
+long long ll_qc(expr *n)
+{
+    return i_val(n->e_left) ?
+	ll_val(n->e_right->e_left) :
+	    ll_val(n->e_right->e_right);
+}
+
+unsigned long long ull_comma(expr *n)  { return ull_val(n->e_left) ,  ull_val(n->e_right); }
+unsigned long long ull_times(expr *n)  { return ull_val(n->e_left) *  ull_val(n->e_right); }
+unsigned long long ull_divide(expr *n) { return ull_val(n->e_left) /  ull_val(n->e_right); }
+unsigned long long ull_mod(expr *n)    { return ull_val(n->e_left) %  ull_val(n->e_right); }
+unsigned long long ull_plus(expr *n)   { return ull_val(n->e_left) +  ull_val(n->e_right); }
+unsigned long long ull_minue(expr *n)  { return ull_val(n->e_left) -  ull_val(n->e_right); }
+unsigned long long ull_rshift(expr *n) { return ull_val(n->e_left) >> i_val(n->e_right); }
+unsigned long long ull_lshift(expr *n) { return ull_val(n->e_left) << i_val(n->e_right); }
+
+int ull_lt(expr *n)     { return ull_val(n->e_left) <  ull_val(n->e_right); }
+int ull_gt(expr *n)     { return ull_val(n->e_left) >  ull_val(n->e_right); }
+int ull_ge(expr *n)     { return ull_val(n->e_left) >= ull_val(n->e_right); }
+int ull_le(expr *n)     { return ull_val(n->e_left) <= ull_val(n->e_right); }
+int ull_eq(expr *n)     { return ull_val(n->e_left) == ull_val(n->e_right); }
+int ull_ne(expr *n)     { return ull_val(n->e_left) != ull_val(n->e_right); }
+
+unsigned long long ull_and(expr *n)    { return ull_val(n->e_left) &  ull_val(n->e_right); }
+unsigned long long ull_xor(expr *n)    { return ull_val(n->e_left) ^  ull_val(n->e_right); }
+unsigned long long ull_or(expr *n)     { return ull_val(n->e_left) |  ull_val(n->e_right); }
+unsigned long long ull_andand(expr *n) { return ull_val(n->e_left) && ull_val(n->e_right); }
+unsigned long long ull_oror(expr *n)   { return ull_val(n->e_left) || ull_val(n->e_right); }
+unsigned long long ull_qc(expr *n)
+{
+    return i_val(n->e_left) ?
+	ull_val(n->e_right->e_left) :
+	    ull_val(n->e_right->e_right);
 }
 
 float f_comma(expr *n)  { return f_val(n->e_left) ,  f_val(n->e_right); }
