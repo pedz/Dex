@@ -1,6 +1,6 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.7";
+static char sccs_id[] = "@(#)stab.y	1.8";
 
 #include <strings.h>
 #include <stdlib.h>
