@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.8";
+static char sccs_id[] = "@(#)builtins.c	1.9";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +19,7 @@ static char sccs_id[] = "@(#)builtins.c	1.8";
 #include "fcall.h"
 #include "disasm.h"
 #include "builtins.h"
+#include "load.h"
 
 /*
  * Called as: return_range(char *t_name, char *d_name, void **startp, int *lenp)
@@ -349,6 +350,7 @@ static void do_int_vars(void)
 	s->s_global = 1;
 	s->s_size = sizeof(int);
 	s->s_offset = f2v(tp->st_func);
+	printf("%s %16lx\n", tp->st_name, tp->st_func);
     }
 }
 
