@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)stmt.c	1.3";
+static char sccs_id[] = "@(#)stmt.c	1.4";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,7 +91,7 @@ expr *execute_statement(stmt_index s)
 	return 0;
 
     sp = statements + s;
-    for ( ; ; )
+    for ( ; ; ) {
 	switch (sp->stmt_type) {
 	case NULL_STMT:
 	    sp++;
@@ -137,6 +137,7 @@ expr *execute_statement(stmt_index s)
 	    ++sp;
 	    break;
 	}
+    }
 }
 
 stmt_index get_current_stmt(void)
