@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.4";
+static char sccs_id[] = "@(#)dex.c	1.5";
 
 #include <stdio.h>
 #include <strings.h>
@@ -93,7 +93,7 @@ main(int argc, char *argv[])
     return 0;
 }
 
-void *smalloc(int size, char *file, int lineno)
+void *safe_malloc(int size, char *file, int lineno)
 {
     char *ret;
 
@@ -105,7 +105,7 @@ void *smalloc(int size, char *file, int lineno)
     return ret;
 }
 
-void *srealloc(void *old, int size, char *file, int lineno)
+void *safe_realloc(void *old, int size, char *file, int lineno)
 {
     char *ret;
 
