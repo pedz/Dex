@@ -1,8 +1,10 @@
-static char sccs_id[] = "@(#)pre-asgn_expr.c	1.3";
+static char sccs_id[] = "@(#)pre-asgn_expr.c	1.4";
 
+#include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
+#include "base_expr.h"
 
 /*
  * includes all of the assignment ops
@@ -76,6 +78,7 @@ asgn_op(unsigned long, ul, suffix, op)
 int_op(modasgn, %=)
 int_op(andasgn, &=)
 int_op(orasgn, |=)
+int_op(xorasgn, ^=)
 
 
 /*
