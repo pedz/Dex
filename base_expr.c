@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)base_expr.c	1.3";
+static char sccs_id[] = "@(#)base_expr.c	1.4";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -12,16 +12,16 @@ static void print_name(char *name, typeptr tptr);
 
 unsigned int get_field(void *addr, int offset, int size)
 {
-    long laddr = (long)addr;
+    unsigned int *laddr = addr;
     unsigned int temp;
 
-    laddr += (offset / 8);
+    laddr += (offset / WSIZE);
     offset %= WSIZE;
     if (offset + size > WSIZE) {
 	fprintf(stderr, "getval spans an integer boundry\n");
 	exit(1);
     }
-    temp = *(unsigned int *)laddr;
+    temp = *laddr;
     temp >>= WSIZE - offset - size;
     temp &= (unsigned)-1 >> (WSIZE - size);
     return temp;
