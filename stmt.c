@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)stmt.c	1.2";
+static char sccs_id[] = "@(#)stmt.c	1.3";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,12 +57,10 @@ static stmt_index next_stmt(enum stmt_type t)
     if (!statements)
 	statements = smalloc(sizeof(struct stmt) * (current_max = 100),
 			     __FILE__, __LINE__);
-    if (current_stmt == current_max &&
-	!(statements = realloc(statements,
-			       sizeof(struct stmt) * (current_max += 100)))) {
-	fprintf(stderr, "Out of memory for realloc in next_stmt\n");
-	exit(1);
-    }
+    if (current_stmt == current_max)
+	statements = srealloc(statements,
+			      sizeof(struct stmt) * (current_max += 100),
+			      __FILE__, __LINE__);
     statements[current_stmt].stmt_type = t;
     return current_stmt++;
 }
