@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)base_expr.c	1.1";
+static char sccs_id[] = "@(#)base_expr.c	1.2";
 
 #include "map.h"
 #include "sym.h"
@@ -276,7 +276,7 @@ st st_qc(expr *n)
 	    st_val(n->e_right->e_right);
 }
 
-signed char sc__sc(expr *n) { return sc_val(n->e_left);  }
+signed char sc__sc(expr *n) { return sc_val(n->e_left); }
 signed char sc__uc(expr *n) { return uc_val(n->e_left); }
 signed char sc__i(expr *n)  { return i_val(n->e_left);  }
 signed char sc__ui(expr *n) { return ui_val(n->e_left); }
@@ -401,17 +401,60 @@ double d_leaf(expr *n) { return n->e_d; }
 st st_leaf(expr *n) { return n->e_st; }
 
 /* global var address nodes */
-signed char *sc_gaddr(expr *n) { return (signed char *)n->e_addr; }
-unsigned char *uc_gaddr(expr *n) { return (unsigned char *)n->e_addr; }
-int *i_gaddr(expr *n) { return (int *)n->e_addr; }
-unsigned int *ui_gaddr(expr *n) { return (unsigned int *)n->e_addr; }
-short *s_gaddr(expr *n) { return (short *)n->e_addr; }
-unsigned short *us_gaddr(expr *n) { return (unsigned short *)n->e_addr; }
-long *l_gaddr(expr *n) { return (long *)n->e_addr; }
-unsigned long *ul_gaddr(expr *n) { return (unsigned long *)n->e_addr; }
-float *f_gaddr(expr *n) { return (float *)n->e_addr; }
-double *d_gaddr(expr *n) { return (double *)n->e_addr; }
-st *st_gaddr(expr *n) { return (st *)n->e_addr; }
+signed char *sc_gaddr(expr *n)
+{
+    return (signed char *)n->e_addr;
+}
+
+unsigned char *uc_gaddr(expr *n)
+{
+    return (unsigned char *)n->e_addr;
+}
+
+int *i_gaddr(expr *n)
+{
+    return (int *)n->e_addr;
+}
+
+unsigned int *ui_gaddr(expr *n)
+{
+    return (unsigned int *)n->e_addr;
+}
+
+short *s_gaddr(expr *n)
+{
+    return (short *)n->e_addr;
+}
+
+unsigned short *us_gaddr(expr *n)
+{
+    return (unsigned short *)n->e_addr;
+}
+
+long *l_gaddr(expr *n)
+{
+    return (long *)n->e_addr;
+}
+
+unsigned long *ul_gaddr(expr *n)
+{
+    return (unsigned long *)n->e_addr;
+}
+
+float *f_gaddr(expr *n)
+{
+    return (float *)n->e_addr;
+}
+
+double *d_gaddr(expr *n)
+{
+    return (double *)n->e_addr;
+}
+
+st *st_gaddr(expr *n)
+{
+    return (st *)n->e_addr;
+}
 
 /* local var address nodes */
 extern int frame_ptr;
@@ -474,81 +517,59 @@ st *st_laddr(expr *n)
 /* Routines which take an lvalue into a pvalue */
 signed char sc_l2p(expr *n)
 {
-    signed char v, *a;
-    a = sc_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(signed char *, sc_addr(n->e_left));
 }
+
 unsigned char uc_l2p(expr *n)
 {
-    unsigned char v, *a;
-    a = uc_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(unsigned char *, uc_addr(n->e_left));
 }
+
 int i_l2p(expr *n)
 {
-    int v, *a;
-    a = i_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(int *, i_addr(n->e_left));
 }
+
 unsigned int ui_l2p(expr *n)
 {
-    unsigned int v, *a;
-    a = ui_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(unsigned int *, ui_addr(n->e_left));
 }
+
 short s_l2p(expr *n)
 {
-    short v, *a;
-    a = s_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(short *, s_addr(n->e_left));
 }
+
 unsigned short us_l2p(expr *n)
 {
-    unsigned short v, *a;
-    a = us_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(unsigned short *, us_addr(n->e_left));
 }
+
 long l_l2p(expr *n)
 {
-    long v, *a;
-    a = l_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(long *, l_addr(n->e_left));
 }
+
 unsigned long ul_l2p(expr *n)
 {
-    unsigned long v, *a;
-    a = ul_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(unsigned long *, ul_addr(n->e_left));
 }
+
 float f_l2p(expr *n)
 {
-    float v, *a;
-    a = f_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(float *, f_addr(n->e_left));
 }
+
 double d_l2p(expr *n)
 {
-    double v, *a;
-    a = d_addr(n->e_left);
-    v_read(&v, a, sizeof(v));
-    return v;
+    return *v2f_type(double *, d_addr(n->e_left));
 }
+
 st st_l2p(expr *n)
 {
-    st v, *a;
-    a = st_addr(n->e_left);
-    v = (st)a;
-    return v;
+    return (st)st_addr(n->e_left);
 }
+
 
 signed char sc_null(expr *n) { return 0; }
 unsigned char uc_null(expr *n) { return 0; }
@@ -561,3 +582,113 @@ unsigned long ul_null(expr *n) { return 0; }
 float f_null(expr *n) { return 0; }
 double d_null(expr *n) { return 0; }
 st st_null(expr *n) { static st s; return s; }
+
+signed char *sc_v2f(expr *n)
+{
+    return v2f_type(signed char *, sc_addr(n->e_left));
+}
+
+unsigned char *uc_v2f(expr *n)
+{
+    return v2f_type(unsigned char *, uc_addr(n->e_left));
+}
+
+int *i_v2f(expr *n)
+{
+    return v2f_type(int *, i_addr(n->e_left));
+}
+
+unsigned int *ui_v2f(expr *n)
+{
+    return v2f_type(unsigned int *, ui_addr(n->e_left));
+}
+
+short *s_v2f(expr *n)
+{
+    return v2f_type(short *, s_addr(n->e_left));
+}
+
+unsigned short *us_v2f(expr *n)
+{
+    return v2f_type(unsigned short *, us_addr(n->e_left));
+}
+
+long *l_v2f(expr *n)
+{
+    return v2f_type(long *, l_addr(n->e_left));
+}
+
+unsigned long *ul_v2f(expr *n)
+{
+    return v2f_type(unsigned long *, ul_addr(n->e_left));
+}
+
+float *f_v2f(expr *n)
+{
+    return v2f_type(float *, f_addr(n->e_left));
+}
+
+double *d_v2f(expr *n)
+{
+    return v2f_type(double *, d_addr(n->e_left));
+}
+
+st *st_v2f(expr *n)
+{
+    return v2f_type(st *, st_addr(n->e_left));
+}
+
+signed char *sc_f2v(expr *n)
+{
+    return f2v_type(signed char *, sc_addr(n->e_left));
+}
+
+unsigned char *uc_f2v(expr *n)
+{
+    return f2v_type(unsigned char *, uc_addr(n->e_left));
+}
+
+int *i_f2v(expr *n)
+{
+    return f2v_type(int *, i_addr(n->e_left));
+}
+
+unsigned int *ui_f2v(expr *n)
+{
+    return f2v_type(unsigned int *, ui_addr(n->e_left));
+}
+
+short *s_f2v(expr *n)
+{
+    return f2v_type(short *, s_addr(n->e_left));
+}
+
+unsigned short *us_f2v(expr *n)
+{
+    return f2v_type(unsigned short *, us_addr(n->e_left));
+}
+
+long *l_f2v(expr *n)
+{
+    return f2v_type(long *, l_addr(n->e_left));
+}
+
+unsigned long *ul_f2v(expr *n)
+{
+    return f2v_type(unsigned long *, ul_addr(n->e_left));
+}
+
+float *f_f2v(expr *n)
+{
+    return f2v_type(float *, f_addr(n->e_left));
+}
+
+double *d_f2v(expr *n)
+{
+    return f2v_type(double *, d_addr(n->e_left));
+}
+
+st *st_f2v(expr *n)
+{
+    return f2v_type(st *, st_addr(n->e_left));
+}
