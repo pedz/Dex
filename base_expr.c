@@ -1,12 +1,15 @@
-static char sccs_id[] = "@(#)base_expr.c	1.7";
+static char sccs_id[] = "@(#)base_expr.c	1.8";
 
 #include <stdio.h>
 #include <setjmp.h>
+#include <stdlib.h>
 #include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "base_expr.h"
+
+#define DEBUG_BIT BASE_EXPR_C_BIT
 
 #define WSIZE (8 * sizeof(ularge_t))
 
@@ -29,30 +32,30 @@ ularge_t get_field(void *addr, int offset, int size)
 
 void set_field(void *addr, int offset, int size, ularge_t val)
 {
-  ularge_t *laddr = addr;
-  ularge_t temp;
-  ularge_t mask;
+    ularge_t *laddr = addr;
+    ularge_t temp;
+    ularge_t mask;
 
-  printf("set laddr:%08x offset %d size %d val %016llx\n",
-	 laddr, offset, size, val);
-  laddr += (offset / WSIZE);
-  offset %= WSIZE;
-  if (offset + size > WSIZE) {
-    fprintf(stderr, "set_field spans alignment boundry\n");
-    exit(1);
-  }
-  printf("set new laddr:%08x offset %d\n", laddr, offset);
-  temp = *laddr;
-  printf("set *laddr:%016llx\n", temp);
-  mask = (((ularge_t)-1 >> (WSIZE - size)) << (WSIZE - offset - size));
-  printf("set mask:%016llx\n", mask);
-  temp &= ~mask;
-  printf("set *laddr after mask:%016llx\n", temp);
-  val <<= (WSIZE - offset - size);
-  val &= mask;
-  printf("set val after mask:%016llx\n", val);
-  temp |= val;
-  printf("set new val:%016llx\n", temp);
-  *(ularge_t *)laddr = temp;
-  return;
+    DEBUG_PRINTF(("set laddr:%s offset %d size %d val %s\n",
+		  P(laddr), offset, size, P(val)));
+    laddr += (offset / WSIZE);
+    offset %= WSIZE;
+    if (offset + size > WSIZE) {
+	fprintf(stderr, "set_field spans alignment boundry\n");
+	exit(1);
+    }
+    DEBUG_PRINTF(("set new laddr:%s offset %d\n", P(laddr), offset));
+    temp = *laddr;
+    DEBUG_PRINTF(("set *laddr:%s\n", P(temp)));
+    mask = (((ularge_t)-1 >> (WSIZE - size)) << (WSIZE - offset - size));
+    DEBUG_PRINTF(("set mask:%s\n", P(mask)));
+    temp &= ~mask;
+    DEBUG_PRINTF(("set *laddr after mask:%s\n", P(temp)));
+    val <<= (WSIZE - offset - size);
+    val &= mask;
+    DEBUG_PRINTF(("set val after mask:%s\n", P(val)));
+    temp |= val;
+    DEBUG_PRINTF(("set new val:%s\n", P(temp)));
+    *(ularge_t *)laddr = temp;
+    return;
 }
