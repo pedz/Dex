@@ -1,12 +1,16 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.8";
+static char sccs_id[] = "@(#)stab.y	1.9";
 
 #include <strings.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "map.h"
 #include "sym.h"
+#include "tree.h"
 #include "dex.h"
+#include "stab_pre.h"
+
 static char buf[128];			/* buf for names and stuff */
 static char *nextp = buf;		/* pointer into aclbuf */
 
@@ -49,10 +53,11 @@ static symptr cur_sym;
 static char *parse_line;
 static char *parse_position;
 static char small_buf[32];
-static yylex();
+static int yylex(void);
 static yyerror(char *s);
 static void bogus(int n);
-int parse_stab(ns *ns, char *s, int len, symptr *s_out);
+
+int yyparse(void);
 
 %}
 
@@ -1030,7 +1035,7 @@ LEAD_LETTER
     | '\177'
     ;
 %%
-#include <stdio.h>
+#define DEBUG_BIT STAB_Y_BIT
 
 /*
  * This grammer and parser is set up so that a null terminated string
@@ -1048,7 +1053,7 @@ static char *parse_line;
 static char *parse_position;
 static char small_buf[32];
 
-static yylex()				/* actually STABlex */
+static int yylex(void)			/* actually STABlex */
 {
     int c;
 
