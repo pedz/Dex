@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)stmt.c	1.4";
+static char sccs_id[] = "@(#)stmt.c	1.5";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,12 +55,10 @@ static stmt_index next_stmt(enum stmt_type t)
 {
 
     if (!statements)
-	statements = smalloc(sizeof(struct stmt) * (current_max = 100),
-			     __FILE__, __LINE__);
+	statements = smalloc(sizeof(struct stmt) * (current_max = 100));
     if (current_stmt == current_max)
 	statements = srealloc(statements,
-			      sizeof(struct stmt) * (current_max += 100),
-			      __FILE__, __LINE__);
+			      sizeof(struct stmt) * (current_max += 100));
     statements[current_stmt].stmt_type = t;
     return current_stmt++;
 }
