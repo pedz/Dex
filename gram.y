@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.3";
+static char sccs_id[] = "@(#)gram.y	1.4";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -84,6 +84,8 @@ void yyerror(char *s, ...);
 %token <val> PRINT
 %token <val> SOURCE
 %token <val> SYM_DUMP
+%token <val> STMT_DUMP
+%token <val> TYPE_DUMP
 
 /* keywords used for C -- all of this might be used at the current time */
 
@@ -195,6 +197,14 @@ command
     | SYM_DUMP ';'
 	{
 	    dump_symtable();
+	}
+    | STMT_DUMP ';'
+	{
+	    dump_stmts();
+	}
+    | TYPE_DUMP ';'
+	{
+	    dump_types();
 	}
     | SOURCE STRING ';'
 	{
@@ -582,6 +592,11 @@ struct_declaration
 	    int pos = 0;
 	    fieldptr f = $3;
 
+	    if (t->t_val.val_s.s_fields) {
+		yyerror("struct or unions %s can not be redeclared",
+			$1.a_name);
+		YYERROR;
+	    }
 	    t->t_val.val_s.s_fields = f;
 	    if (t->t_type == STRUCT_TYPE) {
 		pos = allocate_fields(f);
@@ -596,18 +611,19 @@ struct_declaration
 	    pos += (sizeof(int) * 8) - 1;
 	    pos /= 8;
 	    t->t_val.val_s.s_size = pos;
-	    if ($1.a_name)
-		add_namedef(t, $1.a_name);
 	    $$ = $1;
 	}
     | struct_union IDENTIFIER
 	{
 	    if (!($$.a_type = name2namedef_all($2))) {
-		yyerror("struct or union %s not found", $2);
-		YYERROR;
+		$$.a_type = newtype(ns_inter, (($1 == STRUCT) ?
+					       STRUCT_TYPE : UNION_TYPE));
+		add_namedef($$.a_type, $2);
 	    }
-	    $$.a_base = struct_type;
 	    $$.a_valid_type = 1;
+	    $$.a_name = $2;
+	    $$.a_valid_name = 1;
+	    $$.a_base = struct_type;
 	    $$.a_valid_base = 1;
 	}
     | struct_union error
@@ -630,8 +646,11 @@ str_head
 	}
     | struct_union IDENTIFIER
 	{
-	    $$.a_type = newtype(ns_inter, (($1 == STRUCT) ?
-					   STRUCT_TYPE : UNION_TYPE));
+	    if (!($$.a_type = name2namedef(ns_inter, $2))) {
+		$$.a_type = newtype(ns_inter, (($1 == STRUCT) ?
+					       STRUCT_TYPE : UNION_TYPE));
+		add_namedef($$.a_type, $2);
+	    }
 	    $$.a_valid_type = 1;
 	    $$.a_name = $2;
 	    $$.a_valid_name = 1;
@@ -775,10 +794,10 @@ function_declarator		/* function name */
 	{
 	    typeptr t = newtype($2.a_type->t_ns, PTR_TYPE);
 
+	    t->t_val.val_p = $2.a_type->t_val.val_f.f_typeptr;
 	    $$ = $2;
-	    $$.a_type = t;
+	    $$.a_type->t_val.val_f.f_typeptr = t;
 	    $$.a_base = ulong_type;
-	    t->t_val.val_p = $2.a_type;
 	}
     | ptr_function_declarator arg_list
 	{
@@ -1671,9 +1690,17 @@ static symptr gram_enter_sym(anode *attr, int line)
 	yyerror("No valid base from line %d", line);
     if (!attr->a_valid_class)
 	yyerror("No valid class from line %d", line);
-    ret = enter_sym(ns_inter, attr->a_name);
+    ret = enter_sym(ns_inter, attr->a_name, 0);
+
+    /*
+     * There are many cases where a symbol is not a duplicate but this solves
+     * most of them.
+     */
     if (ret->s_defined)
-	yyerror("Duplicate symbol");
+	if (ret->s_nesting == nesting_level)
+	    yyerror("Duplicate symbol");
+	else
+	    ret = enter_sym(ns_inter, attr->a_name, 1);
     ret->s_defined = 1;
     ret->s_base = attr->a_base;
     ret->s_type = attr->a_type;
