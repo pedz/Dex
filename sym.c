@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.4";
+static char sccs_id[] = "@(#)sym.c	1.5";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -389,8 +389,10 @@ char *store_string(ns *nspace, char *name, int len, char *suffix)
     result[name_len] = 0;
     if (suffix)
 	strcat(result, suffix);
+#if 0					/* Screws up filenames */
     if (result[0] == '.')
 	result[0] = '$';
+#endif
     ++stp->st_count;
     return st->str_name = result;
 }
@@ -558,11 +560,15 @@ symptr addr2userdef(ns *nspace, void *addr)
     for (end = (sym = sytp->sy_hash) + HASH_SIZE; sym < end; ++sym)
 	for (temp = *sym; temp; temp = temp->s_hash)
 	    if (temp->s_global && (temp->s_offset <= addr) &&
-		(!closest || (closest->s_offset < temp->s_offset)))
+		(!closest || (closest->s_offset < temp->s_offset ||
+			      (closest->s_offset -= temp->s_offset &&
+			       closest->s_name[0] == '$'))))
 		closest = temp;
     for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
 	if ((temp = addr2userdef(nspace, addr)) &&
-	    (!closest || (closest->s_offset < temp->s_offset)))
+	    (!closest || (closest->s_offset < temp->s_offset ||
+			  (closest->s_offset == temp->s_offset &&
+			   closest->s_name[0] == '$'))))
 	    closest = temp;
     return closest;
 }
@@ -575,7 +581,9 @@ symptr addr2userdef_all(void *addr)
 
     for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	if ((temp = addr2userdef(nspace, addr)) &&
-	    (!closest || (closest->s_offset < temp->s_offset)))
+	    (!closest || (closest->s_offset < temp->s_offset ||
+			  (closest->s_offset == temp->s_offset &&
+			   closest->s_name[0] == '$'))))
 	    closest = temp;
     return closest;
 }
@@ -623,6 +631,7 @@ symptr enter_sym(ns *nspace, char *name, int force)
     ++sytp->sy_count;
     ret = new(struct sym);
     bzero(ret, sizeof(*ret));
+    ret->s_ns = nspace;
     ret->s_hash = sytp->sy_hash[hash_val];
     sytp->sy_hash[hash_val] = ret;
     ret->s_name = name;
@@ -669,10 +678,12 @@ static void print_sym(symptr s)
 	if (oldt == t)
 	    break;
     }
-    printf("(%s), addr=%08x, size=%d, nesting=%d\n",
-	   type_2_string[(s->s_base > LAST_TYPE || s->s_base < 0) ?
-			 LAST_TYPE : s->s_base],
-	   s->s_offset, s->s_size, s->s_nesting);
+    if (s->s_base > LAST_TYPE || s->s_base < 0)
+	printf("(%s:%d), addr=%08x, size=%d, nesting=%d\n",
+	       "bad", s->s_base, s->s_offset, s->s_size, s->s_nesting);
+    else
+	printf("(%s), addr=%08x, size=%d, nesting=%d\n",
+	       type_2_string[s->s_base], s->s_offset, s->s_size, s->s_nesting);
 }
 
 static void _dump_symtable(ns *nspace, symtabptr old_sytp)
