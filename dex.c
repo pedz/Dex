@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.6";
+static char sccs_id[] = "@(#)dex.c	1.7";
 
 #include <stdio.h>
 #include <strings.h>
@@ -17,7 +17,7 @@ char *unixname = "/unix";
 void *stack_top;
 extern int GRAMdebug;
 
-static void super_extra_hack(char *argv0)
+static void retrieve_own_stabs(char *argv0)
 {
     char buf[10240];
     char *path;
@@ -29,7 +29,6 @@ static void super_extra_hack(char *argv0)
     if (!(stat(argv0, &sbuf) || !S_ISREG(sbuf.st_mode) || access(argv0, X_OK))) {
 	/* We found it */
 	load(argv0, -1, -1);
-	printf("Found myself\n");
 	return;
     }
 
@@ -44,9 +43,9 @@ static void super_extra_hack(char *argv0)
 
 	/* We found it */
 	load(buf, -1, -1);
-	printf("Found myself\n");
-	break;
+	return;
     }
+    printf("Did not find myself\n");
     return;
 }
 
@@ -88,8 +87,8 @@ main(int argc, char *argv[])
     load_base_types(ns_inter);
     tree_init();
     map_init();
-    extra_hack();
-    super_extra_hack(argv0);
+    builtin_init();
+    retrieve_own_stabs(argv0);
     GRAMparse();
     return 0;
 }
