@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.5";
+static char sccs_id[] = "@(#)load.c	1.6";
 
 #include <a.out.h>
 #include <string.h>
@@ -93,6 +93,24 @@ struct for_ref {
     symptr fr_sym;
 };
 
+static char *stab_buf;
+static int stab_buf_size;
+
+static void add_to_buf(char *s, int size)
+{
+    int new_stab_buf_size = strlen(stab_buf) + size + 1;
+
+    if (new_stab_buf_size >= stab_buf_size)
+	if (stab_buf)
+	    stab_buf = srealloc(stab_buf, new_stab_buf_size);
+	else
+	    stab_buf = smalloc(new_stab_buf_size);
+    strncat(stab_buf, s, size);
+    if (stab_buf[new_stab_buf_size - 2] == '?')
+	stab_buf[new_stab_buf_size - 2] = 0;
+    else
+	stab_buf[new_stab_buf_size - 1] = 0;
+}
 
 void load(char *path, int text_base, int data_base)
 {
@@ -114,6 +132,7 @@ void load(char *path, int text_base, int data_base)
     char *suffix;
     typeptr thistype;
     int haddot;
+    int have_stab_buf = 0;
 #ifdef USE_MMAP
     struct stat sbuf;
 #endif
@@ -235,6 +254,12 @@ void load(char *path, int text_base, int data_base)
 			continue;
 
 		    case MAP(XMC_SV, XTY_SD): /* Supervisor function */
+#ifdef XMC_SV64
+		    case MAP(XMC_SV64, XTY_SD):
+#endif
+#ifdef XMC_SV3264
+		    case MAP(XMC_SV3264, XTY_SD):
+#endif
 			suffix = "$sv";
 			thistype = get_ptr_func_int(load_ns,
 						    &int_type,
@@ -242,6 +267,7 @@ void load(char *path, int text_base, int data_base)
 						    &ptr_func_int_type);
 			break;
 
+		    case MAP(XMC_DS, XTY_LD): /* toc to function */
 		    case MAP(XMC_DS, XTY_SD): /* toc to function */
 			suffix = "$ds";
 			thistype = get_ptr_func_int(load_ns,
@@ -267,13 +293,15 @@ void load(char *path, int text_base, int data_base)
 		    default:
 			fprintf(stderr,
 				"Unknown loader class/type of %d/%d for %s\n",
-				lsym->l_smclas, lsym->l_smtype, lsym->l_name);
+				lsym->l_smclas, lsym->l_smtype & 7, lsym->l_name);
 			continue;
 		    }
 
 		    if (lsym->l_zeroes) {
 			name = lsym->l_name;
-			size = sizeof(lsym->l_name);
+			size = name[sizeof(lsym->l_name) - 1] ?
+			    sizeof(lsym->l_name) :
+			    0;
 		    } else {
 			name = strings + lsym->l_offset;
 			size = 0;
@@ -457,7 +485,7 @@ void load(char *path, int text_base, int data_base)
 
 	    if (s->n_zeroes) {
 		name = s->n_name;
-		size = sizeof(s->n_name);
+		size = name[sizeof(s->n_name) - 1] ? sizeof(s->n_name) : 0;
 	    } else {
 		/* Empty names -- skip over these puppies */
 		if (!s->n_offset)
@@ -506,10 +534,24 @@ void load(char *path, int text_base, int data_base)
 		     */
 		case MAP(XMC_PR, XTY_SD):
 		case MAP(XMC_PR, XTY_LD):
+		    /* I'm not 100% positive about the XMC_DB */
+		case MAP(XMC_DB, XTY_SD):
+		case MAP(XMC_DB, XTY_LD):
 		    suffix = 0;
-		    thistype = get_func_int(cur_block,
-					    &int_type,
-					    &func_int_type);
+		    /*
+		     * New note 980915 by EPS... I added the test for
+		     * haddot because of 'key_value' looked like a
+		     * function pointer.  I'm hoping all the PR LD
+		     * entries are from .s files and follow the ENTRY
+		     * or DATA conventions.  If not, I'm screwed.
+		     */
+		    if (haddot)
+			thistype = get_func_int(cur_block,
+						&int_type,
+						&func_int_type);
+		    else
+			thistype = get_int(cur_block,
+					   &int_type);
 		    break;
 
 		case MAP(XMC_RO, XTY_SD):
@@ -585,6 +627,12 @@ void load(char *path, int text_base, int data_base)
 		    continue;
 
 		case MAP(XMC_SV, XTY_SD): /* Supervisor function */
+#ifdef XMC_SV64
+		case MAP(XMC_SV64, XTY_SD): /* Supervisor function */
+#endif
+#ifdef XMC_SV3264
+		case MAP(XMC_SV3264, XTY_SD): /* Supervisor function */
+#endif
 		    suffix = "$sv";
 		    thistype = get_ptr_func_int(load_ns,
 						&int_type,
@@ -802,7 +850,9 @@ void load(char *path, int text_base, int data_base)
 			if (aux->x_file._x.x_ftype == XFT_FN) {
 			    if (aux->x_file._x.x_zeroes) {
 				name = aux->x_file.x_fname;
-				size = sizeof(aux->x_file.x_fname);
+				size = name[sizeof(aux->x_file.x_fname) - 1] ?
+				    sizeof(aux->x_file.x_fname) :
+				    0;
 			    } else {
 				name = strings + aux->x_file._x.x_offset;
 				size = 0;
@@ -859,9 +909,34 @@ void load(char *path, int text_base, int data_base)
 		 * So... in the case of a C_FUN, we pass cur_file to
 		 * parse_stab instead of cur_block.  In pascal, this
 		 * is going to break but... hahahahahahahaha.
+		 * 
+		 * Whisper quietly over the sound of jack hammers and
+		 * chain saws... The stab string syntax says that if
+		 * the string ends in a ? then it continues in the
+		 * next stab entry.  Well, my stab parser gets
+		 * impatient so I concatenate all of the things
+		 * together before calling parse_stab.  The way I do
+		 * this is to save the string in a buffer and loop
+		 * back around.  This makes the assumption that the
+		 * other fields are consistant in all the stab entries
+		 * I concatenate together.
 		 */
-		parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block, name,
-			   size, &dbx_sptr);
+		if (name[(size ? size : strlen(name)) - 1] == '?') {
+		    add_to_buf(name, (size ? size : strlen(name)));
+		    have_stab_buf = 1;
+		    break;
+		}
+
+		if (have_stab_buf) {
+		    add_to_buf(name, (size ? size : strlen(name)));
+		    parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block, stab_buf,
+			       0, &dbx_sptr);
+		    have_stab_buf = 0;
+		    stab_buf[0] = 0;
+		} else {
+		    parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block, name,
+			       size, &dbx_sptr);
+		}
 
 		/* These guys have an undefined n_value field */
 		if (s->n_sclass == C_DECL || s->n_sclass == C_GSYM)
@@ -936,4 +1011,7 @@ void load(char *path, int text_base, int data_base)
 #ifdef USE_MMAP
     (void) munmap(m, sbuf.st_size);
 #endif
+    if (have_stab_buf)
+	fprintf(stderr, "Load finished with %s still in stab_buf\n", stab_buf);
+    finish_copies();
 }
