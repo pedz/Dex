@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree.c	1.3";
+static char sccs_id[] = "@(#)tree.c	1.4";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -136,7 +136,7 @@ int mk_dot(cnode *result, cnode *c, char *s)
     int bit_size;
 
     if (t->t_type != STRUCT_TYPE && t->t_type != UNION_TYPE) {
-	fprintf(stderr, "struct or union expected\n");
+	GRAMerror("struct or union expected");
 	return 1;
     }
     nspace = t->t_ns;
@@ -144,8 +144,7 @@ int mk_dot(cnode *result, cnode *c, char *s)
 	 f && strcmp(f->f_name, s);
 	 f = f->f_next);
     if (!f) {
-	fprintf(stderr, "field %s not part of structure %s\n", s,
-		t->t_name);
+	GRAMerror("field %s not part of structure %s", s, t->t_name);
 	return 1;
     }
 
@@ -204,7 +203,7 @@ int mk_ptr(cnode *result, cnode *c, char *s)
     cnode x;
 
     if (t->t_type != PTR_TYPE) {
-	fprintf(stderr, "not a pointer type\n");
+	GRAMerror("not a pointer type");
 	return 1;
     }
     mk_l2p(&x, c);
@@ -219,7 +218,7 @@ int mk_array(cnode *result, cnode *array, cnode *index)
 
     if (array->c_type->t_type != ARRAY_TYPE &&
 	array->c_type->t_type != PTR_TYPE) {
-	fprintf(stderr, "array or pointer type needed for subscripting\n");
+	GRAMerror("array or pointer type needed for subscripting");
 	return 1;
     }
     /*
@@ -273,8 +272,8 @@ int mk_asgn(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
     eptr->e_left = lvalue->c_expr;
     eptr->e_func = op_table[lvalue->c_base][tok_2_op[opcode]];
     if (!eptr->e_func.sc) {
-	fprintf(stderr, "`%s' op is illegal for %s's\n",
-		op_2_string[tok_2_op[opcode]], type_2_string[lvalue->c_base]);
+	GRAMerror("`%s' op is illegal for %s's",
+		  op_2_string[tok_2_op[opcode]], type_2_string[lvalue->c_base]);
 	eptr->e_func = null_func[lvalue->c_base];
 	rc = 1;
     }
@@ -321,21 +320,28 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
     enum expr_type htype;
     typeptr totype;
     expr *eptr;
+    int ptr_is_ok = !(opcode == ',' || opcode == '>' || opcode == '<' || 
+		      opcode == GTOREQUAL || opcode == LTOREQUAL ||
+		      opcode == EQUALITY || opcode == NOTEQUAL ||
+		      opcode == ANDAND || opcode == OROR);
 
     /*
-     * Check for pointer subtraction first.
+     * Check for pointer subtraction first.  The list of opcodes below
+     * are those which are legal to do but do not require any special
+     * code.
      */
-    if (lptr && rptr) {
+    if (lptr && rptr && ptr_is_ok) {
+
 	expr *newr;
 	expr *size;
 	typeptr ltype;
 	typeptr rtype;
 
 	if (opcode != '-') {
-	    fprintf(stderr, "ptr %s ptr is illegal\n",
-		    op_2_string[tok_2_op[opcode]]);
+	    GRAMerror("ptr %s ptr is illegal", op_2_string[tok_2_op[opcode]]);
 	    return 1;
 	}
+
 	ltype = ((left.c_type->t_type == PTR_TYPE) ?
 		 left.c_type->t_val.val_p :
 		 left.c_type->t_val.val_a.a_typeptr);
@@ -343,7 +349,7 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
 		 right.c_type->t_val.val_p :
 		 right.c_type->t_val.val_a.a_typeptr);
 	if (rtype != ltype) {
-	    fprintf(stderr, "pointer subtraction of different types not legal");
+	    GRAMerror("pointer subtraction of different types not legal");
 	    return 1;
 	}
 
@@ -357,24 +363,27 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
 	result->c_bitfield = 0;
 
 	/* Create expression for sizeof(*lvalue) */
-	size->e_func.i = i_leaf;
-	size->e_i = get_size(ltype) / 8;
-	size->e_size = sizeof(int);
+	size = new_expr();
+	size->e_func.l = l_leaf;
+	size->e_l = get_size(ltype) / 8;
+	size->e_size = sizeof(long);
 	
 	/* Create subtraction node of two pointers */
-	newr->e_func = op_table[left.c_base][tok_2_op['-']];
+	newr = new_expr();
+	newr->e_func = op_table[long_type][tok_2_op['-']];
 	newr->e_left = left.c_expr;
 	newr->e_right = right.c_expr;
-	newr->e_size = sizeof(int);
+	newr->e_size = sizeof(long);
 
 	/* Create divide node of new rvalue by sizeof(*lvalue) */
-	eptr->e_func = op_table[left.c_base][tok_2_op['/']];
+	eptr->e_func = op_table[long_type][tok_2_op['/']];
 	eptr->e_left = newr;
 	eptr->e_right = size;
-	eptr->e_size = sizeof(int);
+	eptr->e_size = sizeof(long);
+	return 0;
     }
 
-    if (lptr || rptr) {
+    if ((lptr || rptr) && ptr_is_ok) {
 	expr *newr;
 	expr *size;
 
@@ -395,8 +404,8 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
 	eptr->e_func = null_func[left.c_base];
 
 	if (opcode != '+' && opcode != '-') {
-	    fprintf(stderr, "'%s' op is illegal with pointers\n",
-		    op_2_string[tok_2_op[opcode]]);
+	    GRAMerror("'%s' op is illegal with pointers",
+		      op_2_string[tok_2_op[opcode]]);
 	    return 1;
 	}
 
@@ -436,8 +445,8 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
     eptr->e_func = op_table[htype][tok_2_op[opcode]];
     eptr->e_size = get_size(result->c_type) / 8;
     if (!eptr->e_func.sc) {
-	fprintf(stderr, "`%s' op is illegal for %s's\n",
-		op_2_string[tok_2_op[opcode]], type_2_string[htype]);
+	GRAMerror("`%s' op is illegal for %s's",
+		  op_2_string[tok_2_op[opcode]], type_2_string[htype]);
 	eptr->e_func = null_func[htype];
 	return 1;
     }
@@ -481,8 +490,8 @@ int mk_qc_op(cnode *result, cnode *qvalue, cnode *tvalue, cnode *fvalue)
     eptr->e_func = op_table[htype][tok_2_op['?']];
     eptr->e_size = true.c_expr->e_size;
     if (!eptr->e_func.sc) {
-	fprintf(stderr, "`%s' op is illegal for %s's\n",
-		op_2_string[tok_2_op['?']], type_2_string[htype]);
+	GRAMerror("`%s' op is illegal for %s's",
+		  op_2_string[tok_2_op['?']], type_2_string[htype]);
 	eptr->e_func = null_func[htype];
 	return 1;
     }
@@ -502,8 +511,8 @@ void cast_to(cnode *rvalue, typeptr t, enum expr_type base)
     if (base == rvalue->c_base)
 	return;
     if (!(f = cast_table[base][rvalue->c_base]).sc) {
-	fprintf(stderr, "Illegal cast from %s to %s\n",
-		type_2_string[base], type_2_string[rvalue->c_base]);
+	GRAMerror("Illegal cast from %s to %s",
+		  type_2_string[base], type_2_string[rvalue->c_base]);
 	eptr = rvalue->c_expr;
     } else {
 	eptr = new_expr();
@@ -523,8 +532,8 @@ expr *cast_to_int(cnode *r)
     if (r->c_base == int_type)
 	return r->c_expr;
     if (!(f = cast_table[int_type][r->c_base]).sc) {
-	fprintf(stderr, "Illegal cast from %s to %s\n",
-		type_2_string[int_type], type_2_string[r->c_base]);
+	GRAMerror("Illegal cast from %s to %s",
+		  type_2_string[int_type], type_2_string[r->c_base]);
 	return r->c_expr;
     }
     ret = new_expr();
@@ -871,7 +880,7 @@ void eval_all(all *result, cnode *c)
 	break;
     case void_type:
     default:
-	printf("bogus type dude!!!\n");
+	fprintf(stderr, "bogus type dude!!!\n");
 	break;
     }
 }
