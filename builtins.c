@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.4";
+static char sccs_id[] = "@(#)builtins.c	1.5";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +6,7 @@ static char sccs_id[] = "@(#)builtins.c	1.4";
 #include <setjmp.h>
 #include <string.h>
 #include <a.out.h>
+#include <stdarg.h>
 #include "map.h"
 #include "dmap.h"
 #include "sym.h"
@@ -18,6 +19,20 @@ static char sccs_id[] = "@(#)builtins.c	1.4";
 #include "fcall.h"
 #include "disasm.h"
 #include "builtins.h"
+
+/*
+ * Called as: return_range(char *t_name, char *d_name, void **startp, int *lenp)
+ */
+int int_return_range(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+    char *t_name = (char *)f[1];
+    char *d_name = (char *)f[2];
+    void **startp = (void *)f[3];
+    int *lenp = (void *)f[4];
+    
+    return return_range(t_name, d_name, startp, lenp);
+}
 
 int int_regs_instr(expr *n)
 {
@@ -66,6 +81,13 @@ int int_strcmp(expr *n)
     long *f = v2f_type(long *, frame_ptr);
 
     return strcmp((char *)f[1], (char *)f[2]);
+}
+
+int int_strlen(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+
+    return strlen((char *)f[1]);
 }
 
 int int_strncmp(expr *n)
@@ -156,19 +178,20 @@ int int_find(expr *n)
 	    break;
     if (nspace) {
 	struct lineno *lines;
-	int diff = (ulong)qaddr - (ulong)s->s_offset;
 
 	if (nspace->ns_parent && file_name_p)
 	    *file_name_p = f2v_type(char *, nspace->ns_parent->ns_name);
 	if (lineno_p && (lines = nspace->ns_lines)) {
 	    for (++lines; lines->l_lnno; ++lines)
-		if (lines->l_addr.l_paddr > diff)
+		if (lines->l_addr.l_paddr > (ulong)qaddr)
 		    break;
 	    *lineno_p = nspace->ns_lineoffset + lines[-1].l_lnno - 1;
 	}
     }
-    *func_name_p = f2v_type(char *, s->s_name);
-    *start_p = s->s_offset;
+    if (func_name_p)
+	*func_name_p = f2v_type(char *, s->s_name);
+    if (start_p)
+	*start_p = s->s_offset;
     return 1;
 }
 
@@ -207,8 +230,10 @@ static void do_int_funcs(void)
 	{ "purge_all_pages", int_purge_all_pages },
 	{ "purge_user_pages", int_purge_user_pages },
 	{ "regs_instr", int_regs_instr },
+	{ "return_range", int_return_range },
 	{ "sprintf", int_sprintf },
 	{ "strcmp",  int_strcmp },
+	{ "strlen",  int_strlen },
 	{ "strncmp", int_strncmp },
 	{ "v2f",     int_v2f },
     };
@@ -290,8 +315,13 @@ static void do_int_vars(void)
 	int *st_func;
     };
     struct table tab[] = {
+#ifdef _AIX41
 	{ "thread_slot",  &thread_slot },
-	{ "selected_cpu", &selected_cpu }
+#else
+	{ "proc_slot",  &proc_slot },
+#endif
+	{ "selected_cpu", &selected_cpu },
+	{ "fromdump",     &fromdump }
     };
     struct table *tp, *tp_end;
     typeptr t = find_type(ns_inter, TP_INT);
