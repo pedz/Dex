@@ -1,35 +1,5 @@
 
-/* @(#)tree.h	1.1 */
-
-/*
- * This might be a hugh mistake but the convention is that single or
- * double letters will be used to denote all the types.  c for char,
- * uc for unsigned char, etc.  Functions will be prefixed with sc_ as
- * an example for a function which returns a char.
- *
- * Note that pointer type is never used in an expression tree.
- * Instead an unsigned long is used.  ptr_type is listed in expr_type
- * since it will simplify the parsing but it is purposely left out of
- * "all".
- */
-
-/*
- * Keep FIRST_TYPE equal to the first expr_type and LAST_TYPE equal to
- * the last expr_type.
- */
-enum expr_type {
-    schar_type, uchar_type, int_type, uint_type, short_type,
-    ushort_type, long_type, ulong_type, float_type, double_type,
-    struct_type, void_type, bad_type
-    };
-#define FIRST_TYPE schar_type
-#define LAST_TYPE  bad_type
-
-/* Typedef for pointer type */
-typedef char *ptr;
-
-/* Pointer type as used in an expression tree */
-#define ptr_expr unsigned long
+/* @(#)tree.h	1.2 */
 
 /*
  * When a struct is evaulated, the address of the structure is
@@ -151,6 +121,11 @@ typedef struct expr {
 #define st_addr(node) ((*(node)->e_func.sta)(node))
 #define v_addr(node)  ((*(node)->e_func.va)(node))
 
+typedef struct arg_list {
+    struct arg_list *a_next;
+    anode a_anode;
+} arg_list;
+
 /*
  * During the compile phase, this struct is used to keep track of the
  * expression node, its type, and other information.
@@ -168,73 +143,7 @@ typedef struct cnode_list {
     cnode cl_cnode;
 } cnode_list;
 
-enum classes {
-    auto_class, reg_class, extern_class, static_class, typedef_class,
-    param_class
-    };
-
-typedef struct anode {
-    typeptr a_type;			/* pointer to typenode */
-    enum expr_type a_base;		/* base type of cnode */
-    enum classes a_class;		/* storage class */
-} anode;
-    
-/* user defined symbols */
-struct sym {
-    struct sym *s_hash;			/* hash chain */
-    char *s_name;			/* name of symbol */
-    enum expr_type s_base;		/* base type of symbol */
-    typeptr s_type;			/* type */
-    union {
-	v_ptr _s_offset;		/* offset */
-	int   _s_stmt;			/* statement */
-    } _s_u;
-#define s_offset _s_u._s_offset
-#define s_stmt   _s_u._s_stmt
-
-    int s_size;				/* size of symbol */
-    int s_nesting;			/* nesting level */
-    unsigned int s_global : 1;		/* true if a global */
-};
-typedef struct sym *symptr;
-
-typedef struct arg_list {
-    struct arg_list *a_next;
-    char *a_ident;
-    anode a_anode;
-} arg_list;
-
-expr *new_expr(void);
-int mkident(cnode *result, char *s);
-void mkl2p(cnode *result, cnode *c);
-int mkdot(cnode *result, cnode *c, char *s);
-int mkptr(cnode *result, cnode *c, char *s);
-int mkarray(cnode *result, cnode *c, cnode *index);
-int mkasgn(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
-int mkbinary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
-void mk_fcall(cnode *result, cnode *name, cnode_list *args);
-int mk_qc_op(cnode *result, cnode *qvalue, cnode *tvalue, cnode *fvalue);
-void cast_to(cnode *rvalue, typeptr t);
-expr *cast_to_int(cnode *r);
-void tree_init(void);
-symptr name2userdef(char *name);
-void clean_symtable();
-symptr enter_sym(anode * attr, char *name);
-enum expr_type base_type(typeptr t);
-void eval_all(all *result, cnode *c);
-typeptr mkstrtype(int len);
-typeptr mkrange(char *n, long lower, long upper);
-typeptr mkfloat(char *n, int bytes);
-void mkconst(cnode *c, int value);
-int mk_incdec(cnode *result, cnode *lvalue, int op);
-void print_expression(cnode *c);
-void do_parameter_allocation(arg_list *old_list, arg_list *args);
-void start_function(symptr f);
-void end_function(void);
-void cast_to_current_function(cnode *rvalue);
-int increase_nesting(void);
-void decrease_nesting(int new);
-
+extern char *type_2_string[];
 
 /*
  * To add a new type you need to add it to expr_type and make up a
@@ -244,3 +153,27 @@ void decrease_nesting(int new);
  * could be done with a m4 style preprocessor but that gets pretty
  * gross (I've been that path as well).
  */
+
+expr *new_expr(void);
+int mkident(cnode *result, char *s);
+void mkl2p(cnode *result, cnode *c);
+int mkdot(cnode *result, cnode *c, char *s);
+int mkptr(cnode *result, cnode *c, char *s);
+int mkarray(cnode *result, cnode *array, cnode *index);
+int mkasgn(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
+int mkbinary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
+void mk_fcall(cnode *result, cnode *name, cnode_list *args);
+int mk_qc_op(cnode *result, cnode *qvalue, cnode *tvalue, cnode *fvalue);
+void cast_to(cnode *rvalue, typeptr t, enum expr_type base);
+expr *cast_to_int(cnode *r);
+void tree_init(void);
+enum expr_type base_type(typeptr t);
+void eval_all(all *result, cnode *c);
+typeptr mkstrtype(ns *nspace, int len);
+typeptr mkrange(ns *nspace, char *n, long lower, long upper);
+typeptr mkfloat(ns *nspace, char *n, int bytes);
+void mkconst(ns *nspace, cnode *c, int value);
+int mk_incdec(ns *nspace, cnode *result, cnode *lvalue, int op);
+void print_expression(cnode *c);
+void do_parameter_allocation(arg_list *old_list, arg_list *args);
+void *get_user_sym_addr(char *name);
