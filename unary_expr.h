@@ -1,4 +1,4 @@
-/* @(#)unary_expr.h	1.1 */
+/* @(#)unary_expr.h	1.2 */
 
 /* simple constant leaf nodes */
 
@@ -66,6 +66,7 @@ float f_null(expr *n);
 double d_null(expr *n);
 st st_null(expr *n);
 
+#ifdef Not_Used
 signed char *sc_v2f(expr *n);
 unsigned char *uc_v2f(expr *n);
 int *i_v2f(expr *n);
@@ -89,6 +90,7 @@ unsigned long *ul_f2v(expr *n);
 float *f_f2v(expr *n);
 double *d_f2v(expr *n);
 st *st_f2v(expr *n);
+#endif
 
 /* Unary math operators */
 int sc_lnot(expr *n);
