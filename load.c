@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.6";
+static char sccs_id[] = "@(#)load.c	1.7";
 
 #include <a.out.h>
 #include <string.h>
@@ -239,6 +239,20 @@ void load(char *path, int text_base, int data_base)
 		    symptr s;
 		    void *offset;
 
+#ifdef l_zeroes
+		    if (lsym->l_zeroes) {
+			name = lsym->l_name;
+			size = name[sizeof(lsym->l_name) - 1] ?
+			    sizeof(lsym->l_name) :
+			    0;
+		    }
+		    else
+#endif
+		    {
+			name = strings + lsym->l_offset;
+			size = 0;
+		    }
+
 		    /*
 		     * I have looked at the name list for /unix and
 		     * came up with the following mappings.  So far,
@@ -284,6 +298,7 @@ void load(char *path, int text_base, int data_base)
 			break;
 
 		    case MAP(XMC_PR, XTY_LD): /* data */
+		    case MAP(XMC_RW, XTY_LD): /* data */
 		    case MAP(XMC_RW, XTY_CM): /* data */
 		    case MAP(XMC_RW, XTY_SD): /* data */
 			suffix = 0;
@@ -293,19 +308,10 @@ void load(char *path, int text_base, int data_base)
 		    default:
 			fprintf(stderr,
 				"Unknown loader class/type of %d/%d for %s\n",
-				lsym->l_smclas, lsym->l_smtype & 7, lsym->l_name);
+				lsym->l_smclas, lsym->l_smtype & 7, name);
 			continue;
 		    }
 
-		    if (lsym->l_zeroes) {
-			name = lsym->l_name;
-			size = name[sizeof(lsym->l_name) - 1] ?
-			    sizeof(lsym->l_name) :
-			    0;
-		    } else {
-			name = strings + lsym->l_offset;
-			size = 0;
-		    }
 		    if (haddot = (name[0] == '.')) {
 			++name;
 			if (size)
@@ -483,10 +489,13 @@ void load(char *path, int text_base, int data_base)
 		end_func = 0;
 	    }
 
+#ifdef n_zeroes
 	    if (s->n_zeroes) {
 		name = s->n_name;
 		size = name[sizeof(s->n_name) - 1] ? sizeof(s->n_name) : 0;
-	    } else {
+	    } else
+#endif
+	    {
 		/* Empty names -- skip over these puppies */
 		if (!s->n_offset)
 		    name = "$NONAME";	/* code csect typically have no name */
@@ -749,7 +758,12 @@ void load(char *path, int text_base, int data_base)
 		sptr->s_offset = (void *)offset;
 		sptr->s_base = base_type(thistype);
 		sptr->s_type = thistype;
+#ifdef __XCOFF64__
+		sptr->s_size = (aux->x_csect.x_scnlen_hi << 32) |
+				     aux->x_csect.x_scnlen_lo;
+#else
 		sptr->s_size = aux->x_csect.x_scnlen; /* #### not always */
+#endif
 		sptr->s_nesting = 0;
 		sptr->s_global = 1;
 		sptr->s_haddot = haddot;
@@ -799,6 +813,18 @@ void load(char *path, int text_base, int data_base)
 		     * check the lnnoptr for another excuse not to
 		     * create a seperate name space for this function.
 		     */
+#ifdef __XCOFF64__
+		    if (a1->x_fcn.x_lnnoptr) {
+			Set_cur_block(cur_func = ns_create(cur_file, name));
+			new_symbols(cur_func);
+			cur_func->ns_text_start = text_base + s->n_value;
+			cur_func->ns_lines = load_ns->ns_lines +
+			    ((a1->x_fcn.x_lnnoptr - lnnoptr_base)
+			     / LINESZ);
+			end_func = a1->x_fcn.x_endndx;
+			cur_func->ns_text_size = a1->x_fcn.x_fsize;
+		    }
+#else
 		    if (a1->x_sym.x_fcnary.x_fcn.x_lnnoptr) {
 			Set_cur_block(cur_func = ns_create(cur_file, name));
 			new_symbols(cur_func);
@@ -809,6 +835,7 @@ void load(char *path, int text_base, int data_base)
 			end_func = a1->x_sym.x_fcnary.x_fcn.x_endndx;
 			cur_func->ns_text_size = a1->x_sym.x_misc.x_lnsz.x_size;
 		    }
+#endif
 		}
 		break;
 
