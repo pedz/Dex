@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.6";
+static char sccs_id[] = "@(#)builtins.c	1.7";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,14 +151,14 @@ int int_v2f(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
 
-    return (int)v2f(f[1]);
+    return (int)v2f((void *)(f[1]));
 }
 
 int int_f2v(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
 
-    return (int)f2v(f[1]);
+    return (int)f2v((void *)(f[1]));
 }
 
 /*
