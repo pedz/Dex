@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)print.c	1.1";
+static char sccs_id[] = "@(#)print.c	1.2";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -64,9 +64,9 @@ void print_name(char *name, typeptr tptr)
 	break;
 
     case RANGE_TYPE:
-	if ((!(ltptr = tptr->t_val.val_r.r_typeptr) ||
-	     !(lname = ltptr->t_name)) &&
-	    !(lname = tptr->t_name))
+	if (!(lname = tptr->t_name) &&
+	    (!(ltptr = tptr->t_val.val_r.r_typeptr) ||
+	     !(lname = ltptr->t_name)))
 	    lname = "";
 	printf("%s %s", lname, name);
 	break;
@@ -171,7 +171,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	    volatile int had_fault;
 
 	    BEGIN_PROTECT(&had_fault);
-	    bcopy(v2f(val), buf, sizeof(buf));
+	    bcopy(v2f((void *)val), buf, sizeof(buf));
 	    for (i = 0; i < sizeof(buf); ++i)
 		if (buf[i] < ' ' || buf[i] > 126)
 		    break;
