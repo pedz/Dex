@@ -1,20 +1,16 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.1";
+static char sccs_id[] = "@(#)stab.y	1.2";
 
 #include <strings.h>
 #include <stdlib.h>
 #include "map.h"
 #include "sym.h"
-#include "tree.h"
 #include "dex.h"
 static char buf[128];			/* buf for names and stuff */
 static char *nextp = buf;		/* pointer into aclbuf */
 
 static void bogus();
-static char *current_name;
-static int current_typedef;
-static int current_typeid;
 
 /*
  * The following defines attempt to redefine everything that yacc
@@ -69,30 +65,64 @@ static int current_typeid;
 %type <param> tparamlist tparam
 %type <rval> REAL
 %type <type> typedef array subrange proceduretype record
+%type <type> symbol_declaration
 %type <val> INTEGER HEXINTEGER typeid bound numparams passby typenum
 %type <val> ordvalue numelements numbits numbytes bitpattern bitoffset
-%type <val> namedtype variable parameter
+%type <val> variable parameter proc procedure
     
 %%
-file_def
-    : stab_def '\n'
-    | file_def stab_def '\n'
-    ;
-
 stab_def
     : /* empty */
-    | NAME ':' { current_name = $1; } class
-    | ':' { current_name = 0; } class
     | NAME
+    | NAME ':' class
+    | ':' class
+    | NAME ':' 't' typeid
+	{
+	    add_typedef(find_type(cur_ns, $4), $1);
+	}
+    | ':' 't' typeid
+    | NAME ':' 'T' typeid
+	{
+	    add_namedef(find_type(cur_ns, $4), $1);
+	}
+    | ':' 'T' typeid
+    | NAME ':' symbol_declaration
+	{
+	    cur_sym = enter_sym(cur_ns, $1);
+	    /*
+	     * We don't really care if the symbol is already defined
+	     * or not.  We do not set s_defined or s_offset and let
+	     * the guy that called us figure out what to do.
+	     */
+	    cur_sym->s_type = $3;
+	    cur_sym->s_base = base_type(cur_sym->s_type);
+	    cur_sym->s_size = get_size(cur_sym->s_type) / 8;
+	    cur_sym->s_nesting = 1;
+	    cur_sym->s_typed = 1;
+	}
     ;
 
 class
     : 'c' '=' constant ';'
-    | namedtype
-    | parameter
-    | procedure
-    | variable
     | label
+    ;
+
+symbol_declaration
+    : parameter
+	{
+	    $$ = find_type(cur_ns, $1);
+	}
+    | procedure
+	{
+	    $$ = newtype(cur_ns, PROC_TYPE);
+	    $$->t_val.val_f.f_typeptr = find_type(cur_ns, $1);
+	    $$->t_val.val_f.f_params = -1;
+	    $$->t_val.val_f.f_paramlist = 0;
+	}
+    | variable
+	{
+	    $$ = find_type(cur_ns, $1);
+	}
     ;
 
 constant
@@ -110,25 +140,6 @@ numelements : INTEGER ;
 numbits : INTEGER ;
 numbytes : INTEGER ;
 bitpattern : HEXINTEGER ;
-
-namedtype
-    : 't'				/* used-defined type (typedef) */
-	{
-	    current_typedef = 1;
-	}
-      typeid
-	{
-	    $$ = $3;
-	}
-    | 'T'				/* struct union, etc */
-	{
-	    current_typedef = 0;
-	}
-      typeid
-	{
-	    $$ = $3;
-	}
-    ;
 
 parameter
     : 'a' typeid			/* pass by ref in general register */
@@ -160,65 +171,91 @@ parameter
 procedure
     : proc				/* procedure at current scoping */
     | proc ',' NAME ',' NAME		/* procedure named 1st local to 2nd */
+	{
+	    yyerror("Can't do this");
+	}
     ;
 
 variable
-    : typeid				/* local */
-	{
-	    $$ = $1;
-	}
-    | 'd' typeid			/* float */
+    : local_variable typeid		/* local */
 	{
 	    $$ = $2;
 	}
-    | 'r' typeid			/* register */
+    | global_variable typeid		/* float */
 	{
 	    $$ = $2;
 	}
-    | 'G' typeid			/* global */
-	{
-	    $$ = $2;
-	}
-    | 'S' typeid			/* c static global */
-	{
-	    $$ = $2;
-	}
-    | 'V' typeid			/* c static local */
-	{
-	    $$ = $2;
-	}
+    ;
+
+local_variable
+    : /* NULL */
+    | 'd'
+    | 'r'
+    ;
+
+global_variable
+    : 'G'
+    | 'S'
+    | 'V'
     ;
 
 label : 'L' ;				/* label name */
 
 proc
     : 'f' typeid			/* private func of type typeid */
+	{
+	    $$ = $2;
+	}
     | 'm' typeid			/* modula-2 ext. pascal */
+	{
+	    $$ = $2;
+	}
     | 'J' typeid			/* internal function */
+	{
+	    $$ = $2;
+	}
     | 'F' typeid			/* externalfunction */
+	{
+	    $$ = $2;
+	}
     | 'l'				/* internal procedure */
+	{
+	    $$ = -1;
+	}
     | 'P'				/* external procedure */
+	{
+	    $$ = -1;
+	}
     | 'Q'				/* private procedure */
+	{
+	    $$ = -1;
+	}
     ;
 
 typeid
     : INTEGER
     | typenum typedef 
 	{
-	    if ($2)
+	    if ($2) {
 		$2->t_attrs = 0;
+		(void) insert_type($1, $2);
+	    }
+	    $$ = $1;
 	}
     | typenum typeattrs typedef
 	{
-	    if ($3)
+	    if ($3) {
 		$3->t_attrs = $2;
+		(void) insert_type($1, $3);
+	    }
+	    $$ = $1;
 	}
     ;
 
 typenum
     : INTEGER '='
 	{
-	    current_typeid = $1;
+	    $$ = $1;
 	}
 
 typeattrs
@@ -261,129 +298,124 @@ typedef
 	{
 	    typeptr t = find_type(cur_ns, $1);
 
-	    $$ = newtype(cur_ns, t->t_type, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, t->t_type);
 	    copy_type($$, t);
 	}
     | 'b' typeid ';' numbytes		/* pascal space type */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'c' typeid ';' numbits		/* complex type typeid */
 	{
-	    $$ = newtype(cur_ns, COMPLEX_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, COMPLEX_TYPE);
 	    $$->t_val.val_g.g_typeptr = find_type(cur_ns, $2);
 	    $$->t_val.val_g.g_size = $4;
 	}
     | 'd' typeid			/* file of type typeid */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
-    | 'e' enumspec ';'			/* enumerated type */
+    | 'e' enumspec opt_semi			/* enumerated type */
 	{
-	    $$ = newtype(cur_ns, ENUM_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, ENUM_TYPE);
 	    $$->t_val.val_e = $2;
 	}
     | 'g' typeid ';' numbits		/* floating-point type of numbits */
 	{
-	    $$ = newtype(cur_ns, FLOAT_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, FLOAT_TYPE);
 	    $$->t_val.val_g.g_typeptr = find_type(cur_ns, $2);
 	    $$->t_val.val_g.g_size = $4;
 	}
     | 'i' NAME ':' NAME ';'		/* import type modulename:name */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'i' NAME ':' NAME ',' typeid ';'	/* import modulename:name typeid */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
+	}
+    | 'k' typeid
+	{
+	    $$ = newtype(cur_ns, CONSTANT_TYPE);
+	    $$->t_val.val_k = find_type(cur_ns, $2);
 	}
     | 'n' typeid ';' numbytes		/* string type with max length */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'o' NAME ';'			/* opaque type */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'o' NAME ',' typeid		/* opaque define typeid */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'w'				/* wide character */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'z' typeid ';' numbytes		/* pascal gstring type */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'C' usage				/* cobol picture */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'K' cobolfiledesc			/* cobol file descriptor */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'M' typeid ';' bound		/* multiple instance */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'N' typeid			/* pascal stringptr */
 	{
-	    $$ = newtype(cur_ns,STRINGPTR_TYPE,current_name,current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, STRINGPTR_TYPE);
 	    $$->t_val.val_N = $2;
 	}
     | 'S' typeid			/* set of type typeid */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | '*' typeid			/* pointer to type typeid */
 	{
-	    $$ = newtype(cur_ns, PTR_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, PTR_TYPE);
 	    $$->t_val.val_p = find_type(cur_ns, $2);
+	}
+    | 'V' typeid
+	{
+	    $$ = newtype(cur_ns, VOLATILE);
+	    $$->t_val.val_v = find_type(cur_ns, $2);
 	}
     | 'Z'
 	{
-	    $$ = newtype(cur_ns, ELLIPSES, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, ELLIPSES);
 	}
     | array
     | subrange
     | proceduretype
     | record
+    ;
+
+opt_semi
+    : /* NULL */
+    | ';'
     ;
 
 enumspec
@@ -416,34 +448,29 @@ enum
 array
     : 'a' typedef ';' typeid		/* array */
 	{
-	    $$ = newtype(cur_ns, ARRAY_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, ARRAY_TYPE);
 	    $$->t_val.val_a.a_typedef = $2;
 	    $$->t_val.val_a.a_typeptr = find_type(cur_ns, $4);
 	}
     | 'A' typeid			/* open array */
 	{
-	    $$ = newtype(cur_ns, ARRAY_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, ARRAY_TYPE);
 	    $$->t_val.val_a.a_typedef = 0;
 	    $$->t_val.val_a.a_typeptr = find_type(cur_ns, $2);
 	}
     | 'D' INTEGER ';' typeid		/* n-dimen. dynamic array */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'E' INTEGER ';' typeid		/* n-dimen. subarray  */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'P' typedef ';' typeid		/* packed array */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     ;
@@ -451,8 +478,7 @@ array
 subrange
     : 'r' typeid ';' bound ';' bound /* subrange with bounds */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    $$->t_val.val_r.r_typeptr = find_type(cur_ns, $2);
 	    $$->t_val.val_r.r_lower = $4;
 	    $$->t_val.val_r.r_upper = $6;
@@ -481,36 +507,31 @@ boundtype
 proceduretype
     : 'f' typeid ';'		/* func returning type typeid */
 	{
-	    $$ = newtype(cur_ns, PROC_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, PROC_TYPE);
 	    $$->t_val.val_f.f_typeptr = find_type(cur_ns, $2);
 	    $$->t_val.val_f.f_params = -1;
 	    $$->t_val.val_f.f_paramlist = 0;
 	}
     | 'f' typeid ',' numparams ';' tparamlist ';' /* typeid func w n params*/
 	{
-	    $$ = newtype(cur_ns, PROC_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, PROC_TYPE);
 	    $$->t_val.val_f.f_typeptr = find_type(cur_ns, $2);
 	    $$->t_val.val_f.f_params = $4;
 	    $$->t_val.val_f.f_paramlist = $6;
 	}
     | 'p' numparams ';' tparamlist ';'	/* proc with n params */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'R' numparams ';' namedtparamlist ';' /* pascal sub parameter */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'F' typeid ',' numparams ';' namedtparamlist ';' /* func parameter */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     ;
@@ -544,46 +565,39 @@ namedtparam
 record
     : 's' numbytes ofieldlist ';'	/* struct */
 	{
-	    $$ = newtype(cur_ns, STRUCT_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, STRUCT_TYPE);
 	    $$->t_val.val_s.s_size = $2;
 	    $$->t_val.val_s.s_fields = $3;
 	}
     | 'u' numbytes ofieldlist ';'	/* union */
 	{
-	    $$ = newtype(cur_ns, UNION_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, UNION_TYPE);
 	    $$->t_val.val_s.s_size = $2;
 	    $$->t_val.val_s.s_fields = $3;
 	}
     | 'v' numbytes ofieldlist variantpart ';' /* variant record */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'G' redefinition 'n' numbits fieldlist ';' /* cobol group w/o conds */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'G' 'n' numbits fieldlist ';'
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'G' redefinition 'c' numbits condition fieldlist ';' /* with conds */
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'G' 'c' numbits condition fieldlist ';'
 	{
-	    $$ = newtype(cur_ns, RANGE_TYPE, current_name, current_typedef);
-	    insert_type(current_typeid, $$);
+	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus();
 	}
     | 'Y' numbytes classkey OptPBV OptBaseSpecList '(' ExtendedFieldList
@@ -803,7 +817,7 @@ NAME
     : { nextp = buf; } name
 	{
 	    *nextp = 0;
-	    $$ = strcpy(smalloc(nextp - buf + 1, __FILE__, __LINE__), buf);
+	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     ;
 
@@ -840,12 +854,12 @@ STRING
     : { nextp = buf; } '\"' str '\"'
 	{
 	    *nextp = '\0';
-	    $$ = strcpy(smalloc(nextp - buf + 1, __FILE__, __LINE__), buf);
+	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     | { nextp = buf; } '\'' str '\''
 	{
 	    *nextp = '\0';
-	    $$ = strcpy(smalloc(nextp - buf + 1, __FILE__, __LINE__), buf);
+	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     ;
 
@@ -971,29 +985,38 @@ LEAD_LETTER
 %%
 #include <stdio.h>
 
-static lineno = 1;
-static charno = 0;
-static FILE *stabfile;
+/*
+ * This grammer and parser is set up so that a null terminated string
+ * is passed into parse_stab along with the name space to use.  Static
+ * global variables are setup and then yyparse is called.  yyparse
+ * will eventually call yylex which will return the characters one by
+ * one until the end of the string is hit at which time EOF is
+ * returned.  The grammer is suppose to reduce at the end of the
+ * string.  If it does not, then we have problems but it will
+ * eventually error out when it gets back EOF's.
+ */
 static ns *cur_ns;
+static symptr cur_sym;
+static char *parse_line;
+static char *parse_position;
+static char small_buf[32];
 
 static yylex()				/* actually STABlex */
 {
-    int c = getc(stabfile);
-    extern int yydebug;
+    int c;
 
-    ++charno;
-    if (c == '\n') {
-	++lineno;
-	charno = 0;
-    }
+    if (c = *parse_position)
+	++parse_position;
+    else
+	c = EOF;
     yylval.c = c;
     return c;
 }
 
 static yyerror(char *s)			/* actually STABerror */
 {
-    fprintf(stderr, "%s parsing stab file at line %d and char %d\n", s,
-	    lineno, charno);
+    fprintf(stderr, "%s parsing stab string %s at character %d\n", s,
+	    parse_line, parse_position - parse_line);
 }
 
 static void bogus()
@@ -1002,16 +1025,21 @@ static void bogus()
     exit(1);
 }
 
-int parse_stab(char *s)
+int parse_stab(ns *ns, char *s, int len, symptr *s_out)
 {
-    if (!(stabfile = fopen(s, "r"))) {
-	fprintf(stderr, "%s: ", progname);
-	perror(s);
-	exit(1);
-    }
-    cur_ns = ns_create(s);
-    if (yyparse()) {
-	fprintf(stderr, "%s: stab file didn't parse\n", progname);
-	exit(1);
-    }
+    int ret;
+
+    if (len) {
+	strncpy(small_buf, s, len);
+	small_buf[sizeof(small_buf) - 1] = 0;
+	parse_line = small_buf;
+    } else
+	parse_line = s;
+    parse_position = parse_line;
+    cur_ns = ns;
+    cur_sym = 0;
+    ret = yyparse();
+    if (s_out)
+	*s_out = cur_sym;
+    return ret;
 }
