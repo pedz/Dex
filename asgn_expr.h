@@ -1,5 +1,5 @@
 
-/* @(#)asgn_expr.h	1.1 */
+/* @(#)asgn_expr.h	1.2 */
 
 signed char sc_asgn(expr *n);
 unsigned char uc_asgn(expr *n);
@@ -83,6 +83,15 @@ short s_orasgn(expr *n);
 unsigned short us_orasgn(expr *n);
 long l_orasgn(expr *n);
 unsigned long ul_orasgn(expr *n);
+
+signed char sc_xorasgn(expr *n);
+unsigned char uc_xorasgn(expr *n);
+int i_xorasgn(expr *n);
+unsigned int ui_xorasgn(expr *n);
+short s_xorasgn(expr *n);
+unsigned short us_xorasgn(expr *n);
+long l_xorasgn(expr *n);
+unsigned long ul_xorasgn(expr *n);
 
 signed char sc_lsasgn(expr *n);
 unsigned char uc_lsasgn(expr *n);
