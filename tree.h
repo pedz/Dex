@@ -1,5 +1,5 @@
 
-/* @(#)tree.h	1.2 */
+/* @(#)tree.h	1.3 */
 
 /*
  * When a struct is evaulated, the address of the structure is
@@ -88,7 +88,9 @@ typedef struct expr {
 #define e_addr e_arg._e_addr
 
     } e_arg;
-    int e_size;
+    int e_size : 22;
+    int e_boffset : 5;
+    int e_bsize : 5;
 } expr;
 
 /* Macros to compute the pvalue of a single node */
@@ -134,8 +136,11 @@ typedef struct arg_list {
 typedef struct cnode {
     typeptr c_type;			/* pointer to typenode */
     enum expr_type c_base;		/* base type of cnode */
-    unsigned int c_const : 1;		/* true if a constant */
     expr *c_expr;			/* current expression tree */
+    int c_offset;			/* bit field offset */
+    int c_size;				/* bit field size */
+    unsigned int c_const : 1;		/* true if a constant */
+    unsigned int c_bitfield : 1;	/* true for bit fields */
 } cnode;
 
 typedef struct cnode_list {
@@ -155,13 +160,14 @@ extern char *type_2_string[];
  */
 
 expr *new_expr(void);
-int mkident(cnode *result, char *s);
-void mkl2p(cnode *result, cnode *c);
-int mkdot(cnode *result, cnode *c, char *s);
-int mkptr(cnode *result, cnode *c, char *s);
-int mkarray(cnode *result, cnode *array, cnode *index);
-int mkasgn(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
-int mkbinary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
+int mk_ident(cnode *result, char *s);
+void mk_l2p(cnode *result, cnode *c);
+int mk_dot(cnode *result, cnode *c, char *s);
+int mk_ptr(cnode *result, cnode *c, char *s);
+int mk_array(cnode *result, cnode *array, cnode *index);
+int mk_asgn(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
+int mk_unary(cnode *result, cnode *lvalue, int opcode);
+int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue);
 void mk_fcall(cnode *result, cnode *name, cnode_list *args);
 int mk_qc_op(cnode *result, cnode *qvalue, cnode *tvalue, cnode *fvalue);
 void cast_to(cnode *rvalue, typeptr t, enum expr_type base);
@@ -169,10 +175,8 @@ expr *cast_to_int(cnode *r);
 void tree_init(void);
 enum expr_type base_type(typeptr t);
 void eval_all(all *result, cnode *c);
-typeptr mkstrtype(ns *nspace, int len);
-typeptr mkrange(ns *nspace, char *n, long lower, long upper);
-typeptr mkfloat(ns *nspace, char *n, int bytes);
-void mkconst(ns *nspace, cnode *c, int value);
+typeptr mk_strtype(ns *nspace, int len);
+void mk_const(ns *nspace, cnode *c, int value);
 int mk_incdec(ns *nspace, cnode *result, cnode *lvalue, int op);
 void print_expression(cnode *c);
 void do_parameter_allocation(arg_list *old_list, arg_list *args);
