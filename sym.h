@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.5 */
+/* @(#)sym.h	1.6 */
 
 #define HASH_SIZE 128
 
@@ -238,3 +238,4 @@ void clean_symtable(ns *nspace, int nesting_level);
 symptr enter_sym(ns *nspace, char *name, int force);
 void dump_symtable(void);
 void dump_types(void);
+int allocate_fields(fieldptr f);
