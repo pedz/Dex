@@ -1,9 +1,8 @@
-static char sccs_id[] = "@(#)sym.c	1.2";
+static char sccs_id[] = "@(#)sym.c	1.3";
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
-#include <setjmp.h>
 #include <dbxstclass.h>
 #include "map.h"
 #include "sym.h"
@@ -31,7 +30,6 @@ static char *stab_type_2_string[] = {
 
 static int hash(char *s);
 static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr);
-static void print_name(char *name, typeptr tptr);
 static int sym_compare(void *v1, void *v2);
 static void print_sym(symptr s);
 static void _dump_symtable(ns *nspace, symtabptr old_sytp);
@@ -113,12 +111,9 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
 
     if (typeid >= (old_limit = *limit)) {
 	*limit = typeid + 100;
-	if (*ptr) {
-	    if (!(*ptr = realloc(*ptr, *limit * sizeof(typeptr)))) {
-		fprintf(stderr, "Out of memory\n");
-		exit(1);
-	    }
-	} else
+	if (*ptr)
+	    *ptr = srealloc(*ptr, *limit * sizeof(typeptr), __FILE__, __LINE__);
+	else
 	    *ptr = smalloc(*limit * sizeof(typeptr), __FILE__, __LINE__);
 	bzero(*ptr + old_limit, sizeof(typeptr) * (*limit - old_limit));
     }
@@ -192,13 +187,13 @@ int typedef2typeid(typeptr t)
     return 0;
 }
 
-fieldptr newfield(char *name, int typeid, int offset, int numbits)
+fieldptr newfield(char *name, typeptr tptr, int offset, int numbits)
 {
     fieldptr ret = new(struct field);
 
     ret->f_next = 0;
     ret->f_name = name;
-    ret->f_typeid = typeid;
+    ret->f_typeptr = tptr;
     ret->f_offset = offset;
     ret->f_numbits = numbits;
     return ret;
@@ -242,6 +237,7 @@ void add_typedef(typeptr t, char *name)
     }
     t->t_hash = ttp->tt_hash[hash_val];
     ttp->tt_hash[hash_val] = t;
+    t->t_name = name;
     ++ttp->tt_count;
 }
 
@@ -263,6 +259,7 @@ void add_namedef(typeptr t, char *name)
     }
     t->t_hash = ttp->tt_hash[hash_val];
     ttp->tt_hash[hash_val] = t;
+    t->t_name = name;
     ++ttp->tt_count;
 }
 
@@ -314,271 +311,6 @@ paramptr newparam(int typeid, int passby)
     ret->p_typeid = typeid;
     ret->p_passby = passby;
     return ret;
-}
-
-/*
- * Print out the thing that t points to.  The address is addr, offset is
- * a bit offset from addr (which may be greater than 32), size is the
- * size of the object, indent is the indent level for printouts, name
- * is the name of the field or variable, sname is the possible name of
- * the structure (e.g. struct toad { ...)
- */
-void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
-	       char *name)
-{
-    fieldptr f;
-    typeptr ltptr, rtptr;
-    attrptr lattr;
-    int val;
-    int index, lower, upper, item_size, range;
-    char *e_val;
-    enumptr eptr;
-    ns *nspace = tptr->t_ns;
-    double d;
-
-    if (!size)
-	size = get_size(tptr);
-
-    switch (tptr->t_type) {
-    case UNION_TYPE:
-    case STRUCT_TYPE:
-	printf("%*s", indent, "");
-	print_name("", tptr);
-	printf("{\n");
-	
-	for (f = tptr->t_val.val_s.s_fields; f; f = f->f_next)
-	    print_out(find_type(nspace, f->f_typeid), addr,
-		      offset + f->f_offset, f->f_numbits, indent + 2,
-		      f->f_name);
-
-	if (name)
-	    printf("%*s} %s;\n", indent, "", name);
-	else
-	    printf("%*s};", indent, "");
-	break;
-
-    case PTR_TYPE: /* pointer to some type but who cares what type it is */
-	if (size != 32) {
-	    fprintf(stderr, "size of pointer not 32 bits for %s\n", name);
-	    exit(1);
-	}
-	item_size = get_size(tptr->t_val.val_p);
-
-	getval(&val, addr, offset, size);
-	printf("%*s", indent, "");
-	print_name(name, tptr);
-	/*
-	 * Special case for non-null pointers to char
-	 */
-	if (val && item_size == 8) {
-	    char buf[32];
-	    int i;
-
-	    BEGIN_PROTECT();
-	    bcopy(v2f(val), buf, sizeof(buf));
-	    for (i = 0; i < sizeof(buf); ++i)
-		if (buf[i] < ' ' || buf[i] > 126)
-		    break;
-	    if (i == sizeof(buf) || buf[i] == '\0') {
-		printf(" = 0x%08x => \"%.*s\"\n", val, sizeof(buf), buf);
-		EXIT_PROTECT(break);
-	    }
-	    END_PROTECT();
-	}
-	printf(" = 0x%08x\n", val);
-	break;
-
-    case ARRAY_TYPE:
-	ltptr = tptr->t_val.val_a.a_typeptr;
-	if ((rtptr = tptr->t_val.val_a.a_typedef)->t_type != RANGE_TYPE) {
-	    printf("bogus typedef for array for %s\n", name);
-	    return;
-	}
-	lower = rtptr->t_val.val_r.r_lower;
-	upper = rtptr->t_val.val_r.r_upper;
-	range = upper - lower + 1;
-	item_size = size / range;	/* first guess */
-
-	for (lattr = ltptr->t_attrs; lattr; lattr = lattr->a_next)
-	    if (lattr->a_type == SIZE_ATTR) {
-		item_size = lattr->a_val;
-		break;
-	    }
-	if (item_size * range != size) {
-	    printf("bogus sizes, item_size = %d, count = %d, size = %d\n",
-		   item_size, range, size);
-	    return;
-	}
-
-	if (item_size == 8) {		/* assume array of char => string */
-	    if (offset % 8) {
-		printf("bogus offset for string of characters for %s\n", name);
-		return;
-	    }
-	    printf("%*s", indent, "");
-	    print_name(name, tptr);
-	    printf(" = \"%.*s\"\n", range, addr + (offset / 8));
-	    break;
-	}
-
-	for (index = lower; index <= upper; ++index) {
-	    char buf[64];
-
-	    sprintf(buf, "%s[%3i]", name, index);
-	    print_out(ltptr, addr, offset, item_size, indent, buf);
-	    offset += item_size;
-	}
-	break;
-
-    case RANGE_TYPE:
-	getval(&val, addr, offset, size);
-	if (tptr->t_val.val_r.r_lower < 0) /* signed */
-	    if (val & (1 << (size - 1))) /* test sign big */
-		val |= (-1 << size);	/* smash in sign extension */
-	printf("%*s", indent, "");
-	print_name(name, tptr);
-	if (size == 8)
-	    printf(" = %d(0x%0*x)'%c'\n", val, (size +3) / 4,val, val);
-	else
-	    printf(" = %d(0x%0*x)\n", val, (size + 3) / 4, val);
-	break;
-
-    case PROC_TYPE:
-	printf("%s bogus proc\n", name);
-	break;
-
-    case FLOAT_TYPE:
-	if (size == sizeof(float) * 8)
-	    d = *(float *)addr;
-	else
-	    d = *(double *)addr;
-	
-	printf("%*s", indent, "");
-	print_name(name, tptr);
-	printf(" = %f\n", d);
-	break;
-
-    case ENUM_TYPE:
-	getval(&val, addr, offset, size);
-	e_val = "UNKOWN";
-	for (eptr = tptr->t_val.val_e; eptr; eptr = eptr->e_next)
-	    if (eptr->e_val == val) {
-		e_val = eptr->e_name;
-		break;
-	    }
-	printf("%*s", indent, "");
-	print_name(name, tptr);
-	printf(" = %s(0x%08x)\n", e_val, val);
-	break;
-
-    case STRINGPTR_TYPE:
-	printf("%s bogus stringptr\n", name);
-	break;
-    case COMPLEX_TYPE:
-	printf("%s bogus complex\n", name);
-	break;
-    case CONSTANT_TYPE:
-	printf("%*s", indent, "");
-	printf("const ");
-	print_out(tptr->t_val.val_k, addr, offset, size, 0, name);
-	break;
-    default:
-	printf("%s bogus default\n", name);
-	break;
-    }
-}
-
-static void print_name(char *name, typeptr tptr)
-{
-    char buf[32];
-    typeptr ltptr;
-    char *lname;
-    char *u_or_s;
-
-    if (!tptr)
-	printf("%s", name);
-
-    switch (tptr->t_type) {
-    case STRUCT_TYPE:
-    case UNION_TYPE:
-	u_or_s = tptr->t_type == STRUCT_TYPE ? "struct" : "union";
-	if (tptr->t_name)
-	    printf("%s %s %s", u_or_s, tptr->t_name, name);
-	else
-	    printf("%s %s", u_or_s, name);
-	break;
-
-    case PTR_TYPE:
-	if ((ltptr = tptr->t_val.val_p) &&
-	    (ltptr->t_type == ARRAY_TYPE || ltptr->t_type == PROC_TYPE))
-	    sprintf(buf, "(*%s)", name);
-	else
-	    sprintf(buf, "*%s", name);
-	print_name(buf, ltptr);
-	break;
-
-    case ARRAY_TYPE:
-	if (!(lname = tptr->t_name))
-	    lname = "";
-	ltptr = tptr->t_val.val_a.a_typeptr;
-	sprintf(buf, "%s[]", name);
-	print_name(buf, ltptr);
-	break;
-
-    case RANGE_TYPE:
-	if ((!(ltptr = tptr->t_val.val_r.r_typeptr) ||
-	     !(lname = ltptr->t_name)) &&
-	    !(lname = tptr->t_name))
-	    lname = "";
-	printf("%s %s", lname, name);
-	break;
-
-    case PROC_TYPE:
-	ltptr = tptr->t_val.val_f.f_typeptr;
-	sprintf(buf, "%s()", name);
-	print_name(buf, ltptr);
-	break;
-
-    case FLOAT_TYPE:
-	printf("%s %s", tptr->t_name, name);
-	break;
-
-    case ENUM_TYPE:
-	if (tptr->t_name)
-	    printf("enum %s %s", tptr->t_name, name);
-	else
-	    printf("enum %s", name);
-	break;
-
-    case STRINGPTR_TYPE:
-	printf("strptr %s", name);
-	break;
-    case COMPLEX_TYPE:
-	printf("complex %s", name);
-	break;
-    case CONSTANT_TYPE:
-	printf("const %s", name);
-	break;
-    default:
-	printf("unknown type %s", name);
-	break;
-    }
-}
-
-void getval(int *i, char *addr, int offset, int size)
-{
-    unsigned int temp;
-
-    addr += offset / 8;
-    offset %= 8;
-    if (offset + size > 32) {
-	fprintf(stderr, "getval spans an integer boundry\n");
-	exit(1);
-    }
-    temp = *(int *)addr;
-    temp >>= 32 - offset - size;
-    temp &= (unsigned)-1 >> (32 - size);
-    *i = temp;
 }
 
 void copy_type(typeptr new, typeptr old)
@@ -675,8 +407,10 @@ int get_size(typeptr t)
 	return 0;
     case CONSTANT_TYPE:
 	return get_size(t->t_val.val_k);
+    case VOLATILE:
+	return get_size(t->t_val.val_v);
     default:
-	fprintf(stderr, "bogus type for getsize\n");
+	fprintf(stderr, "bogus type for get_size\n");
 	exit(1);
     }
     return 0;
@@ -775,6 +509,44 @@ symptr name2userdef_all(char *name)
 	    else if (!ret_not_typed)
 		ret_not_typed = ret;
     return ret_not_typed;
+}
+
+/*
+ * Find the user defined symbol with the highest address which is less
+ * than or equal to addr.
+ */
+symptr addr2userdef(ns *nspace, void *addr)
+{
+    symptr *sym, *end, temp;
+    symptr closest = 0;
+    symtabptr sytp;
+
+    if (!(sytp = nspace->ns_syms))
+	return 0;
+    
+    for (end = (sym = sytp->sy_hash) + HASH_SIZE; sym < end; ++sym)
+	for (temp = *sym; temp; temp = temp->s_hash)
+	    if (temp->s_global && (temp->s_offset <= addr) &&
+		(!closest || (closest->s_offset < temp->s_offset)))
+		closest = temp;
+    for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
+	if ((temp = addr2userdef(nspace, addr)) &&
+	    (!closest || (closest->s_offset < temp->s_offset)))
+	    closest = temp;
+    return closest;
+}
+
+symptr addr2userdef_all(void *addr)
+{
+    ns *nspace;
+    symptr temp;
+    symptr closest = 0;
+
+    for (nspace = ns_head; nspace; nspace = nspace->ns_next)
+	if ((temp = addr2userdef(nspace, addr)) &&
+	    (!closest || (closest->s_offset < temp->s_offset)))
+	    closest = temp;
+    return closest;
 }
 
 /* after leaving a nesting level, we delete the old symbols */
