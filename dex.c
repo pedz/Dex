@@ -1,23 +1,17 @@
-static char sccs_id[] = "@(#)dex.c	1.1";
+static char sccs_id[] = "@(#)dex.c	1.2";
 
 #include <stdio.h>
 #include <strings.h>
 #include <stdlib.h>
 #include "map.h"
 #include "sym.h"
-#include "tree.h"
 #include "inter.h"
-
-/*
- * Arguments:
- *  0) name of program
- *  1) symtab file
- *  2) struct to print out
- *  3) address
- *  4) (optional) path to dump
- */
+#include "dex.h"
 
 char *progname;
+char *dumpname = "/dev/mem";
+char *unixname = "/unix";
+void *stack_top;
 extern int GRAMdebug;
 
 main(int argc, char *argv[])
@@ -28,16 +22,37 @@ main(int argc, char *argv[])
     int rflag;
     int addr;
 
-    if (progname = rindex(argv[0], '/'))
+    if (progname = rindex(argv[0], '/')) /* figure out the program name */
 	++progname;
     else
 	progname = argv[0];
+    --argc;
+    ++argv;
 
-    GRAMdebug = (argc > 1 && !strcmp(argv[1], "-d"));
-    ns_inter = ns_create(progname);
+    if (GRAMdebug = (argc && !strcmp(argv[1], "-d"))) {	/* optional -d flag */
+	--argc;
+	++argv;
+    }
+
+    if (argc) {				/* Optional first arg is the dump name */
+	dumpname = argv[0];
+	++argv;
+	--argc;
+    }
+
+    if (argc) {				/* Optional second arg is /unix name */
+	unixname = argv[0];
+	++argv;
+	--argc;
+    }
+
+    ns_inter = ns_create((ns *)0, progname);
+    load_base_types(ns_inter);
+    extra_hack();
     printf("go!\n");
     fflush(stdout);
     tree_init();
+    map_init();
     GRAMparse();
     return 0;
 }
@@ -46,6 +61,7 @@ void *smalloc(int size, char *file, int lineno)
 {
     char *ret;
 
+    /* printf("malloc of %d from %s:%d\n", size, file, lineno); */
     if (!(ret = malloc(size)) && size) {
 	fprintf(stderr, "Out of memory in %s: line %d\n", file, lineno);
 	exit(1);
