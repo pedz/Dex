@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)disasm.c	1.2";
+static char sccs_id[] = "@(#)disasm.c	1.3";
 
 #include <sys/types.h>
 #include "map.h"
@@ -135,6 +135,7 @@ struct instr {
  {    "bcr",    "bclr", 0x13, 0x010,  XL,             "%bo,%bi",   4},
  {    "cal",    "addi", 0x0e,     0,   D,         "%rt,%d(%ra)",   0},
  {    "cau",   "addis", 0x0f,     0,   D,         "%rt,%ra,%ui",   0},
+ {    "cax",     "add", 0x1f, 0x10a,  XO,         "%rt,%ra,%rb",   2},
  {   "clcs",         0, 0x1f, 0x213,   X,             "%rt,%ra",   8},
  {    "clf",     "clf", 0x1f, 0x076,   X,             "%ra,%rb",   0},
  {    "cli",         0, 0x1f, 0x1f6,   X,             "%ra,%rb",   P},
@@ -346,6 +347,35 @@ struct instr {
  {  "xoril",    "xori", 0x1a,     0,   D,         "%ra,%rs,%ui",   0},
  {  "xoriu",   "xoris", 0x1b,     0,   D,         "%ra,%rs,%ui",   0},
  {  "bogus",   "bogus", 0x3f, 0x3ff,   D,                    "",   0},
+ /*
+  * These opcodes are defined to make the binary search work
+  * properly.  If BROKEN is defined, then these are not defined and
+  * the find_instr routine changes to reproduce the way it use to work
+  * which was broken.
+  */
+#ifndef BROKEN
+ {      "a",     "add", 0x1f, 0x20a,  XO,         "%rt,%ra,%rb",   2},
+ {    "abs",         0, 0x1f, 0x368,  XO,             "%rt,%ra",   2},
+ {     "ae",    "adde", 0x1f, 0x28a,  XO,         "%rt,%ra,%rb",   2},
+ {    "ame",   "addme", 0x1f, 0x2ea,  XO,             "%rt,%ra",   2},
+ {    "aze",   "addze", 0x1f, 0x2ca,  XO,             "%rt,%ra",   0},
+ {    "cax",     "add", 0x1f, 0x30a,  XO,         "%rt,%ra,%rb",   2},
+ {    "div",         0, 0x1f, 0x34b,  XO,         "%rt,%ra,%rb",  28},
+ {   "divs",         0, 0x1f, 0x36b,  XO,         "%rt,%ra,%rb",  28},
+ {        0,    "divw", 0x1f, 0x3eb,  XO,         "%rt,%ra,%rb",  26},
+ {        0,   "divwu", 0x1f, 0x3cb,  XO,         "%rt,%ra,%rb",  26},
+ {    "doz",         0, 0x1f, 0x308,  XO,         "%rt,%ra,%rb",  28},
+ {        0,   "mulhw", 0x1f, 0x24b,  XO,         "%rt,%ra,%rb",  26},
+ {        0,  "mulhwu", 0x1f, 0x20b,  XO,         "%rt,%ra,%rb",  26},
+ {   "muls",   "mullw", 0x1f, 0x2eb,  XO,         "%rt,%ra,%rb",   2},
+ {   "nabs",         0, 0x1f, 0x3e8,  XO,             "%rt,%ra",  28},
+ {    "neg",     "neg", 0x1f, 0x268,  XO,             "%rt,%ra",   2},
+ {     "sf",   "subfc", 0x1f, 0x208,  XO,         "%rt,%ra,%rb",   2},
+ {    "sfe",   "subfe", 0x1f, 0x288,  XO,         "%rt,%ra,%rb",   2},
+ {   "sfme",  "subfme", 0x1f, 0x2e8,  XO,             "%rt,%ra",   2},
+ {   "sfze",  "subfze", 0x1f, 0x2c8,  XO,             "%rt,%ra",   2},
+ {        0,    "subf", 0x1f, 0x228,  XO,         "%rt,%ra,%rb",  26},
+#endif
 };
 
 static int err(char *buf, int line)
@@ -374,13 +404,22 @@ static struct instr *find_instr(union inst i)
     if (!sorted) {
 	qsort(table, A_SIZE(table), sizeof(table[0]), tcmp);
 	sorted = 1;
+#ifdef FIND_DEBUG
+	for (low = 0; low < A_SIZE(table); ++low) {
+	    t = table + low;
+	    printf("%10s %2x %3x\n", t->i_name, t->i_opcd, t->i_eo);
+	}
+#endif
     }
 
     low = 0;
     high = A_SIZE(table);
+#ifdef FIND_DEBUG
+    printf("%2x %3x\n", i._d_form._opcd, i._x_form._eo);
+#endif
     while (low <= high) {
 	t = table + (mid = ((low + high) >> 1));
-	if (!(diff = t->i_opcd - i._d_form._opcd))
+	if (!(diff = t->i_opcd - i._d_form._opcd)) {
 	    switch (t->i_form) {
 	    case B:
 	    case D:
@@ -392,28 +431,64 @@ static struct instr *find_instr(union inst i)
 	    case X:
 		if (!(diff = t->i_eo - i._x_form._eo))
 		    return t;
+#ifdef FIND_DEBUG
+		printf("x   %03x %03x %08x ", t->i_eo, i._x_form._eo, i._l);
+#endif
 		break;
 	    case XL:
 		if (!(diff = t->i_eo - i._xl_form._eo))
 		    return t;
+#ifdef FIND_DEBUG
+		printf("xl  %03x %03x %08x ", t->i_eo, i._xl_form._eo,
+		       i._l);
+#endif
 		break;
 	    case XFX:
 		if (!(diff = t->i_eo - i._xfx_form._eo))
 		    return t;
+#ifdef FIND_DEBUG
+		printf("xfx %03x %03x %08x ", t->i_eo, i._xfx_form._eo, i._l);
+#endif
 		break;
 	    case XFL:
 		if (!(diff = t->i_eo - i._xfl_form._eo))
 		    return t;
+#ifdef FIND_DEBUG
+		printf("xfl %03x %03x %08x ", t->i_eo, i._xfl_form._eo, i._l);
+#endif
 		break;
 	    case XO:
+#ifndef BROKEN
+		/*
+		 * Note: we compare to the x_form.eo because we have
+		 * made duplicate entries for the two ways the oe bit
+		 * can be set.  Otherwise the binary search messes up.
+		 */
+		if (!(diff = t->i_eo - i._x_form._eo))
+		    return t;
+#ifdef FIND_DEBUG
+		printf("xo  %03x %03x %08x ", t->i_eo, i._x_form._eo, i._l);
+#endif
+#else
 		if (!(diff = t->i_eo - i._xo_form._eo1))
 		    return t;
+#ifdef FIND_DEBUG
+		printf("xo  %03x %03x %08x ", t->i_eo, i._xo_form._eo1, i._l);
+#endif
+#endif
 		break;
 	    case A:
 		if (!(diff = t->i_eo - i._a_form._xo))
 		    return t;
+#ifdef FIND_DEBUG
+		printf("a   %03x %03x %08x ", t->i_eo, i._a_form._xo, i._l);
+#endif
 		break;
 	    }
+	}
+#ifdef FIND_DEBUG
+	printf("%3d %3d %3d %4d\n", low, mid, high, diff);
+#endif
 	if (diff < 0)
 	    low = mid + 1;
 	else
@@ -445,62 +520,68 @@ char *instr(long *addr)
 	strcpy(ibuf, "{");
 	strcat(ibuf, t->i_pname);
     }
-    switch (t->i_notes) {
-    case 1:
-	if (t->i_form == A) {
-	    if (i._a_form._rc)
-		strcat(ibuf, ".");
-	} else if (t->i_form == M) {
-	    if (i._m_form._rc)
-		strcat(ibuf, ".");
-	} else if (t->i_form == X) {
-	    if (i._x_form._rc)
-		strcat(ibuf, ".");
-	} else if (t->i_form == XFX) {
-	    if (i._xfx_form._rc)
-		strcat(ibuf, ".");
-	} else if (t->i_form == XFL) {
-	    if (i._xfl_form._rc)
-		strcat(ibuf, ".");
-	} else
-	    strcat(ibuf, " note 1 error ");
-	break;
-    case 2:
-	if (t->i_form == XO) {
-	    if (i._xo_form._oe)
-		strcat(ibuf, "o");
-	    if (i._xo_form._rc)
-		strcat(ibuf, ".");
-	} else
-	    strcat(ibuf, " note 2 error ");
-	break;
-    case 3:
-	if (t->i_form == B) {
-	    if (i._b_form._lk)
-		strcat(ibuf, "l");
-	    if (i._b_form._aa)
-		strcat(ibuf, "a");
-	} else if (t->i_form == I) {
-	    if (i._i_form._lk)
-		strcat(ibuf, "l");
-	    if (i._i_form._aa)
-		strcat(ibuf, "a");
-	} else
-	    strcat(ibuf, " note 3 error ");
-	break;
-    case 4:
-	if (t->i_form == SC) {
-	    if (i._sc_form._lk)
-		strcat(ibuf, "l");
-	} else if (t->i_form == SVC) {
-	    if (i._svc_form._lk)
-		strcat(ibuf, "l");
-	} else if (t->i_form == XL) {
-	    if (i._xl_form._lk)
-		strcat(ibuf, "l");
-	} else
-	    strcat(ibuf, " note 4 error ");
-	break;
+    if (t->i_notes) {
+	int ntemp;
+
+	for (ntemp = t->i_notes; ntemp; ntemp = ntemp / 10) {
+	    switch (ntemp % 10) {
+	    case 1:
+		if (t->i_form == A) {
+		    if (i._a_form._rc)
+			strcat(ibuf, ".");
+		} else if (t->i_form == M) {
+		    if (i._m_form._rc)
+			strcat(ibuf, ".");
+		} else if (t->i_form == X) {
+		    if (i._x_form._rc)
+			strcat(ibuf, ".");
+		} else if (t->i_form == XFX) {
+		    if (i._xfx_form._rc)
+			strcat(ibuf, ".");
+		} else if (t->i_form == XFL) {
+		    if (i._xfl_form._rc)
+			strcat(ibuf, ".");
+		} else
+		    strcat(ibuf, " note 1 error ");
+		break;
+	    case 2:
+		if (t->i_form == XO) {
+		    if (i._xo_form._oe)
+			strcat(ibuf, "o");
+		    if (i._xo_form._rc)
+			strcat(ibuf, ".");
+		} else
+		    strcat(ibuf, " note 2 error ");
+		break;
+	    case 3:
+		if (t->i_form == B) {
+		    if (i._b_form._lk)
+			strcat(ibuf, "l");
+		    if (i._b_form._aa)
+			strcat(ibuf, "a");
+		} else if (t->i_form == I) {
+		    if (i._i_form._lk)
+			strcat(ibuf, "l");
+		    if (i._i_form._aa)
+			strcat(ibuf, "a");
+		} else
+		    strcat(ibuf, " note 3 error ");
+		break;
+	    case 4:
+		if (t->i_form == SC) {
+		    if (i._sc_form._lk)
+			strcat(ibuf, "l");
+		} else if (t->i_form == SVC) {
+		    if (i._svc_form._lk)
+			strcat(ibuf, "l");
+		} else if (t->i_form == XL) {
+		    if (i._xl_form._lk)
+			strcat(ibuf, "l");
+		} else
+		    strcat(ibuf, " note 4 error ");
+		break;
+	    }
+	}
     }
     if (!t->i_name)
 	strcat(ibuf, "}");
