@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.8";
+static char sccs_id[] = "@(#)gram.y	1.9";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -65,10 +65,11 @@ static arg_list *current_arg_list;
 
 static int nesting_level;
 static symptr current_function;
-static long global_index = (long)h_base;
 static int param_index;
 static int variable_index;
 static int variable_max;
+
+long global_index;
 
 void yyerror(char *s, ...);
 static symptr gram_enter_sym(anode *attr, int line, cnode_list *init);
