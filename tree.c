@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree.c	1.6";
+static char sccs_id[] = "@(#)tree.c	1.7";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,6 +85,7 @@ void mk_l2p(cnode *result, cnode *c)
 	eptr->e_func = op_table[c->c_base][tok_2_op['.']];
 	eptr->e_left = c->c_expr;
 	eptr->e_size = c->c_expr->e_size;
+	PRINTF("mk_l2p %d %08x\n", eptr->e_size, eptr);
 	if (c->c_bitfield) {
 	    eptr->e_bsize = c->c_size;
 	    eptr->e_boffset = c->c_offset;
@@ -881,39 +882,51 @@ enum expr_type base_type(typeptr t)
 
 void eval_all(all *result, cnode *c)
 {
+    PRINTF("eval_all called with %s and evaled to ", type_2_string[c->c_base]);
     switch (c->c_base) {
     case schar_type:
 	result->c = sc_val(c->c_expr);
+	PRINTF("%08x\n", result->c);
 	break ;
     case uchar_type:
 	result->uc = uc_val(c->c_expr);
+	PRINTF("%08x\n", result->uc);
 	break ;
     case int_type:
 	result->i = i_val(c->c_expr);
+	PRINTF("%08x\n", result->i);
 	break;
     case uint_type:
 	result->ui = ui_val(c->c_expr);
+	PRINTF("%08x\n", result->ui);
 	break ;
     case short_type:
 	result->s = s_val(c->c_expr);
+	PRINTF("%08x\n", result->s);
 	break ;
     case ushort_type:
 	result->us = us_val(c->c_expr);
+	PRINTF("%08x\n", result->us);
 	break ;
     case long_type:
 	result->l = l_val(c->c_expr);
+	PRINTF("%08x\n", result->l);
 	break ;
     case ulong_type:
 	result->ul = ul_val(c->c_expr);
+	PRINTF("%08x\n", result->ul);
 	break ;
     case float_type:
 	result->f = f_val(c->c_expr);
+	PRINTF("%f\n", result->f);
 	break ;
     case double_type:
 	result->d = d_val(c->c_expr);
+	PRINTF("%f\n", result->d);
 	break ;
     case struct_type:
 	result->st = st_val(c->c_expr);
+	PRINTF("%08x\n", result->st);
 	break;
     case void_type:
     default:
@@ -995,5 +1008,5 @@ void *get_user_sym_addr(char *name)
 	return 0;
     mk_ident(&c, name);
     eval_all(&a, &c);
-    return (void *)a.i;
+    return (void *)a.l;
 }
