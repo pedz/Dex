@@ -1,10 +1,12 @@
-static char sccs_id[] = "@(#)unary_expr.c	1.1";
+static char sccs_id[] = "@(#)unary_expr.c	1.2";
 
 #include <stdio.h>
+#include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "unary_expr.h"
+#include "base_expr.h"
 
 /* simple constant leaf nodes */
 
@@ -194,6 +196,8 @@ long l_l2p(expr *n)
     if (n->e_bsize)
 	return (long)get_field(v2f(l_addr(n->e_left)),
 			 n->e_boffset, n->e_bsize);
+    else if (n->e_size == sizeof(ularge_t))
+	return *v2f_type(large_t *, ul_addr(n->e_left));
     else
 	return *v2f_type(long *, l_addr(n->e_left));
 }
@@ -203,6 +207,8 @@ unsigned long ul_l2p(expr *n)
     if (n->e_bsize)
 	return (unsigned long)get_field(v2f(ul_addr(n->e_left)),
 			 n->e_boffset, n->e_bsize);
+    else if (n->e_size == sizeof(ularge_t))
+	return *v2f_type(ularge_t *, ul_addr(n->e_left));
     else
 	return *v2f_type(unsigned long *, ul_addr(n->e_left));
 }
