@@ -1,5 +1,5 @@
 
-/* @(#)tree.h	1.3 */
+/* @(#)tree.h	1.4 */
 
 /*
  * When a struct is evaulated, the address of the structure is
@@ -145,6 +145,7 @@ typedef struct cnode {
 
 typedef struct cnode_list {
     struct cnode_list *cl_next;
+    struct cnode_list *cl_down;
     cnode cl_cnode;
 } cnode_list;
 
