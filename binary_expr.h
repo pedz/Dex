@@ -1,4 +1,4 @@
-/* @(#)binary_expr.h	1.1 */
+/* @(#)binary_expr.h	1.2 */
 
 signed char sc_comma(expr *n);
 signed char sc_times(expr *n);
