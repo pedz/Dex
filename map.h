@@ -1,8 +1,8 @@
 
-/* @(#)map.h	1.7 */
+/* @(#)map.h	1.8 */
 
-#define h_base ((v_ptr)0x30000000)
-#define h_high ((v_ptr)(((long)(h_base)) + 0x10000000))
+extern long h_base;
+extern long h_high;
 
 #define DUMP_BASE ((void *)0x30000000)
 #define LOAD_BASE ((void *)0xD0000000)
