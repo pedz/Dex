@@ -1,5 +1,5 @@
 
-/* @(#)tree.h	1.5 */
+/* @(#)tree.h	1.6 */
 
 /*
  * When a struct is evaulated, the address of the structure is
