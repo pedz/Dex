@@ -1,11 +1,15 @@
-static char sccs_id[] = "@(#)tree_dump.c	1.1";
+static char sccs_id[] = "@(#)tree_dump.c	1.2";
 
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "asgn_expr.h"
 #include "base_expr.h"
+#include "binary_expr.h"
+#include "cast_expr.h"
+#include "unary_expr.h"
 #include "fcall.h"
+#include "builtins.h"
 
 enum args {
     E_ADDR, E_BOTH, E_DOUBLE, E_FCALL, E_FLOAT, E_INT, E_LEFT, E_LONG,
@@ -49,6 +53,7 @@ static struct tab name_tab[] = {
     E(d_laddr), E_ADDR,
     E(d_le), E_BOTH,
     E(d_leaf), E_DOUBLE,
+    E(d_lnot), E_LEFT,
     E(d_lt), E_BOTH,
     E(d_minue), E_BOTH,
     E(d_minusasgn), E_BOTH,
@@ -60,6 +65,7 @@ static struct tab name_tab[] = {
     E(d_qc), E_QC,
     E(d_times), E_BOTH,
     E(d_timesasgn), E_BOTH,
+    E(d_umin), E_LEFT,
     E(d_v2f), E_LEFT,
     E(f__d), E_LEFT,
     E(f__f), E_LEFT,
@@ -88,6 +94,7 @@ static struct tab name_tab[] = {
     E(f_laddr), E_ADDR,
     E(f_le), E_BOTH,
     E(f_leaf), E_FLOAT,
+    E(f_lnot), E_LEFT,
     E(f_lt), E_BOTH,
     E(f_minue), E_BOTH,
     E(f_minusasgn), E_BOTH,
@@ -99,6 +106,7 @@ static struct tab name_tab[] = {
     E(f_qc), E_QC,
     E(f_times), E_BOTH,
     E(f_timesasgn), E_BOTH,
+    E(f_umin), E_LEFT,
     E(f_v2f), E_LEFT,
     E(i__d), E_LEFT,
     E(i__f), E_LEFT,
@@ -114,6 +122,7 @@ static struct tab name_tab[] = {
     E(i_andand), E_BOTH,
     E(i_andasgn), E_BOTH,
     E(i_asgn), E_BOTH,
+    E(i_bnot), E_LEFT,
     E(i_comma), E_BOTH,
     E(i_dec), E_BOTH,
     E(i_divasgn), E_BOTH,
@@ -129,6 +138,7 @@ static struct tab name_tab[] = {
     E(i_laddr), E_ADDR,
     E(i_le), E_BOTH,
     E(i_leaf), E_INT,
+    E(i_lnot), E_LEFT,
     E(i_lsasgn), E_BOTH,
     E(i_lshift), E_BOTH,
     E(i_lt), E_BOTH,
@@ -148,8 +158,14 @@ static struct tab name_tab[] = {
     E(i_rshift), E_BOTH,
     E(i_times), E_BOTH,
     E(i_timesasgn), E_BOTH,
+    E(i_umin), E_LEFT,
     E(i_v2f), E_LEFT,
     E(i_xor), E_BOTH,
+    E(int_dis), E_INT,
+    E(int_find), E_INT,
+    E(int_load), E_INT,
+    E(int_printf), E_INT,
+    E(int_v2f), E_INT,
     E(l__d), E_LEFT,
     E(l__f), E_LEFT,
     E(l__i), E_LEFT,
@@ -164,6 +180,7 @@ static struct tab name_tab[] = {
     E(l_andand), E_BOTH,
     E(l_andasgn), E_BOTH,
     E(l_asgn), E_BOTH,
+    E(l_bnot), E_LEFT,
     E(l_comma), E_BOTH,
     E(l_dec), E_BOTH,
     E(l_divasgn), E_BOTH,
@@ -179,6 +196,7 @@ static struct tab name_tab[] = {
     E(l_laddr), E_ADDR,
     E(l_le), E_BOTH,
     E(l_leaf), E_LONG,
+    E(l_lnot), E_LEFT,
     E(l_lsasgn), E_BOTH,
     E(l_lshift), E_BOTH,
     E(l_lt), E_BOTH,
@@ -198,6 +216,7 @@ static struct tab name_tab[] = {
     E(l_rshift), E_BOTH,
     E(l_times), E_BOTH,
     E(l_timesasgn), E_BOTH,
+    E(l_umin), E_LEFT,
     E(l_v2f), E_LEFT,
     E(l_xor), E_BOTH,
     E(s__d), E_LEFT,
@@ -214,6 +233,7 @@ static struct tab name_tab[] = {
     E(s_andand), E_BOTH,
     E(s_andasgn), E_BOTH,
     E(s_asgn), E_BOTH,
+    E(s_bnot), E_LEFT,
     E(s_comma), E_BOTH,
     E(s_dec), E_BOTH,
     E(s_divasgn), E_BOTH,
@@ -229,6 +249,7 @@ static struct tab name_tab[] = {
     E(s_laddr), E_ADDR,
     E(s_le), E_BOTH,
     E(s_leaf), E_SHORT,
+    E(s_lnot), E_LEFT,
     E(s_lsasgn), E_BOTH,
     E(s_lshift), E_BOTH,
     E(s_lt), E_BOTH,
@@ -248,6 +269,7 @@ static struct tab name_tab[] = {
     E(s_rshift), E_BOTH,
     E(s_times), E_BOTH,
     E(s_timesasgn), E_BOTH,
+    E(s_umin), E_LEFT,
     E(s_v2f), E_LEFT,
     E(s_xor), E_BOTH,
     E(sc__d), E_LEFT,
@@ -264,6 +286,7 @@ static struct tab name_tab[] = {
     E(sc_andand), E_BOTH,
     E(sc_andasgn), E_BOTH,
     E(sc_asgn), E_BOTH,
+    E(sc_bnot), E_LEFT,
     E(sc_comma), E_BOTH,
     E(sc_dec), E_BOTH,
     E(sc_divasgn), E_BOTH,
@@ -279,6 +302,7 @@ static struct tab name_tab[] = {
     E(sc_laddr), E_ADDR,
     E(sc_le), E_BOTH,
     E(sc_leaf), E_SCHAR,
+    E(sc_lnot), E_LEFT,
     E(sc_lsasgn), E_BOTH,
     E(sc_lshift), E_BOTH,
     E(sc_lt), E_BOTH,
@@ -298,6 +322,7 @@ static struct tab name_tab[] = {
     E(sc_rshift), E_BOTH,
     E(sc_times), E_BOTH,
     E(sc_timesasgn), E_BOTH,
+    E(sc_umin), E_LEFT,
     E(sc_v2f), E_LEFT,
     E(sc_xor), E_BOTH,
     E(st_asgn), E_BOTH,
@@ -325,6 +350,7 @@ static struct tab name_tab[] = {
     E(uc_andand), E_BOTH,
     E(uc_andasgn), E_BOTH,
     E(uc_asgn), E_BOTH,
+    E(uc_bnot), E_LEFT,
     E(uc_comma), E_BOTH,
     E(uc_dec), E_BOTH,
     E(uc_divasgn), E_BOTH,
@@ -340,6 +366,7 @@ static struct tab name_tab[] = {
     E(uc_laddr), E_ADDR,
     E(uc_le), E_BOTH,
     E(uc_leaf), E_UCHAR,
+    E(uc_lnot), E_LEFT,
     E(uc_lsasgn), E_BOTH,
     E(uc_lshift), E_BOTH,
     E(uc_lt), E_BOTH,
@@ -359,6 +386,7 @@ static struct tab name_tab[] = {
     E(uc_rshift), E_BOTH,
     E(uc_times), E_BOTH,
     E(uc_timesasgn), E_BOTH,
+    E(uc_umin), E_LEFT,
     E(uc_v2f), E_LEFT,
     E(uc_xor), E_BOTH,
     E(ui__d), E_LEFT,
@@ -375,6 +403,7 @@ static struct tab name_tab[] = {
     E(ui_andand), E_BOTH,
     E(ui_andasgn), E_BOTH,
     E(ui_asgn), E_BOTH,
+    E(ui_bnot), E_LEFT,
     E(ui_comma), E_BOTH,
     E(ui_dec), E_BOTH,
     E(ui_divasgn), E_BOTH,
@@ -390,6 +419,7 @@ static struct tab name_tab[] = {
     E(ui_laddr), E_ADDR,
     E(ui_le), E_BOTH,
     E(ui_leaf), E_UINT,
+    E(ui_lnot), E_LEFT,
     E(ui_lsasgn), E_BOTH,
     E(ui_lshift), E_BOTH,
     E(ui_lt), E_BOTH,
@@ -409,6 +439,7 @@ static struct tab name_tab[] = {
     E(ui_rshift), E_BOTH,
     E(ui_times), E_BOTH,
     E(ui_timesasgn), E_BOTH,
+    E(ui_umin), E_LEFT,
     E(ui_v2f), E_LEFT,
     E(ui_xor), E_BOTH,
     E(ul__d), E_LEFT,
@@ -425,6 +456,7 @@ static struct tab name_tab[] = {
     E(ul_andand), E_BOTH,
     E(ul_andasgn), E_BOTH,
     E(ul_asgn), E_BOTH,
+    E(ul_bnot), E_LEFT,
     E(ul_comma), E_BOTH,
     E(ul_dec), E_BOTH,
     E(ul_divasgn), E_BOTH,
@@ -440,6 +472,7 @@ static struct tab name_tab[] = {
     E(ul_laddr), E_ADDR,
     E(ul_le), E_BOTH,
     E(ul_leaf), E_ULONG,
+    E(ul_lnot), E_LEFT,
     E(ul_lsasgn), E_BOTH,
     E(ul_lshift), E_BOTH,
     E(ul_lt), E_BOTH,
@@ -459,6 +492,7 @@ static struct tab name_tab[] = {
     E(ul_rshift), E_BOTH,
     E(ul_times), E_BOTH,
     E(ul_timesasgn), E_BOTH,
+    E(ul_umin), E_LEFT,
     E(ul_v2f), E_LEFT,
     E(ul_xor), E_BOTH,
     E(us__d), E_LEFT,
@@ -475,6 +509,7 @@ static struct tab name_tab[] = {
     E(us_andand), E_BOTH,
     E(us_andasgn), E_BOTH,
     E(us_asgn), E_BOTH,
+    E(us_bnot), E_LEFT,
     E(us_comma), E_BOTH,
     E(us_dec), E_BOTH,
     E(us_divasgn), E_BOTH,
@@ -490,6 +525,7 @@ static struct tab name_tab[] = {
     E(us_laddr), E_ADDR,
     E(us_le), E_BOTH,
     E(us_leaf), E_USHORT,
+    E(us_lnot), E_LEFT,
     E(us_lsasgn), E_BOTH,
     E(us_lshift), E_BOTH,
     E(us_lt), E_BOTH,
@@ -509,6 +545,7 @@ static struct tab name_tab[] = {
     E(us_rshift), E_BOTH,
     E(us_times), E_BOTH,
     E(us_timesasgn), E_BOTH,
+    E(us_umin), E_LEFT,
     E(us_v2f), E_LEFT,
     E(us_xor), E_BOTH,
 };
@@ -547,6 +584,8 @@ static void internal_tree_dump(expr *e)
 	printf(" 0x%08x", e->e_addr);
 	break;
     case E_BOTH:
+	if (e->e_bsize)
+	    printf("size:%d offset:%d ", e->e_bsize, e->e_boffset);
 	internal_tree_dump(e->e_left);
 	printf(" ");
 	internal_tree_dump(e->e_right);
@@ -564,6 +603,8 @@ static void internal_tree_dump(expr *e)
 	printf(" %d", e->e_i);
 	break;
     case E_LEFT:
+	if (e->e_bsize)
+	    printf("size:%d offset:%d ", e->e_bsize, e->e_boffset);
 	internal_tree_dump(e->e_left);
 	break;
     case E_LONG:
