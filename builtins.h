@@ -1,5 +1,5 @@
 
-/* @(#)builtins.h	1.3 */
+/* @(#)builtins.h	1.4 */
 
 char *int_instr(expr *n);
 char *int_strcat(expr *n);
