@@ -1,5 +1,5 @@
 
-/* @(#)stmt.h	1.4 */
+/* @(#)stmt.h	1.5 */
 
 /*
  * Rather than trying to minimize space, the structure for statements
