@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.5";
+static char sccs_id[] = "@(#)sym.c	1.6";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,9 +112,9 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
     if (typeid >= (old_limit = *limit)) {
 	*limit = typeid + 100;
 	if (*ptr)
-	    *ptr = srealloc(*ptr, *limit * sizeof(typeptr), __FILE__, __LINE__);
+	    *ptr = srealloc(*ptr, *limit * sizeof(typeptr));
 	else
-	    *ptr = smalloc(*limit * sizeof(typeptr), __FILE__, __LINE__);
+	    *ptr = smalloc(*limit * sizeof(typeptr));
 	bzero(*ptr + old_limit, sizeof(typeptr) * (*limit - old_limit));
     }
 
@@ -206,6 +206,29 @@ int typedef2typeid(typeptr t)
 	    if (*p == t)
 		return p - tid->tid_type_pos;
     return 0;
+}
+
+int allocate_fields(fieldptr f)
+{
+    int pos = 0;
+
+    for ( ; f; f = f->f_next) {
+	/* if foo : size was specified */
+	if (f->f_numbits < 0)
+	    f->f_numbits = -f->f_numbits;
+	else {
+	    /* No size specified so move to proper boundry */
+	    int bytes = (f->f_numbits + 7) / 8;
+	    
+	    if (bytes > 4)
+		bytes = 4;
+	    pos += (bytes * 8 - 1);
+	    pos &= ~(bytes * 8 - 1);
+	}
+	f->f_offset = pos;
+	pos += f->f_numbits;
+    }
+    return pos;
 }
 
 fieldptr newfield(char *name, typeptr tptr, int offset, int numbits)
@@ -384,7 +407,7 @@ char *store_string(ns *nspace, char *name, int len, char *suffix)
      * if len is set, we copy only up to len bytes and we put the null
      * terminater in by hand.
      */
-    result = smalloc(name_len + suffix_len + 1, __FILE__, __LINE__);
+    result = smalloc(name_len + suffix_len + 1);
     bcopy(name, result, name_len);
     result[name_len] = 0;
     if (suffix)
@@ -468,11 +491,18 @@ ns *ns_create(ns *nspace, char *name)
 	ret->ns_namedefs = nspace->ns_namedefs;
 	ret->ns_tids = nspace->ns_tids;
     } else {
+#if 0
 	if (ns_tail)
 	    ns_tail->ns_next = ret;
 	else
 	    ns_head = ret;
 	ns_tail = ret;
+#else
+	ret->ns_next = ns_head;
+	ns_head = ret;
+	if (!ns_tail)
+	    ns_tail = ret;
+#endif
     }
     return ret;
 }
@@ -513,6 +543,7 @@ symptr name2userdef(ns *nspace, char *name)
 
     if (!(sytp = nspace->ns_syms))
 	return 0;
+
     for (ret = sytp->sy_hash[h]; ret; ret = ret->s_hash)
 	if (!strcmp(ret->s_name, name))
 	    if (ret->s_typed)
@@ -561,7 +592,7 @@ symptr addr2userdef(ns *nspace, void *addr)
 	for (temp = *sym; temp; temp = temp->s_hash)
 	    if (temp->s_global && (temp->s_offset <= addr) &&
 		(!closest || (closest->s_offset < temp->s_offset ||
-			      (closest->s_offset -= temp->s_offset &&
+			      (closest->s_offset == temp->s_offset &&
 			       closest->s_name[0] == '$'))))
 		closest = temp;
     for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
@@ -699,8 +730,7 @@ static void _dump_symtable(ns *nspace, symtabptr old_sytp)
 	    printf("Symbols for %s point to the parent\n", nspace->ns_name);
 	else {
 	    printf("Symbols for %s\n", nspace->ns_name);
-	    a = all = (symptr *)smalloc(sizeof(symptr) * sytp->sy_count,
-					__FILE__, __LINE__);
+	    a = all = (symptr *)smalloc(sizeof(symptr) * sytp->sy_count);
 	    a_end = a + sytp->sy_count;
 	    for (i = 0; i < HASH_SIZE; i++)
 		for (s = sytp->sy_hash[i]; s; s = s->s_hash)
