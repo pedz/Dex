@@ -1,28 +1,47 @@
-static char sccs_id[] = "@(#)fcall.c	1.7";
+static char sccs_id[] = "@(#)fcall.c	1.8";
 
 #include <stdio.h>
 #include <setjmp.h>
+#include <sys/errno.h>
+#include <stdlib.h>
+#include <strings.h>
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
+#include "dex.h"
+#define DEBUG_BIT FCALL_C_BIT
 
 long frame_ptr;
 long stack_ptr;
+extern long global_index;
 
 int setup_pseudos(void)
 {
-    extern long global_index;
+#define XXX_SIZE (64*1024)
 
-    frame_ptr = h_high;
-    stack_ptr = h_high;
-    global_index = h_base;
+    if (!(global_index = (long)malloc(XXX_SIZE)))
+	return ENOMEM;
+    frame_ptr = stack_ptr = global_index + XXX_SIZE - sizeof(long);
+    DEBUG_PRINTF(("global=0x%s frame=0x%s\n",
+		 P(global_index), P(frame_ptr)));
+    return 0;
 }
 
 static void push(v_ptr a, int size)
 {
-    stack_ptr -= size;
-    bcopy(a, v2f((void *)stack_ptr), size);
+    if ((stack_ptr -= size) < global_index) {
+	fprintf(stderr, "push: Out of pseudo variable space\n");
+	exit(1);
+    }	
+    bcopy(a, (void *)stack_ptr, size);
+    if (debug_mask & DEBUG_BIT) {
+	int i;
+	DEBUG_PRINTF(("pushing: %d ", size));
+	for (i = 0; i < size; ++i)
+	    DEBUG_PRINTF(("%02x", ((char *)a)[i]));
+	DEBUG_PRINTF((" from %016lx to %016lx\n", a, stack_ptr));
+    }
 }
 
 static void mark_stack(void)
@@ -31,7 +50,7 @@ static void mark_stack(void)
     frame_ptr = stack_ptr;
 }
 
-#if __64BIT__
+#ifdef __64BIT__
 
 static void process_args(cnode_list *l)
 {
@@ -91,6 +110,18 @@ static void process_args(cnode_list *l)
 	    result.ul = ul_val(e);
 	    v = &result.ul;
 	    size = sizeof(result.ul);
+	    break ;
+
+	case long_long_type:
+	    result.ll = ll_val(e);
+	    v = &result.ll;
+	    size = sizeof(result.ll);
+	    break ;
+
+	case ulong_long_type:
+	    result.ull = ull_val(e);
+	    v = &result.ull;
+	    size = sizeof(result.ull);
 	    break ;
 
 	case float_type:
@@ -183,6 +214,18 @@ static void process_args(cnode_list *l)
 	    size = sizeof(result.ul);
 	    break ;
 
+	case long_long_type:
+	    result.ll = ll_val(e);
+	    v = &result.ll;
+	    size = sizeof(result.ll);
+	    break ;
+
+	case ulong_long_type:
+	    result.ull = ull_val(e);
+	    v = &result.ull;
+	    size = sizeof(result.ull);
+	    break ;
+
 	case float_type:
 	    result.d = f_val(e);
 	    v = &result.d;
@@ -214,7 +257,7 @@ static void process_args(cnode_list *l)
 
 static void release_stack(void)
 {
-    frame_ptr = *v2f_type(long *, frame_ptr);
+    frame_ptr = *(long *)frame_ptr;
 }
 
 static stmt_index basic_fcall(expr *n)
@@ -233,6 +276,10 @@ static stmt_index basic_fcall(expr *n)
 void alloc_stack(int n)
 {
     stack_ptr -= (n + sizeof(long) - 1) & (~(sizeof(long) - 1));
+    if (stack_ptr < global_index) {
+	fprintf(stderr, "alloc_stack: Out of pseudo variable space\n");
+	exit(1);
+    }
 }
 
 #define MK_FCALL(base_type, prefix) \
@@ -241,9 +288,12 @@ base_type prefix ## _fcall(expr *n) \
     base_type result; \
     expr *e; \
     stmt_index s; \
-    int cur_stack = stack_ptr; \
+    long cur_stack = stack_ptr; \
     volatile int had_fault; \
+    int local_stmt_index = cur_stmt_index; \
      \
+    if (cur_stmt_index < STMT_STACK_SIZE) \
+	++cur_stmt_index; \
     s = basic_fcall(n); \
     mark_stack(); \
     BEGIN_PROTECT(&had_fault); \
@@ -252,6 +302,7 @@ base_type prefix ## _fcall(expr *n) \
     END_PROTECT(); \
     release_stack(); \
     stack_ptr = cur_stack; \
+    cur_stmt_index = local_stmt_index; \
     if (had_fault) \
 	return 0; \
     return result; \
@@ -265,6 +316,8 @@ MK_FCALL(short, s);
 MK_FCALL(unsigned short, us);
 MK_FCALL(long, l);
 MK_FCALL(unsigned long, ul);
+MK_FCALL(long long, ll);
+MK_FCALL(unsigned long long, ull);
 MK_FCALL(float, f);
 MK_FCALL(double, d);
 MK_FCALL(st, st);
