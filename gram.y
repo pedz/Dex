@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.9";
+static char sccs_id[] = "@(#)gram.y	1.10";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -9,6 +9,7 @@ static char sccs_id[] = "@(#)gram.y	1.9";
 #include <stdarg.h>
 #include <string.h>
 #include <dbxstclass.h>
+#include <stdio.h>
 #include "dex.h"
 #include "map.h"
 #include "sym.h"
@@ -17,8 +18,11 @@ static char sccs_id[] = "@(#)gram.y	1.9";
 #include "unary_expr.h"
 #include "inter.h"
 #include "fcall.h"
+#include "gram_pre.h"
+#include "scan_pre.h"
 
 #define YYDEBUG 1
+#define DEBUG_BIT GRAM_Y_BIT
 
 ns *ns_inter;
 static anode anode_stack[8];
@@ -69,9 +73,6 @@ static int param_index;
 static int variable_index;
 static int variable_max;
 
-long global_index;
-
-void yyerror(char *s, ...);
 static symptr gram_enter_sym(anode *attr, int line, cnode_list *init);
 static int increase_nesting(void);
 static void decrease_nesting(int new);
@@ -84,7 +85,9 @@ static char *save_as_string(int i);
 %}
 
 %union {
-    large_t val;			/* ints, etc */
+    int ival;				/* int */
+    long lval;				/* long */
+    large_t llval;			/* large */
     double rval;			/* reals */
     char *str;				/* names, etc */
     typeptr type;
@@ -98,41 +101,41 @@ static char *save_as_string(int i);
 }
 
 /* keywords used for the commands of the debugger */
-%token <val> DUMP
-%token <val> PRINT
-%token <val> SOURCE
-%token <val> SYM_DUMP
-%token <val> STMT_DUMP
-%token <val> TYPE_DUMP
+%token <ival> DUMP
+%token <ival> PRINT
+%token <ival> SOURCE
+%token <ival> SYM_DUMP
+%token <ival> STMT_DUMP
+%token <ival> TYPE_DUMP
 
 /* keywords used for C -- all of this might be used at the current time */
 
-%token <val> AUTO
-%token <val> BREAK
-%token <val> CASE CHAR CONTINUE
-%token <val> DEFAULT DO DOUBLE
-%token <val> ELSE ENTRY EXTERN
-%token <val> ENUM
-%token <val> FLOAT FOR
-%token <val> GOTO
-%token <val> IF INT
-%token <val> LONG
-%token <val> REGISTER RETURN
-%token <val> SHORT SIGNED SIZEOF STATIC STRUCT SWITCH
-%token <val> UNION UNSIGNED
-%token <val> VOID
-%token <val> WHILE
-%token <val> TYPEDEF
+%token <ival> AUTO
+%token <ival> BREAK
+%token <ival> CASE CHAR CONTINUE
+%token <ival> DEFAULT DO DOUBLE
+%token <ival> ELSE ENTRY EXTERN
+%token <ival> ENUM
+%token <ival> FLOAT FOR
+%token <ival> GOTO
+%token <ival> IF INT
+%token <ival> LONG
+%token <ival> REGISTER RETURN
+%token <ival> SHORT SIGNED SIZEOF STATIC STRUCT SWITCH
+%token <ival> UNION UNSIGNED
+%token <ival> VOID
+%token <ival> WHILE
+%token <ival> TYPEDEF
 
 /*
  *  Token from scanner which should not exist but do to make the
  * grammer LR(1).  These symbols are for +=, -=, etc ...
  */
 
-%token <val> PLUSEQUAL MINUSEQUAL TIMESEQUAL DIVEQUAL MODEQUAL LSEQUAL
-%token <val> RSEQUAL ANDEQUAL XOREQUAL OREQUAL '=' ',' '*' '/' '%' '+'
-%token <val> '-' RSHIFT LSHIFT '<' '>' GTOREQUAL LTOREQUAL EQUALITY
-%token <val> NOTEQUAL '&' '^' '|' ANDAND OROR
+%token <ival> PLUSEQUAL MINUSEQUAL TIMESEQUAL DIVEQUAL MODEQUAL LSEQUAL
+%token <ival> RSEQUAL ANDEQUAL XOREQUAL OREQUAL '=' ',' '*' '/' '%' '+'
+%token <ival> '-' RSHIFT LSHIFT '<' '>' GTOREQUAL LTOREQUAL EQUALITY
+%token <ival> NOTEQUAL '&' '^' '|' ANDAND OROR
 
 /*
  * Tokens from the scanner which must and should exist but are not
@@ -140,12 +143,14 @@ static char *save_as_string(int i);
  * such as &&, ||, ->, etc.
  */
 
-%token <val> INCOP DECOP PTROP
+%token <ival> INCOP DECOP PTROP
 
-%token <val> ICON
+%token <ival>  ICON
+%token <lval>  LCON
+%token <llval> LLCON
 %token <rval>  RCON
-%token <str> IDENTIFIER STRING
-%token <type> TYPEDEFNAME
+%token <str>   IDENTIFIER STRING
+%token <type>  TYPEDEFNAME
 
 /* Precedence */
 
@@ -176,8 +181,8 @@ static char *save_as_string(int i);
 %type <cnode> constant name lvalue pvalue expression
 %type <cnode> opt_expression nce
 
-%type <val> opt_constant_expression constant_expression asgn_op
-%type <val> compound_statement_preamble function_heading struct_union
+%type <ival> opt_constant_expression constant_expression asgn_op
+%type <ival> compound_statement_preamble function_heading struct_union
 
 %type <stmt> compound_statement statement_list statement if_preamble
 %type <stmt> else_preamble data_def init_declaration_list
@@ -225,13 +230,25 @@ command
 	}
     | data_def 
 	{
+	    volatile long had_fault;
+
 	    (void) mk_return_stmt((expr *)0);
+	    BEGIN_PROTECT(&had_fault);
 	    (void) execute_statement($1);
+	    END_PROTECT();
+	    if (had_fault)
+		printf("hit a page fault at %s\n", P(had_fault));
 	}
     | statement 
 	{
+	    volatile long had_fault;
+
 	    (void) mk_return_stmt((expr *)0);
+	    BEGIN_PROTECT(&had_fault);
 	    (void) execute_statement($1);
+	    END_PROTECT();
+	    if (had_fault)
+		printf("hit a page fault at %s\n", P(had_fault));
 	}
     ;
 
@@ -477,12 +494,16 @@ simple_type			/* predefined types */
 	}
     | LONG
 	{
-#ifdef __64BIT__
-	    $$.a_type = find_type(ns_inter, TP_LONG_64);
-#else
-	    $$.a_type = find_type(ns_inter, TP_LONG);
-#endif
+	    if (sizeof(long) == 8)
+		$$.a_type = find_type(ns_inter, TP_LONG_64);
+	    else
+		$$.a_type = find_type(ns_inter, TP_LONG);
 	    $$.a_base = long_type;
+	}
+    | LONG LONG
+	{
+	    $$.a_type = find_type(ns_inter, TP_LLONG);
+	    $$.a_base = long_long_type;
 	}
     | UNSIGNED
 	{
@@ -526,12 +547,16 @@ simple_type			/* predefined types */
 	}
     | UNSIGNED LONG
 	{
-#ifdef __64BIT__
-	    $$.a_type = find_type(ns_inter, TP_ULONG_64);
-#else
-	    $$.a_type = find_type(ns_inter, TP_ULONG);
-#endif
+	    if (sizeof(long) == 8)
+		$$.a_type = find_type(ns_inter, TP_ULONG_64);
+	    else
+		$$.a_type = find_type(ns_inter, TP_ULONG);
 	    $$.a_base = ulong_type;
+	}
+    | UNSIGNED LONG LONG
+	{
+	    $$.a_type = find_type(ns_inter, TP_ULLONG);
+	    $$.a_base = ulong_long_type;
 	}
     ;
 
@@ -909,7 +934,6 @@ name_list			/* simple list of formal arguments */
     : IDENTIFIER
 	{
 	    $$ = new(arg_list);
-	    bzero(&$$, sizeof($$));
 	    $$->a_anode.a_name = $1;
 	    $$->a_anode.a_valid_name = 1;
 	    param_count = 1;
@@ -917,7 +941,6 @@ name_list			/* simple list of formal arguments */
     | IDENTIFIER ',' name_list
 	{
 	    $$ = new(arg_list);
-	    bzero(&$$, sizeof($$));
 	    $$->a_next = $3;
 	    $$->a_anode.a_name = $1;
 	    $$->a_anode.a_valid_name = 1;
@@ -1181,7 +1204,7 @@ statement
     | PRINT expression ';'
 	{
 	    $$ = mk_print_stmt(&$2);
-	    PRINTF("did statement\n");
+	    DEBUG_PRINTF(("did statement\n"));
 	}
     | error
 	{
@@ -1387,7 +1410,7 @@ asgn_op
 pvalue
     : lvalue				%prec DOSHIFT
 	{
-	    PRINTF("hit this %d\n", $1.c_expr->e_size);
+	    DEBUG_PRINTF(("hit this %d\n", $1.c_expr->e_size));
 	    mk_l2p(&$$, &$1);
 	}
     | '(' expression ')'
@@ -1505,7 +1528,8 @@ lvalue
 #else
 	    $$.c_expr->e_size = sizeof(void *);
 #endif
-	    PRINTF("* %08x %d\n", $$.c_expr, $$.c_expr->e_size);
+	    DEBUG_PRINTF(("* %s %d\n", P($$.c_expr),
+			 $$.c_expr->e_size));
 	    $$.c_const = 0;
 	    $$.c_bitfield = 0;
 	}
@@ -1623,7 +1647,18 @@ constant
 	}
     | ICON
 	{
-	    mk_const(ns_inter, &$$, $1);
+	    mk_const(ns_inter, &$$, $1, TP_INT);
+	}
+    | LCON
+	{
+	    if (sizeof(long) == 4)
+		mk_const(ns_inter, &$$, $1, TP_LONG);
+	    else
+		mk_const(ns_inter, &$$, $1, TP_LONG_64);
+	}
+    | LLCON
+	{
+	    mk_const(ns_inter, &$$, $1, TP_LLONG);
 	}
     | STRING
 	{
@@ -1638,11 +1673,11 @@ constant
 	}
     | SIZEOF nce
 	{
-	    mk_const(ns_inter, &$$, get_size($2.c_type) / 8);
+	    mk_const(ns_inter, &$$, get_size($2.c_type) / 8, TP_INT);
 	}
     | SIZEOF '(' type_name ')'
 	{
-	    mk_const(ns_inter, &$$, get_size($3.a_type) / 8);
+	    mk_const(ns_inter, &$$, get_size($3.a_type) / 8, TP_INT);
 	}
     | SIZEOF '(' type_name error
 	{
@@ -1714,9 +1749,6 @@ non_empty_decl
 
 %%
 
-#include <stdio.h>
-#include "scan.h"
-
 void yyerror(char *s, ...)
 {
     va_list Argp;
@@ -1787,12 +1819,12 @@ static symptr gram_enter_sym(anode *attr, int line, cnode_list *init)
 	int size = ret->s_size = get_size(ret->s_type) / 8;
 	
 	if (attr->a_class == param_class) {
-	    ret->s_offset = (v_ptr)param_index;
-#if 0
-	    param_index += size;
-#else
-	    param_index += (((size + sizeof(long)-1)/sizeof(long))*sizeof(long));
-#endif
+	    if (size < sizeof(long))
+		ret->s_offset = (v_ptr)(param_index + (sizeof(long) - size));
+	    else
+		ret->s_offset = (v_ptr)param_index;
+	    param_index += (((size + sizeof(long)-1) / sizeof(long)) *
+			    sizeof(long));
 	} else {
 	    variable_index += size;
 	    ret->s_offset = (v_ptr)-variable_index;
