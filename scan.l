@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.6";
+static char sccs_id[] = "@(#)scan.l	1.7";
 
 #define yylval GRAMlval
 
