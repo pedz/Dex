@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree_dump.c	1.4";
+static char sccs_id[] = "@(#)tree_dump.c	1.5";
 
 #include "dex.h"
 #include "map.h"
@@ -601,6 +601,8 @@ static void internal_tree_dump(expr *e)
     case E_BOTH:
 	if (e->e_bsize)
 	    printf("size:%d offset:%d ", e->e_bsize, e->e_boffset);
+	else if (e->e_size == sizeof(ularge_t))
+	    printf("ularge_t ");
 	internal_tree_dump(e->e_left);
 	printf(" ");
 	internal_tree_dump(e->e_right);
@@ -620,6 +622,8 @@ static void internal_tree_dump(expr *e)
     case E_LEFT:
 	if (e->e_bsize)
 	    printf("size:%d offset:%d ", e->e_bsize, e->e_boffset);
+	else if (e->e_size == sizeof(ularge_t))
+	    printf("ularge_t ");
 	internal_tree_dump(e->e_left);
 	break;
     case E_LONG:
