@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.8";
+static char sccs_id[] = "@(#)sym.c	1.9";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -288,6 +288,7 @@ void add_typedef(typeptr t, char *name)
     t->t_hash = ttp->tt_hash[hash_val];
     ttp->tt_hash[hash_val] = t;
     t->t_name = name;
+    t->t_typedef = 1;
     ++ttp->tt_count;
 }
 
@@ -315,6 +316,7 @@ void add_namedef(typeptr t, char *name)
     t->t_hash = ttp->tt_hash[hash_val];
     ttp->tt_hash[hash_val] = t;
     t->t_name = name;
+    t->t_typedef = 0;
     ++ttp->tt_count;
 }
 
