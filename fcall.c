@@ -1,23 +1,18 @@
-static char sccs_id[] = "@(#)fcall.c	1.1";
+static char sccs_id[] = "@(#)fcall.c	1.2";
 
 #include <stdio.h>
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
-#include "hmap.h"
 
-int frame_ptr = h_high;
-int stack_ptr = h_high;
+long frame_ptr = (long)h_high;
+long stack_ptr = (long)h_high;
 
 static void push(v_ptr a, int size)
 {
-    int old_stack = stack_ptr;
-
     stack_ptr -= size;
-    if ((old_stack ^ stack_ptr) & ~(PAGESIZE - 1))
-	h_mkpage((v_ptr)stack_ptr);
-    v_write(a, (v_ptr)stack_ptr, size);
+    bcopy(a, v2f(stack_ptr), size);
 }
 
 static void mark_stack(void)
@@ -116,12 +111,12 @@ static void process_args(cnode_list *l)
 
 static void release_stack(void)
 {
-    v_read(&frame_ptr, (v_ptr)frame_ptr, sizeof(frame_ptr));
+    frame_ptr = *v2f_type(long *, frame_ptr);
 }
 
 static expr *basic_fcall(expr *n)
 {
-    stmt s;
+    stmt_index s;
     expr *e;
 
     s = i_val(n->e_call);
@@ -136,11 +131,7 @@ static expr *basic_fcall(expr *n)
 
 void alloc_stack(int n)
 {
-    int old_stack = stack_ptr;
-
     stack_ptr -= n;
-    if ((old_stack ^ stack_ptr) & ~(PAGESIZE - 1))
-	h_mkpage((v_ptr)stack_ptr);
 }
 
 #define MK_FCALL(base_type, prefix) \
