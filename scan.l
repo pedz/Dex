@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.1";
+static char sccs_id[] = "@(#)scan.l	1.2";
 
 #define yylval GRAMlval
 
@@ -26,7 +26,7 @@ struct keywords {
     { "default", DEFAULT },
     { "do", DO },
     { "double", DOUBLE },
-    { "dump", DUMP },
+    { "dump", DUMP },			/* Extension */
     { "else", ELSE },
     { "entry", ENTRY },
     { "enum", ENUM },
@@ -36,19 +36,19 @@ struct keywords {
     { "goto", GOTO },
     { "if", IF },
     { "int", INT },
+    { "load", LOAD },
     { "long", LONG },
-    { "nm", NM },
-    { "print", PRINT },
+    { "print", PRINT },			/* Extension */
     { "register", REGISTER },
     { "return", RETURN },
     { "short", SHORT },
     { "signed", SIGNED },
     { "sizeof", SIZEOF },
-    { "stab", STAB},
+    { "source", SOURCE },		/* Extension */
     { "static", STATIC },
     { "struct", STRUCT },
     { "switch", SWITCH },
-    { "symdump", SYM_DUMP },
+    { "symdump", SYM_DUMP },		/* Extension */
     { "typedef", TYPEDEF },
     { "union", UNION },
     { "unsigned", UNSIGNED },
@@ -61,12 +61,16 @@ struct keywords {
 char string_buf[1024];
 char *str_ptr;
 
+#ifdef getc
+#undef getc
+#endif
+
 %}
 
 %start normal string
 
 %%
-<normal>[a-zA-Z_][a-zA-Z0-9_]* {
+<normal>[$a-zA-Z_][$a-zA-Z0-9_]* {
     keyptr k;
     typeptr t;
 
@@ -74,10 +78,12 @@ char *str_ptr;
 	if (!strcmp(k->name, yytext)) {
 	    return k->token;
 	}
-    if (t = name2typedef(yytext)) /* look for typedefs */
+    if (t = name2typedef_all(yytext)) { /* look for typedefs */
+	yylval.type = t;
 	return TYPEDEFNAME;
+    }
 
-    yylval.str = store_name(ns_inter, yytext);
+    yylval.str = store_string(ns_inter, yytext, 0, (char *)0);
     return IDENTIFIER;
 }
 
@@ -100,7 +106,7 @@ char *str_ptr;
     int i;
     char *p;
 
-    if (yytext[1] = '\\')
+    if (yytext[1] == '\\') {
 	switch (yytext[2]) {
 	case '0': case '1': case '2': case '3':
 	case '4': case '5': case '6': case '7':
@@ -119,8 +125,9 @@ char *str_ptr;
 	case 't': yylval.val = '\t'; break;
 	default: yylval.val = yytext[2]; break;
 	}
-    else
+    } else {
 	yylval.val = yytext[1];
+    }
     return ICON;
 }
 
@@ -247,7 +254,7 @@ char *str_ptr;
 <string>"\"" {
     BEGIN normal;
     *str_ptr++ = 0;
-    yylval.str = store_name(ns_inter, string_buf);
+    yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
     return STRING;
 }
 
@@ -308,3 +315,52 @@ char *str_ptr;
     unput(yytext[0]);
 }
 %%
+
+struct fs {
+    struct fs *fs_next;
+    char *fs_name;
+    FILE *fs_file;
+    int fs_line;
+};
+static struct fs *file_stack;
+char *yyfilename;
+
+static int getc(FILE *in)
+{
+    int ret;
+
+    while ((ret = fgetc(yyin)) == EOF) {
+	struct fs *f;
+
+	if (!(f = file_stack))
+	    break;
+	fclose(yyin);
+	yyin = file_stack->fs_file;
+	yylineno = file_stack->fs_line;
+	yyfilename = file_stack->fs_name;
+	file_stack = file_stack->fs_next;
+	free(f);
+    }
+
+    return ret;
+}
+
+void add_source(char *s)
+{
+    FILE *temp;
+    struct fs *f;
+
+    if (!(temp = fopen(s, "r"))) {
+	perror(s);
+	return;
+    }
+    f = new(struct fs);
+    f->fs_next = file_stack;
+    file_stack = f;
+    f->fs_file = yyin;
+    f->fs_line = yylineno;
+    f->fs_name = yyfilename;
+    yyin = temp;
+    yylineno = 1;
+    yyfilename = s;
+}
