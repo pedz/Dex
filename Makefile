@@ -1,4 +1,4 @@
-# @(#)Makefile	1.6
+# @(#)Makefile	1.7
 #
 # COMPONENT_NAME:
 #
@@ -52,6 +52,7 @@ OFILES		= \
 	gram.o \
 	load.o \
 	map.o \
+	print.o \
 	scan.o \
 	stab.o \
 	stmt.o \
