@@ -1,4 +1,4 @@
-# @(#)Makefile	1.8
+# @(#)Makefile	1.9
 #
 # COMPONENT_NAME:
 #
@@ -24,8 +24,6 @@ PROGRAMS	= dex
 ILIST		= dex
 IDIR		= /usr/sbin/
 
-# CFLAGS		= -D_KERNEL
-# CFLAGS	= -D_AIX41
 CFLAGS		= -D_AIX41 -DPRINTF=
 LIBS		= -lreadline -ll -lxcurses
 #
@@ -35,13 +33,21 @@ LIBS		= -lreadline -ll -lxcurses
 # with the -g option so that it has all of the proc, thread, ppda, etc
 # structures that are pulled in at startup.
 #
-LDFLAGS		= -bloadmap:dex.map -H4096 -L/usr/local/lib
-STRIP_FLAG	=
-dmap.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
+# LDFLAGS		= -bloadmap:dex.map -H4096 -L/usr/local/lib
+# STRIP_FLAG	=
+# dmap.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
+#
+# New system: we no longer try and find ourselves.  Rather we compile
+# base.o with all of the debug and quick.c load this first off to
+# define all the system structures we believe to be interesting.  This
+# gives us some flexibility.
+LDFLAGS		= -bloadmap:dex.map -L/usr/local/lib
+base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
 scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE -I/usr/local/include
 
 OFILES		= \
 	asgn_expr.o \
+	base.o \
 	base_expr.o \
 	binary_expr.o \
 	builtins.o \
