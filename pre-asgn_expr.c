@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)pre-asgn_expr.c	1.2";
+static char sccs_id[] = "@(#)pre-asgn_expr.c	1.3";
 
 #include "map.h"
 #include "sym.h"
@@ -19,7 +19,12 @@ type prefix ## _ ## suffix (expr *n) \
     type *p = v2f_type(type *, prefix ## _addr(n->e_left)); \
     type x; \
  \
-    x = ((*p) op t); \
+    if (n->e_bsize) { \
+	x = get_field(p, n->e_boffset, n->e_bsize); \
+	x = x op t; \
+	set_field(p, n->e_boffset, n->e_bsize, x); \
+    } else \
+	x = ((*p) op t); \
     return x; \
 }
 
@@ -82,6 +87,14 @@ type prefix ## _ ## suffix (expr *n) \
 { \
     int t = i_val(n->e_right); \
     type *l = v2f_type(type *, prefix ## _addr(n->e_left)); \
+ \
+    if (n->e_bsize) { \
+	type x = get_field(l, n->e_boffset, n->e_bsize); \
+	 \
+	x op t; \
+	set_field(l, n->e_boffset, n->e_bsize, x); \
+	return x; \
+    } \
     return *l op t; \
 }
 
@@ -110,9 +123,16 @@ type prefix ## _ ## suffix (expr *n) \
 { \
     type t = prefix ## _val(n->e_right); \
     type *p = v2f_type(type *, prefix ## _addr(n->e_left)); \
-    type x = *p; \
+    type x; \
  \
-    (*p) op t; \
+    if (n->e_bsize) { \
+	type y = x = get_field(p, n->e_boffset, n->e_bsize); \
+	y = y op t; \
+	set_field(p, n->e_boffset, n->e_bsize, y); \
+    } else { \
+	x = *p; \
+	(*p) op t; \
+    } \
     return x; \
 }
 
