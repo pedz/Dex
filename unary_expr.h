@@ -1,4 +1,7 @@
-/* @(#)unary_expr.h	1.3 */
+/* @(#)unary_expr.h	1.4 */
+
+#ifndef __UNARY_EXPR_H
+#define __UNARY_EXPR_H
 
 /* simple constant leaf nodes */
 
@@ -10,6 +13,8 @@ short s_leaf(expr *n);
 unsigned short us_leaf(expr *n);
 long l_leaf(expr *n);
 unsigned long ul_leaf(expr *n);
+long long ll_leaf(expr *n);
+unsigned long long ull_leaf(expr *n);
 float f_leaf(expr *n);
 double d_leaf(expr *n);
 st st_leaf(expr *n);
@@ -23,6 +28,8 @@ short *s_gaddr(expr *n);
 unsigned short *us_gaddr(expr *n);
 long *l_gaddr(expr *n);
 unsigned long *ul_gaddr(expr *n);
+long long *ll_gaddr(expr *n);
+unsigned long long *ull_gaddr(expr *n);
 float *f_gaddr(expr *n);
 double *d_gaddr(expr *n);
 st *st_gaddr(expr *n);
@@ -36,6 +43,8 @@ short *s_laddr(expr *n);
 unsigned short *us_laddr(expr *n);
 long *l_laddr(expr *n);
 unsigned long *ul_laddr(expr *n);
+long long *ll_laddr(expr *n);
+unsigned long long *ull_laddr(expr *n);
 float *f_laddr(expr *n);
 double *d_laddr(expr *n);
 st *st_laddr(expr *n);
@@ -49,6 +58,8 @@ short s_l2p(expr *n);
 unsigned short us_l2p(expr *n);
 long l_l2p(expr *n);
 unsigned long ul_l2p(expr *n);
+long long ll_l2p(expr *n);
+unsigned long long ull_l2p(expr *n);
 float f_l2p(expr *n);
 double d_l2p(expr *n);
 st st_l2p(expr *n);
@@ -62,35 +73,11 @@ short s_null(expr *n);
 unsigned short us_null(expr *n);
 long l_null(expr *n);
 unsigned long ul_null(expr *n);
+long long ll_null(expr *n);
+unsigned long long ull_null(expr *n);
 float f_null(expr *n);
 double d_null(expr *n);
 st st_null(expr *n);
-
-#ifdef Not_Used
-signed char *sc_v2f(expr *n);
-unsigned char *uc_v2f(expr *n);
-int *i_v2f(expr *n);
-unsigned int *ui_v2f(expr *n);
-short *s_v2f(expr *n);
-unsigned short *us_v2f(expr *n);
-long *l_v2f(expr *n);
-unsigned long *ul_v2f(expr *n);
-float *f_v2f(expr *n);
-double *d_v2f(expr *n);
-st *st_v2f(expr *n);
-
-signed char *sc_f2v(expr *n);
-unsigned char *uc_f2v(expr *n);
-int *i_f2v(expr *n);
-unsigned int *ui_f2v(expr *n);
-short *s_f2v(expr *n);
-unsigned short *us_f2v(expr *n);
-long *l_f2v(expr *n);
-unsigned long *ul_f2v(expr *n);
-float *f_f2v(expr *n);
-double *d_f2v(expr *n);
-st *st_f2v(expr *n);
-#endif
 
 /* Unary math operators */
 int sc_lnot(expr *n);
@@ -117,7 +104,15 @@ long l_umin(expr *n);
 int ul_lnot(expr *n);
 unsigned long ul_bnot(expr *n);
 unsigned long ul_umin(expr *n);
+int ll_lnot(expr *n);
+long long ll_bnot(expr *n);
+long long ll_umin(expr *n);
+int ull_lnot(expr *n);
+unsigned long long ull_bnot(expr *n);
+unsigned long long ull_umin(expr *n);
 int f_lnot(expr *n);
 float f_umin(expr *n);
 int d_lnot(expr *n);
 double d_umin(expr *n);
+
+#endif /* __UNARY_EXPR_H */
