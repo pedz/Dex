@@ -1,4 +1,4 @@
-# @(#)Makefile	1.2
+# @(#)Makefile	1.3
 #
 # COMPONENT_NAME:
 #
@@ -31,8 +31,11 @@ LDFLAGS		= -bloadmap:dex.map
 OFILES		= \
 	asgn_expr.o \
 	base_expr.o \
+	binary_expr.o \
 	builtins.o \
+	cast_expr.o \
 	dex.o \
+	disasm.o \
 	dmap.o \
 	fcall.o \
 	gram.o \
@@ -43,7 +46,8 @@ OFILES		= \
 	stmt.o \
 	sym.o \
 	tree.o \
-	tree_dump.o
+	tree_dump.o \
+	unary_expr.o
 
 asgn_expr.o : asgn_expr.c
 asgn_expr.c : pre-asgn_expr.c
