@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.4";
+static char sccs_id[] = "@(#)scan.l	1.5";
 
 #define yylval GRAMlval
 
@@ -319,6 +319,9 @@ char *str_ptr;
     BEGIN string;
 }
 
+<normal>"\n# "[0-9]+" \"".*"\"\n" {
+}
+
 <normal>" "|"\t"|"\n" ;
 
 <normal>. {
@@ -341,11 +344,73 @@ struct fs {
 static struct fs *file_stack;
 char *yyfilename;
 
+#if USE_READLINE
+#include <readline/history.h>
+#include <readline/readline.h>
+
+static char *do_fgets(FILE *in)
+{
+    static char *last;
+
+    for ( ; ; ) {
+	if (last)
+	    free(last);
+	last = 0;
+	last = readline("> ");
+	if (last && *last) {
+	    int rc;
+	    char *expand;
+	    
+	    using_history();
+	    rc = history_expand(last, &expand);
+	    free(last);
+	    last = expand;
+	    if (rc)
+		printf("%s\n", last);
+	    if (rc < 0)
+		continue;
+	    if (!strcmp(last, "history")) {
+		HIST_ENTRY **list = history_list();
+		int i;
+
+		if (list)
+		    for (i = 0; list[i]; ++i)
+			printf("%d: %s\n", i + history_base, list[i]->line);
+		continue;
+	    }
+	    add_history(last);
+	}
+	break;
+    }
+    return last;
+}
+#else
+static char *do_fgets(FILE *in)
+{
+    static char buf[1024];
+
+    printf("> ");
+    fflush(stdout);
+    return fgets(buf, sizeof(buf), in);
+}
+#endif
+
+static int do_getc(FILE *in)
+{
+    static char *ptr;
+    int c;
+
+    while (!ptr || !*ptr)
+	if (!(ptr = do_fgets(in)))
+	    return EOF;
+    return *ptr++;
+}
+
 static int getc(FILE *in)
 {
     int ret;
 
-    while ((ret = fgetc(yyin)) == EOF) {
+    while ((ret = isatty(fileno(yyin)) ? do_getc(yyin) : fgetc(yyin)) == EOF) {
 	struct fs *f;
 
 	if (!(f = file_stack))
