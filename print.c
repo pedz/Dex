@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)print.c	1.2";
+static char sccs_id[] = "@(#)print.c	1.3";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -31,7 +31,6 @@ void print_name(char *name, typeptr tptr)
     char buf[32];
     typeptr ltptr;
     char *lname;
-    char *u_or_s;
 
     if (!tptr)
 	printf("%s", name);
@@ -39,11 +38,15 @@ void print_name(char *name, typeptr tptr)
     switch (tptr->t_type) {
     case STRUCT_TYPE:
     case UNION_TYPE:
-	u_or_s = tptr->t_type == STRUCT_TYPE ? "struct" : "union";
-	if (tptr->t_name)
-	    printf("%s %s %s", u_or_s, tptr->t_name, name);
-	else
-	    printf("%s %s", u_or_s, name);
+	if (tptr->t_typedef) {
+	    printf("%s %s", tptr->t_name, name);
+	} else {
+	    char *u_or_s = tptr->t_type == STRUCT_TYPE ? "struct" : "union";
+	    if (tptr->t_name)
+		printf("%s %s %s", u_or_s, tptr->t_name, name);
+	    else
+		printf("%s %s", u_or_s, name);
+	}
 	break;
 
     case PTR_TYPE:
@@ -363,8 +366,9 @@ void print_sym(symptr s)
 	printf("(%s:%d), addr=%08x, size=%d, nesting=%d\n",
 	       "bad", s->s_base, s->s_offset, s->s_size, s->s_nesting);
     else
-	printf("(%s), addr=%08x, size=%d, nesting=%d\n",
-	       type_2_string[s->s_base], s->s_offset, s->s_size, s->s_nesting);
+	printf("(%s), addr=%0*lx, size=%d, nesting=%d\n",
+	       type_2_string[s->s_base], sizeof(v_ptr)*2, s->s_offset, s->s_size,
+	       s->s_nesting);
 }
 
 void _dump_symtable(ns *nspace, symtabptr old_sytp)
