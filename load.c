@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.4";
+static char sccs_id[] = "@(#)load.c	1.5";
 
 #include <a.out.h>
 #include <string.h>
@@ -129,10 +129,10 @@ void load(char *path, int text_base, int data_base)
 	close(fd);
 	return;
     }
-    m = mmap((void *)0x40000000, sbuf.st_size, PROT_READ,
+    m = mmap(LOAD_BASE, sbuf.st_size, PROT_READ,
 	     MAP_FILE|MAP_VARIABLE, fd, 0);
     if ((int)m == -1) {
-	perror("mmap");
+	perror("mmap3");
 	close(fd);
 	return;
     }
@@ -172,12 +172,15 @@ void load(char *path, int text_base, int data_base)
 		    int size = sizeof(LINENO) * cnt;
 		    caddr_t from, to;
 
-		    load_ns->ns_lines = smalloc(size, __FILE__, __LINE__);
+		    load_ns->ns_lines = smalloc(size);
 		    from = m + shdr->s_lnnoptr;
 		    to = (caddr_t)load_ns->ns_lines;
 		    bzero(to, size);
 		    while (--cnt >= 0) {
+			struct lineno *l = (struct lineno *)to;
+
 			bcopy(from, to, LINESZ);
+			l->l_addr.l_paddr += text_base;
 			from += LINESZ;
 			to += sizeof(LINENO);
 		    }
@@ -386,29 +389,6 @@ void load(char *path, int text_base, int data_base)
 	}
     }
     
-    /* Line number information */
-    if (text_base != -1 && fhdr->f_nscns) {
-	struct scnhdr *shdr =
-	    (struct scnhdr *)(m + sizeof(struct filehdr) + fhdr->f_opthdr);
-	int i;
-
-	for (i = 0; i < fhdr->f_nscns; ++i, ++shdr) {
-	    if (shdr->s_lnnoptr) {
-		int j;
-		caddr_t base = m + shdr->s_lnnoptr;
-		
-		for (j = 0; j < shdr->s_nlnno; ++j, base += LINESZ) {
-		    struct lineno *l = (struct lineno *)base;
-		    
-		    if (l->l_lnno)
-			/* This is a line number */;
-		    else
-			/* This is a symbol index */;
-		}
-	    }
-	}
-    }
-    
     /* Symbol table */
     if (fhdr->f_symptr) {
 	caddr_t base = m + fhdr->f_symptr;
@@ -566,6 +546,7 @@ void load(char *path, int text_base, int data_base)
 					    &func_int_type);
 		    break;
 
+#ifdef XMC_TD
 		    /*
 		     * A TC SD entry may point to a TD CM or a TD SD
 		     * entry which appears to be the actual data.
@@ -575,6 +556,7 @@ void load(char *path, int text_base, int data_base)
 		    suffix = 0;
 		    thistype = get_int(cur_block, &int_type);
 		    break;
+#endif
 
 		case MAP(XMC_RW, XTY_CM): /* BSS */
 		    suffix = 0;
@@ -601,6 +583,14 @@ void load(char *path, int text_base, int data_base)
 		    
 		case MAP(XMC_BS, XTY_CM):
 		    continue;
+
+		case MAP(XMC_SV, XTY_SD): /* Supervisor function */
+		    suffix = "$sv";
+		    thistype = get_ptr_func_int(load_ns,
+						&int_type,
+						&func_int_type,
+						&ptr_func_int_type);
+		    break;
 
 		default:
 		    fprintf(stderr, "Unknown class/type pair of %d/%d for %s\n",
@@ -751,7 +741,10 @@ void load(char *path, int text_base, int data_base)
 		    union auxent *a1 = (union auxent *)base;
 
 		    if (s->n_scnum != ohdr->o_sntext)
-			fprintf(stderr, "Strange symentry %d\n", sym_index);
+			break;
+		    /*
+		     * fprintf(stderr, "Strange symentry %d\n", sym_index);
+		     */
 		    /*
 		     * Another hack... frequently there are two aux
 		     * entries even if there is no debug info so we
@@ -842,12 +835,19 @@ void load(char *path, int text_base, int data_base)
 	    case C_ESTAT:		/* 0 */
 		break;
 
+	    case C_LSYM:		/* offset in stack */
+	    case C_PSYM:		/* offset in stack */
+		/*
+		 * The code below actually copes with this but it
+		 * turns out that these clutter the symbol table and
+		 * make life harder instead of easier.
+		 */
+		break;
+
 	    case C_DECL:		/* undefined */
 	    case C_GSYM:		/* undefined */
 	    case C_FUN:			/* offset in csect */
 	    case C_STSYM:		/* offset in csect */
-	    case C_LSYM:		/* offset in stack */
-	    case C_PSYM:		/* offset in stack */
 		if (need_load) {
 		    load_base_types(cur_file);
 		    need_load = 0;
@@ -878,8 +878,7 @@ void load(char *path, int text_base, int data_base)
 		    dbx_sptr->s_global = 1;
 		} else if (s->n_sclass == C_STSYM) {
 		    if (static_forward_reference) {
-			struct for_ref *temp = smalloc(sizeof(*temp),
-						       __FILE__, __LINE__);
+			struct for_ref *temp = smalloc(sizeof(*temp));
 			struct for_ref **pp, *p;
 
 			temp->fr_next = 0;
@@ -917,6 +916,10 @@ void load(char *path, int text_base, int data_base)
 		    dbx_sptr->s_offset = offset;
 		    dbx_sptr->s_defined = 1;
 		}
+		break;
+
+	    case C_BINCL:		/* Don't care about include files */
+	    case C_EINCL:
 		break;
 
 	    default:
