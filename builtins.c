@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.9";
+static char sccs_id[] = "@(#)builtins.c	1.10";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -324,11 +324,7 @@ static void do_int_vars(void)
 	int *st_func;
     };
     struct table tab[] = {
-#ifdef _AIX41
 	{ "thread_slot",  &thread_slot },
-#else
-	{ "proc_slot",  &proc_slot },
-#endif
 	{ "selected_cpu", &selected_cpu },
 	{ "fromdump",     &fromdump }
     };
@@ -350,7 +346,6 @@ static void do_int_vars(void)
 	s->s_global = 1;
 	s->s_size = sizeof(int);
 	s->s_offset = f2v(tp->st_func);
-	printf("%s %16lx\n", tp->st_name, tp->st_func);
     }
 }
 
