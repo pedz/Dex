@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)fcall.c	1.5";
+static char sccs_id[] = "@(#)fcall.c	1.6";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -21,6 +21,98 @@ static void mark_stack(void)
     push((v_ptr)&frame_ptr, sizeof(frame_ptr));
     frame_ptr = stack_ptr;
 }
+
+#if __64BIT__
+
+static void process_args(cnode_list *l)
+{
+    all result;
+    cnode *c;
+    expr *e;
+    v_ptr v;
+    int size;
+
+    while (l) {
+	c = &l->cl_cnode;
+	e = c->c_expr;
+	switch (c->c_base) {
+	case schar_type:
+	    result.l = sc_val(e);
+	    v = &result.l;
+	    size = sizeof(result.l);
+	    break ;
+
+	case uchar_type:
+	    result.ul = uc_val(e);
+	    v = &result.ul;
+	    size = sizeof(result.ul);
+	    break ;
+
+	case int_type:
+	    result.l = i_val(e);
+	    v = &result.l;
+	    size = sizeof(result.l);
+	    break;
+
+	case uint_type:
+	    result.ul = ui_val(e);
+	    v = &result.ul;
+	    size = sizeof(result.ul);
+	    break ;
+
+	case short_type:
+	    result.l = s_val(e);
+	    v = &result.l;
+	    size = sizeof(result.l);
+	    break ;
+
+	case ushort_type:
+	    result.ul = us_val(e);
+	    v = &result.ul;
+	    size = sizeof(result.ul);
+	    break ;
+
+	case long_type:
+	    result.l = l_val(e);
+	    v = &result.l;
+	    size = sizeof(result.l);
+	    break ;
+
+	case ulong_type:
+	    result.ul = ul_val(e);
+	    v = &result.ul;
+	    size = sizeof(result.ul);
+	    break ;
+
+	case float_type:
+	    result.d = f_val(e);
+	    v = &result.d;
+	    size = sizeof(result.d);
+	    break ;
+
+	case double_type:
+	    result.d = d_val(e);
+	    v = &result.d;
+	    size = sizeof(result.d);
+	    break ;
+
+	case struct_type:
+	    result.st = st_val(e);
+	    v = (v_ptr)result.st;
+	    size = e->e_size;
+	    break;
+
+	case void_type:
+	default:
+	    fprintf(stderr, "bogus type dude!!!\n");
+	    break;
+	}
+	push(v, size);
+	l = l->cl_next;
+    }
+}
+
+#else
 
 static void process_args(cnode_list *l)
 {
@@ -109,6 +201,7 @@ static void process_args(cnode_list *l)
 	l = l->cl_next;
     }
 }
+#endif
 
 static void release_stack(void)
 {
