@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.2";
+static char sccs_id[] = "@(#)scan.l	1.3";
 
 #define yylval GRAMlval
 
@@ -36,7 +36,6 @@ struct keywords {
     { "goto", GOTO },
     { "if", IF },
     { "int", INT },
-    { "load", LOAD },
     { "long", LONG },
     { "print", PRINT },			/* Extension */
     { "register", REGISTER },
@@ -67,7 +66,7 @@ char *str_ptr;
 
 %}
 
-%start normal string
+%start normal string comment
 
 %%
 <normal>[$a-zA-Z_][$a-zA-Z0-9_]* {
@@ -76,6 +75,7 @@ char *str_ptr;
 
     for (k = keywords; k->name; ++k)
 	if (!strcmp(k->name, yytext)) {
+	    yylval.val = k->token;
 	    return k->token;
 	}
     if (t = name2typedef_all(yytext)) { /* look for typedefs */
@@ -249,6 +249,20 @@ char *str_ptr;
 <normal>"|=" {
     yylval.val = OREQUAL;
     return OREQUAL;
+}
+
+<normal>"/*" {
+    BEGIN comment;
+}
+
+<comment>. {
+}
+
+<comment>\n {
+}
+
+<comment>"*/" {
+    BEGIN normal;
 }
 
 <string>"\"" {
