@@ -1,5 +1,5 @@
 
-/* @(#)asgn_expr.h	1.2 */
+/* @(#)asgn_expr.h	1.3 */
 
 signed char sc_asgn(expr *n);
 unsigned char uc_asgn(expr *n);
