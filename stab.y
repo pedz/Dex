@@ -1,6 +1,6 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.6";
+static char sccs_id[] = "@(#)stab.y	1.7";
 
 #include <strings.h>
 #include <stdlib.h>
@@ -10,7 +10,7 @@ static char sccs_id[] = "@(#)stab.y	1.6";
 static char buf[128];			/* buf for names and stuff */
 static char *nextp = buf;		/* pointer into aclbuf */
 
-static void bogus();
+static void bogus(int n);
 
 /*
  * The following defines attempt to redefine everything that yacc
@@ -51,7 +51,7 @@ static char *parse_position;
 static char small_buf[32];
 static yylex();
 static yyerror(char *s);
-static void bogus();
+static void bogus(int n);
 int parse_stab(ns *ns, char *s, int len, symptr *s_out);
 
 %}
@@ -71,12 +71,12 @@ int parse_stab(ns *ns, char *s, int len, symptr *s_out);
 %type <attr> typeattrs typeattrlist typeattr
 %type <eptr> enumspec enumlist enum
 %type <field> ofieldlist fieldlist rfieldlist field
-%type <name> NAME STRING
+%type <name> NAME STRING bound DIGITSTRING
 %type <param> tparamlist tparam
 %type <rval> REAL
 %type <type> typedef array subrange proceduretype record
 %type <type> symbol_declaration
-%type <val> INTEGER HEXINTEGER typeid bound numparams passby typenum
+%type <val> INTEGER HEXINTEGER typeid numparams passby typenum
 %type <val> ordvalue numelements numbits numbytes bitpattern bitoffset
 %type <val> variable parameter proc procedure
     
@@ -313,12 +313,12 @@ typedef
 	    typeptr t = find_type(cur_ns, $1);
 
 	    $$ = newtype(cur_ns, t->t_type);
-	    copy_type($$, t);
+	    copy_type_and_record($$, t);
 	}
     | 'b' typeid ';' numbytes		/* pascal space type */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'c' typeid ';' numbits		/* complex type typeid */
 	{
@@ -329,7 +329,7 @@ typedef
     | 'd' typeid			/* file of type typeid */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'e' enumspec opt_semi			/* enumerated type */
 	{
@@ -345,12 +345,12 @@ typedef
     | 'i' NAME ':' NAME ';'		/* import type modulename:name */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'i' NAME ':' NAME ',' typeid ';'	/* import modulename:name typeid */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'k' typeid
 	{
@@ -360,42 +360,42 @@ typedef
     | 'n' typeid ';' numbytes		/* string type with max length */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'o' NAME ';'			/* opaque type */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'o' NAME ',' typeid		/* opaque define typeid */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'w'				/* wide character */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'z' typeid ';' numbytes		/* pascal gstring type */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'C' usage				/* cobol picture */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'K' cobolfiledesc			/* cobol file descriptor */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'M' typeid ';' bound		/* multiple instance */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'N' typeid			/* pascal stringptr */
 	{
@@ -405,7 +405,7 @@ typedef
     | 'S' typeid			/* set of type typeid */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | '*' typeid			/* pointer to type typeid */
 	{
@@ -475,17 +475,17 @@ array
     | 'D' INTEGER ';' typeid		/* n-dimen. dynamic array */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'E' INTEGER ';' typeid		/* n-dimen. subarray  */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'P' typedef ';' typeid		/* packed array */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     ;
 
@@ -500,20 +500,20 @@ subrange
     ;
 
 bound
-    : INTEGER				/* constant bound */
-    | boundtype INTEGER			/* var or dynamic bound */
+    : DIGITSTRING			/* constant bound */
+    | boundtype DIGITSTRING		/* var or dynamic bound */
 	{
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'J'				/* bound is indeterminable */
 	{
-	    bogus();
+	    $$ = 0;
 	}
     ;
 
 boundtype
     : 'A'				/* passed by ref on stack */
-    | 'T'				/* passed by vlue on stack */
+    | 'T'				/* passed by value on stack */
     | 'a'				/* passed by ref in register */
     | 't'				/* passed by value in register */
     ;
@@ -536,17 +536,17 @@ proceduretype
     | 'p' numparams ';' tparamlist ';'	/* proc with n params */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'R' numparams ';' namedtparamlist ';' /* pascal sub parameter */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'F' typeid ',' numparams ';' namedtparamlist ';' /* func parameter */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     ;
 
@@ -595,27 +595,27 @@ record
     | 'v' numbytes ofieldlist variantpart ';' /* variant record */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'G' redefinition 'n' numbits fieldlist ';' /* cobol group w/o conds */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'G' 'n' numbits fieldlist ';'
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'G' redefinition 'c' numbits condition fieldlist ';' /* with conds */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'G' 'c' numbits condition fieldlist ';'
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus();
+	    bogus(__LINE__);
 	}
     | 'Y' numbytes classkey OptPBV OptBaseSpecList '(' ExtendedFieldList
 	  OptNameResolutionList ';'
@@ -729,7 +729,7 @@ vrange
     | 'c' ordvalue			/* character variant */
     | 'e' typeid ',' ordvalue		/* enumeration variant */
     | 'i' INTEGER			/* integer variant */
-    | 'r' typeid ';' bound ';' bound	/* subrante variant */
+    | 'r' typeid ';' bound ';' bound	/* subrange variant */
     ;
 
 bitoffset : INTEGER ;
@@ -861,15 +861,23 @@ NAME
     ;
 
 INTEGER
+    : DIGITSTRING
+	{
+	    *nextp = 0;
+	    $$ = atoi($1);
+	}
+    ;
+
+DIGITSTRING
     : { nextp = buf; } '-' { *nextp++ = $<val>2; } digits
 	{
 	    *nextp = 0;
-	    $$ = atoi(buf);
+	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     | { nextp = buf; } digits
 	{
 	    *nextp = 0;
-	    $$ = atoi(buf);
+	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     ;
 
@@ -1058,9 +1066,11 @@ static yyerror(char *s)			/* actually STABerror */
 	    parse_line, parse_position - parse_line);
 }
 
-static void bogus()
+static void bogus(int n)
 {
-    yyerror("unimplmented construct");
+    char buf[64];
+    sprintf(buf, "unimplmented construct from line %d of stab.y", n);
+    yyerror(buf);
     exit(1);
 }
 
