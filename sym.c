@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.6";
+static char sccs_id[] = "@(#)sym.c	1.7";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,33 +75,52 @@ typeptr name2typedef_all(char *name)
     return 0;
 }
 
+/*
+ * A special patch was added in the case of structures.  If the first
+ * thing we find is a structure but it has zero size, we keep
+ * searching.  If we do not find anything else, we return what we
+ * found at first.  But if we find something more interesting, like a
+ * structure of non-zero size, we return that.  We have to do this for
+ * name2namedef as well as name2namedef_all.
+ */
 typeptr name2namedef(ns *nspace, char *name)
 {
     typeptr ret;
     typetabptr ttp;
+    typeptr struct_temp = 0;
 
     if (ttp = nspace->ns_namedefs)
 	for (ret = ttp->tt_hash[hash(name)]; ret; ret = ret->t_hash)
 	    if (!strcmp(ret->t_name, name))
-		return ret;
+		if (ret->t_type == STRUCT_TYPE && ret->t_val.val_s.s_size == 0)
+		    struct_temp = ret;
+		else
+		    return ret;
 
     for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
 	if (ret = name2namedef(nspace, name))
-	    return ret;
+	    if (ret->t_type == STRUCT_TYPE && ret->t_val.val_s.s_size == 0)
+		struct_temp = ret;
+	    else
+		return ret;
 
-    return 0;
+    return struct_temp;
 }
 
 typeptr name2namedef_all(char *name)
 {
     ns *nspace;
     typeptr ret;
+    typeptr struct_temp = 0;
     
     for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	if (ret = name2namedef(nspace, name))
-	    return ret;
+	    if (ret->t_type == STRUCT_TYPE && ret->t_val.val_s.s_size == 0)
+		struct_temp = ret;
+	    else
+		return ret;
 
-    return 0;
+    return struct_temp;
 }
 
 static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
