@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree_dump.c	1.2";
+static char sccs_id[] = "@(#)tree_dump.c	1.3";
 
 #include "map.h"
 #include "sym.h"
@@ -163,8 +163,21 @@ static struct tab name_tab[] = {
     E(i_xor), E_BOTH,
     E(int_dis), E_INT,
     E(int_find), E_INT,
+    E(int_instr), E_INT,
     E(int_load), E_INT,
     E(int_printf), E_INT,
+    E(int_purge_all_pages), E_INT,
+    E(int_purge_user_pages), E_INT,
+    E(int_regs_instr), E_INT,
+    E(int_sprintf), E_INT,
+    E(int_strcat), E_INT,
+    E(int_strchr), E_INT,
+    E(int_strcmp), E_INT,
+    E(int_strcpy), E_INT,
+    E(int_strncat), E_INT,
+    E(int_strncmp), E_INT,
+    E(int_strncpy), E_INT,
+    E(int_strrchr), E_INT,
     E(int_v2f), E_INT,
     E(l__d), E_LEFT,
     E(l__f), E_LEFT,
@@ -608,7 +621,7 @@ static void internal_tree_dump(expr *e)
 	internal_tree_dump(e->e_left);
 	break;
     case E_LONG:
-	printf(" %d", e->e_f);
+	printf(" %d", e->e_l);
 	break;
     case E_NULL:
 	break;
