@@ -1,9 +1,10 @@
-static char sccs_id[] = "@(#)tree.c	1.5";
+static char sccs_id[] = "@(#)tree.c	1.6";
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/signal.h>
 #include <dbxstclass.h>
+#include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
@@ -15,7 +16,6 @@ static char sccs_id[] = "@(#)tree.c	1.5";
 #include "cast_expr.h"
 #include "unary_expr.h"
 #include "inter.h"
-#include "dex.h"
 #include "fcall.h"
 
 /*
@@ -60,7 +60,14 @@ int mk_ident(cnode *result, char *s)
 	return 1;
     result->c_type = sym->s_type;
     result->c_base = sym->s_base;
-    eptr = result->c_expr = new_expr();
+    /*
+     * I think this is always the case.
+     */
+    result->c_bitfield = 0;
+    if (result->c_expr = sym->s_expr)
+	return 0;
+
+    eptr = result->c_expr = sym->s_expr = new_expr();
     eptr->e_func = op_table[sym->s_base][tok_2_op[sym->s_global ? 'g' : 'l' ]];
     eptr->e_addr = sym->s_offset;
     eptr->e_size = sym->s_size;
@@ -195,8 +202,18 @@ int mk_dot(cnode *result, cnode *c, char *s)
 	r_expr->e_right = c_expr;
 	r_expr->e_size = f->f_numbits / 8;
 	result->c_expr = r_expr;
-    } else
+    } else {
 	result->c_expr = c->c_expr;
+	/*
+	 * The result is not the size of the structure but the size of
+	 * this field -- except if it is an array in which case the
+	 * size is the size of an address.
+	 */
+	result->c_expr->e_size = 
+	  (f->f_typeptr->t_type == ARRAY_TYPE) ?
+	  sizeof(char *) :
+	  f->f_numbits / 8;
+    }
 
     /* set the result */
     result->c_const = c->c_const;
@@ -362,7 +379,7 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
 	rtype = ((right.c_type->t_type == PTR_TYPE) ?
 		 right.c_type->t_val.val_p :
 		 right.c_type->t_val.val_a.a_typeptr);
-	if (rtype != ltype) {
+	if (rtype != ltype && get_size(ltype) != get_size(rtype)) {
 	    GRAMerror("pointer subtraction of different types not legal");
 	    return 1;
 	}
@@ -734,6 +751,7 @@ void tree_init(void)
     setinttable(op_table, RSEQUAL, rsasgn, ">>=");
     setinttable(op_table, ANDEQUAL, andasgn, "&=");
     setinttable(op_table, OREQUAL, orasgn, "|=");
+    setinttable(op_table, XOREQUAL, xorasgn, "^=");
     setalltable(op_table, ',', comma, ",");
     setnumtable(op_table, '*', times, "*");
     setnumtable(op_table, '/', divide, "/");
@@ -810,6 +828,8 @@ void tree_init(void)
 
 enum expr_type base_type(typeptr t)
 {
+    large_t upper;
+
     switch (t->t_type) {
     case STRUCT_TYPE:
     case UNION_TYPE:
@@ -820,17 +840,18 @@ enum expr_type base_type(typeptr t)
 	return ulong_type;
 
     case RANGE_TYPE:
-	if (t->t_val.val_r.r_lower) {	/* non-zero lower bound => signed */
-	    if (t->t_val.val_r.r_upper < 128 )
+	upper = atolarge(t->t_val.val_r.r_upper);
+	if (!is_zero(t->t_val.val_r.r_lower)) {	/* non-zero lower bound => signed */
+	    if (upper < 128 )
 		return schar_type;
-	    else if (t->t_val.val_r.r_upper < (128 * 256))
+	    else if (upper < (128 * 256))
 		return short_type;
 	    else
 		return long_type;
 	} else {
-	    if (t->t_val.val_r.r_upper < 256)
+	    if (upper < 256)
 		return uchar_type;
-	    else if (t->t_val.val_r.r_upper < (256 * 256))
+	    else if (upper < (256 * 256))
 		return ushort_type;
 	    else
 		return ulong_type;
@@ -906,6 +927,7 @@ typeptr mk_strtype(ns *nspace, int len)
     typeptr ret;
     typeptr c_type;
     typeptr r_type;
+    char buf[32];
 
     if (ret = name2typedef(nspace, "char *"))
 	return ret;
@@ -914,7 +936,8 @@ typeptr mk_strtype(ns *nspace, int len)
     r_type = newtype(nspace, RANGE_TYPE);
     r_type->t_val.val_r.r_typeptr = 0;
     r_type->t_val.val_r.r_lower = 0;
-    r_type->t_val.val_r.r_upper = len;
+    sprintf(buf, "%d", len);
+    r_type->t_val.val_r.r_upper = store_string(nspace, buf, 0, (char *)0);
 
     ret = newtype(nspace, ARRAY_TYPE);
     ret->t_val.val_a.a_typedef = r_type;
@@ -951,11 +974,11 @@ void print_expression(cnode *c)
     eval_all(&value, c);
     numbuf[0] = 0;
     if (c->c_base == struct_type) {
-	p = v2f(value.st);
+	p = v2f_type(char *, value.st);
 	sprintf(numbuf, "0x%08x", value.st);
     } else if (c->c_type->t_type == ARRAY_TYPE ||
 	       c->c_type->t_type == PROC_TYPE)
-	p = v2f(value.ul);
+	p = v2f_type(char *, value.ul);
     else
 	p = (char *)&value;
 
