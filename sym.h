@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.7 */
+/* @(#)sym.h	1.8 */
 
 #define HASH_SIZE 128
 
@@ -15,10 +15,11 @@ struct type {
     struct attr *t_attrs;		/* attributes */
     enum stab_type t_type;		/* type of the type */
     unsigned int t_printed : 1;		/* Used in dump_types */
+    unsigned int t_typedef : 1;		/* true for typedefs */
     struct name_space *t_ns;		/* pointer to name space */
     union {
 	struct {			/* 's' struct and 'u' union */
-	    int s_size;			/* size in bytes */
+	    long s_size;		/* size in bytes */
 	    struct field *s_fields;	/* list of fields */
 	} val_s;
 	struct type *val_k;		/* contant of this type */
@@ -31,7 +32,7 @@ struct type {
 	} val_r;
 	struct {			/* float and complex */
 	    struct type *g_typeptr;	/* type of float */
-	    int g_size;			/* size in bytes */
+	    long g_size;			/* size in bytes */
 	} val_g;
 	struct e_num *val_e;		/* enumeration list */
 	int val_N;			/* pascal stringptr */
@@ -148,7 +149,7 @@ typedef struct anode {
     unsigned int a_valid_name : 1;
 } anode;
     
-typedef unsigned int stmt_index;
+typedef unsigned long stmt_index;
 #define NO_STMT ((stmt_index)0)
 
 /* user defined symbols */
