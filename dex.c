@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.3";
+static char sccs_id[] = "@(#)dex.c	1.4";
 
 #include <stdio.h>
 #include <strings.h>
@@ -16,16 +16,22 @@ char *unixname = "/unix";
 void *stack_top;
 extern int GRAMdebug;
 
-static void super_extra_hack(void)
+static void super_extra_hack(char *argv0)
 {
     char buf[10240];
     char *path;
     struct stat sbuf;
     
     /*
-     * It seems that mmap can not map the current executable so this
-     * code is not used.
+     * First check whatever argv[0] points to.
      */
+    if (!(stat(argv0, &sbuf) || !S_ISREG(sbuf.st_mode) || access(argv0, X_OK))) {
+	/* We found it */
+	load(argv0, -1, -1);
+	printf("Found myself\n");
+	return;
+    }
+
     for (path = strtok(getenv("PATH"), ":");
 	 path;
 	 path = strtok((char *)0, ":")) {
@@ -37,6 +43,7 @@ static void super_extra_hack(void)
 
 	/* We found it */
 	load(buf, -1, -1);
+	printf("Found myself\n");
 	break;
     }
     return;
@@ -49,6 +56,7 @@ main(int argc, char *argv[])
     int fd;
     int rflag;
     int addr;
+    char *argv0 = argv[0];
 
     if (progname = rindex(argv[0], '/')) /* figure out the program name */
 	++progname;
@@ -80,7 +88,7 @@ main(int argc, char *argv[])
     tree_init();
     map_init();
     extra_hack();
-    /* super_extra_hack(); */
+    super_extra_hack(argv0);
     GRAMparse();
     return 0;
 }
