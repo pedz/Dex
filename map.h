@@ -1,5 +1,5 @@
 
-/* @(#)map.h	1.2 */
+/* @(#)map.h	1.3 */
 
 #define h_base ((v_ptr)0x40000000)
 #define h_high ((v_ptr)(((long)(h_base)) + 0x10000000))
@@ -22,13 +22,13 @@ void map_init(void);
 typedef void *v_ptr;			/* A virtual address */
 typedef void *p_ptr;			/* A physical address */
 
-#define BEGIN_PROTECT() \
+#define BEGIN_PROTECT(faultp) \
 { \
     jmp_type *old; \
     jmp_buf jbuf; \
     old = map_jmp_ptr; \
     map_jmp_ptr = jbuf; \
-    if (setjmp(map_jmp_ptr) == 0) {
+    if ((*faultp = setjmp(map_jmp_ptr)) == 0) {
 
 #define EXIT_PROTECT(thunk) \
 	map_jmp_ptr = old; \
