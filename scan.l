@@ -1,0 +1,310 @@
+%{
+static char sccs_id[] = "@(#)scan.l	1.1";
+
+#define yylval GRAMlval
+
+#include <stdlib.h>
+#include <string.h>
+#include "map.h"
+#include "sym.h"
+#include "tree.h"
+#include "stmt.h"
+#include "gram.h"
+#include "inter.h"
+#include "dex.h"
+
+typedef struct keywords *keyptr;
+struct keywords {
+    char *name;
+    int token;
+} keywords[] = {
+    { "auto", AUTO },
+    { "break", BREAK },
+    { "case", CASE },
+    { "char", CHAR },
+    { "continue", CONTINUE },
+    { "default", DEFAULT },
+    { "do", DO },
+    { "double", DOUBLE },
+    { "dump", DUMP },
+    { "else", ELSE },
+    { "entry", ENTRY },
+    { "enum", ENUM },
+    { "extern", EXTERN },
+    { "float", FLOAT },
+    { "for", FOR },
+    { "goto", GOTO },
+    { "if", IF },
+    { "int", INT },
+    { "long", LONG },
+    { "nm", NM },
+    { "print", PRINT },
+    { "register", REGISTER },
+    { "return", RETURN },
+    { "short", SHORT },
+    { "signed", SIGNED },
+    { "sizeof", SIZEOF },
+    { "stab", STAB},
+    { "static", STATIC },
+    { "struct", STRUCT },
+    { "switch", SWITCH },
+    { "symdump", SYM_DUMP },
+    { "typedef", TYPEDEF },
+    { "union", UNION },
+    { "unsigned", UNSIGNED },
+    { "void", VOID },
+    { "while", WHILE },
+    0,
+};
+
+#define yylex GRAMlex
+char string_buf[1024];
+char *str_ptr;
+
+%}
+
+%start normal string
+
+%%
+<normal>[a-zA-Z_][a-zA-Z0-9_]* {
+    keyptr k;
+    typeptr t;
+
+    for (k = keywords; k->name; ++k)
+	if (!strcmp(k->name, yytext)) {
+	    return k->token;
+	}
+    if (t = name2typedef(yytext)) /* look for typedefs */
+	return TYPEDEFNAME;
+
+    yylval.str = store_name(ns_inter, yytext);
+    return IDENTIFIER;
+}
+
+<normal>[1-9][0-9]* {
+    yylval.val = atoi(yytext);
+    return ICON;
+}
+
+<normal>0[0-7]* {
+    sscanf(yytext, "%o", &yylval.val);
+    return ICON;
+}
+
+<normal>"0x"[0-9a-fA-F]+ {
+    sscanf(yytext, "%x", &yylval.val);
+    return ICON;
+}
+
+<normal>'([^\\]|\\(.|[0-7][0-7][0-7]?))' {
+    int i;
+    char *p;
+
+    if (yytext[1] = '\\')
+	switch (yytext[2]) {
+	case '0': case '1': case '2': case '3':
+	case '4': case '5': case '6': case '7':
+	    for (i = 0, p = yytext + 2; *p != '\''; ++p) {
+		i *= 8;
+		i += *p - '0';
+	    }
+	    yylval.val = i;
+	    break;
+	case '\'': yylval.val = '\''; break;
+	case '\\': yylval.val = '\\'; break;
+	case 'b': yylval.val = '\b'; break;
+	case 'f': yylval.val = '\f'; break;
+	case 'n': yylval.val = '\n'; break;
+	case 'r': yylval.val = '\r'; break;
+	case 't': yylval.val = '\t'; break;
+	default: yylval.val = yytext[2]; break;
+	}
+    else
+	yylval.val = yytext[1];
+    return ICON;
+}
+
+<normal>[0-9]+("."[0-9]*)?[Ee][-+]?[0-9]+ {
+    yylval.rval = atof(yytext);
+    return RCON;
+}
+
+<normal>[0-9]*"."[0-9]+([Ee][-+]?[0-9]+)? {
+    yylval.rval = atof(yytext);
+    return RCON;
+}
+
+<normal>([0-9]+".")|"INF"|"QNAN"|"SNAN" {
+    yylval.rval = atof(yytext);
+    return RCON;
+}
+
+<normal>"->" {
+    yylval.val = PTROP;
+    return PTROP;
+}
+
+<normal>"<<" {
+    yylval.val = LSHIFT;
+    return LSHIFT;
+}
+
+<normal>">>" {
+    yylval.val = RSHIFT;
+    return RSHIFT;
+}
+
+<normal>"++" {
+    yylval.val = INCOP;
+    return INCOP;
+}
+
+<normal>"--" {
+    yylval.val = DECOP;
+    return DECOP;
+}
+
+<normal>"<=" {
+    yylval.val = LTOREQUAL;
+    return LTOREQUAL;
+}
+
+<normal>">=" {
+    yylval.val = GTOREQUAL;
+    return GTOREQUAL;
+}
+
+<normal>"==" {
+    yylval.val = EQUALITY;
+    return EQUALITY;
+}
+
+<normal>"!=" {
+    yylval.val = NOTEQUAL;
+    return NOTEQUAL;
+}
+
+<normal>"&&" {
+    yylval.val = ANDAND;
+    return ANDAND;
+}
+
+<normal>"||" {
+    yylval.val = OROR;
+    return OROR;
+}
+
+<normal>"+=" {
+    yylval.val = PLUSEQUAL;
+    return PLUSEQUAL;
+}
+
+<normal>"-=" {
+    yylval.val = MINUSEQUAL;
+    return MINUSEQUAL;
+}
+
+<normal>"*=" {
+    yylval.val = TIMESEQUAL;
+    return TIMESEQUAL;
+}
+
+<normal>"/=" {
+    yylval.val = DIVEQUAL;
+    return DIVEQUAL;
+}
+
+<normal>"%=" {
+    yylval.val = MODEQUAL;
+    return MODEQUAL;
+}
+
+<normal>"<<=" {
+    yylval.val = LSEQUAL;
+    return LSEQUAL;
+}
+
+<normal>">>=" {
+    yylval.val = RSEQUAL;
+    return RSEQUAL;
+}
+
+<normal>"&=" {
+    yylval.val = ANDEQUAL;
+    return ANDEQUAL;
+}
+
+<normal>"^=" {
+    yylval.val = XOREQUAL;
+    return XOREQUAL;
+}
+
+<normal>"|=" {
+    yylval.val = OREQUAL;
+    return OREQUAL;
+}
+
+<string>"\"" {
+    BEGIN normal;
+    *str_ptr++ = 0;
+    yylval.str = store_name(ns_inter, string_buf);
+    return STRING;
+}
+
+<string>\\(.|[0-7][0-7][0-7]?) {
+    int i;
+    char *p;
+
+    switch (yytext[1]) {
+    case '0': case '1': case '2': case '3':
+    case '4': case '5': case '6': case '7':
+	for (i = 0, p = yytext + 1; *p; ++p) {
+	    i *= 8;
+	    i += *p - '0';
+	}
+	*str_ptr++ = i;
+	break;
+    case '"': *str_ptr++ = '"'; break;
+    case '\'': *str_ptr++ = '\''; break;
+    case '\\': *str_ptr++ = '\\'; break;
+    case 'b': *str_ptr++ = '\b'; break;
+    case 'f': *str_ptr++ = '\f'; break;
+    case 'n': *str_ptr++ = '\n'; break;
+    case 'r': *str_ptr++ = '\r'; break;
+    case 't': *str_ptr++ = '\t'; break;
+    default: *str_ptr++ = yytext[1]; break;
+    }
+}
+
+<string>"$"[A-Za-z0-9_]+ {
+    char *t = getenv(yytext + 1);
+    int len;
+
+    if (!t)
+	t = yytext;
+    len = strlen(t);
+    strcpy(str_ptr, t);
+    str_ptr += len;
+}
+
+<string>. {
+    *str_ptr++ = yytext[0];
+}
+
+<normal>"\"" {
+    str_ptr = string_buf;
+    BEGIN string;
+}
+
+<normal>" "|"\t"|"\n" ;
+
+<normal>. {
+    yylval.val = yytext[0];
+    return yytext[0];
+}
+
+.|"\n" {
+    BEGIN normal;
+    unput(yytext[0]);
+}
+%%
