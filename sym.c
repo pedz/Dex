@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.10";
+static char sccs_id[] = "@(#)sym.c	1.11";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +7,10 @@ static char sccs_id[] = "@(#)sym.c	1.10";
 #include "map.h"
 #include "sym.h"
 #include "dex.h"
+#include "stab_pre.h"
+#include "print.h"
+
+#define DEBUG_BIT SYM_C_BIT
 
 static ns *ns_head;
 static ns *ns_tail;
@@ -111,12 +115,13 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
     typeptr old_type;
 
     if (typeid >= (old_limit = *limit)) {
-	*limit = typeid + 100;
+	size_t old = old_limit * sizeof(typeptr);
+	size_t new = (*limit = typeid + 100) * sizeof(typeptr);
+
 	if (*ptr)
-	    *ptr = srealloc(*ptr, *limit * sizeof(typeptr));
+	    *ptr = srealloc(*ptr, new, old);
 	else
-	    *ptr = smalloc(*limit * sizeof(typeptr));
-	bzero(*ptr + old_limit, sizeof(typeptr) * (*limit - old_limit));
+	    *ptr = smalloc(new);
     }
 
     if (old_type = (*ptr)[typeid]) {
@@ -124,8 +129,8 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
 	struct type *old_hash = old_type->t_hash;
 
 	if (t->t_name) {		/* if this has a name then we freak */
-	    printf("Replacing %s name of %s:%d\n", t->t_name, t->t_ns->ns_name,
-		   typeid);
+	    fprintf(stderr, "Replacing %s name of %s:%d\n",
+		    t->t_name, t->t_ns->ns_name, typeid);
 	    exit(1);
 	}
 
@@ -180,12 +185,10 @@ typeptr insert_type(int typeid, typeptr t)
      */
     if (typeid == 0)
 	return t;
-    if (!(tid = nspace->ns_tids)) {
+    if (!(tid = nspace->ns_tids))
 	tid = nspace->ns_tids = new(struct typeid_table);
-	bzero(nspace->ns_tids, sizeof(*tid));
-    }
     if (typeid < 0)
-	return do_insert(-typeid, t, &tid->tid_lower_limit, &tid->tid_type_neg);
+	return do_insert(-typeid, t, &tid->tid_lower_limit,&tid->tid_type_neg);
     else
 	return do_insert(typeid, t, &tid->tid_upper_limit, &tid->tid_type_pos);
 }
@@ -281,10 +284,8 @@ void add_typedef(typeptr t, char *name)
     }
 
     nspace = t->t_ns;
-    if (!(ttp = nspace->ns_typedefs)) {
+    if (!(ttp = nspace->ns_typedefs))
 	ttp = nspace->ns_typedefs = new(struct type_table);
-	bzero(nspace->ns_typedefs, sizeof(*ttp));
-    }
     t->t_hash = ttp->tt_hash[hash_val];
     ttp->tt_hash[hash_val] = t;
     t->t_name = name;
@@ -309,10 +310,8 @@ void add_namedef(typeptr t, char *name)
     }
 
     nspace = t->t_ns;
-    if (!(ttp = nspace->ns_namedefs)) {
+    if (!(ttp = nspace->ns_namedefs))
 	ttp = nspace->ns_namedefs = new(struct type_table);
-	bzero(nspace->ns_namedefs, sizeof(*ttp));
-    }
     t->t_hash = ttp->tt_hash[hash_val];
     ttp->tt_hash[hash_val] = t;
     t->t_name = name;
@@ -324,7 +323,6 @@ typeptr newtype(ns *nspace, enum stab_type t)
 {
     typeptr ret = new(struct type);
 
-    bzero(ret, sizeof(*ret));
     ret->t_type = t;
     ret->t_ns = nspace;
     return ret;
@@ -353,7 +351,6 @@ typeptr find_type(ns *nspace, int typeid)
      */
     if (!ret) {
 	ret = new(struct type);
-	bzero(ret, sizeof(*ret));
 	ret->t_ns = nspace;
 	insert_type(typeid, ret);
     }
@@ -422,10 +419,8 @@ char *store_string(ns *nspace, char *name, int len, char *suffix)
     if (len && name_len > len)
 	name_len = len;
 
-    if (!stp) {
+    if (!stp)
 	stp = nspace->ns_strings = new(struct string_table);
-	bzero(nspace->ns_strings, sizeof(*stp));
-    }
     for (st = stp->st_hash[hash_val]; st; st = st->str_hash)
 	if (!strncmp(name, st->str_name, name_len) &&
 	    (suffix ?
@@ -528,7 +523,6 @@ ns *ns_create(ns *nspace, char *name)
 {
     ns *ret = new(ns);
 
-    bzero(ret, sizeof(*ret));
     ret->ns_name = name;
     if (ret->ns_parent = nspace) {
 	if (nspace->ns_ltail)
@@ -627,6 +621,21 @@ symptr name2userdef_all(char *name)
     return ret_not_typed;
 }
 
+void xxx(ns *nspace, int indent)
+{
+    printf("%*s%s\n", indent, "", nspace->ns_name);
+    for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
+	xxx(nspace, indent + 2);
+}
+
+void view_namespaces(void)
+{
+    ns *nspace;
+
+    for (nspace = ns_head; nspace; nspace = nspace->ns_next)
+	xxx(nspace, 0);
+}
+
 /*
  * Find the user defined symbol with the highest address which is less
  * than or equal to addr.
@@ -694,10 +703,8 @@ symptr enter_sym(ns *nspace, char *name, int force)
     symtabptr sytp;
     symptr ret;
     
-    if (!(sytp = nspace->ns_syms)) {
+    if (!(sytp = nspace->ns_syms))
 	sytp = nspace->ns_syms = new(struct sym_table);
-	bzero(nspace->ns_syms, sizeof(*sytp));
-    }
     
     /*
      * In theory, we can just compare the name pointers because of the
@@ -705,12 +712,15 @@ symptr enter_sym(ns *nspace, char *name, int force)
      */
     if (!force)
 	for (ret = sytp->sy_hash[hash_val]; ret; ret = ret->s_hash)
-	    if (ret->s_name == name)
+	    if (ret->s_name == name) {
+		DEBUG_PRINTF(("enter_sym: found %s\n", name));
 		return ret;
+	    }
 
+    DEBUG_PRINTF(("enter_sym: new %s\n", name));
     ++sytp->sy_count;
+    sytp->sy_addr_sorted = 0;
     ret = new(struct sym);
-    bzero(ret, sizeof(*ret));
     ret->s_ns = nspace;
     ret->s_hash = sytp->sy_hash[hash_val];
     sytp->sy_hash[hash_val] = ret;
@@ -722,8 +732,13 @@ void dump_symtable(void)
 {
     ns *nspace;
 
-    for (nspace = ns_head; nspace; nspace = nspace->ns_next)
+    for (nspace = ns_head; nspace; nspace = nspace->ns_next) {
+#if 1
 	_dump_symtable(nspace, (symtabptr)0);
+#else
+	xxx(nspace, 0);
+#endif
+    }
 }
 
 void dump_types(void)
