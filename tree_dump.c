@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree_dump.c	1.6";
+static char sccs_id[] = "@(#)tree_dump.c	1.7";
 
 #include "dex.h"
 #include "map.h"
