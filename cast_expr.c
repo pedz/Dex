@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)cast_expr.c	1.1";
+static char sccs_id[] = "@(#)cast_expr.c	1.2";
 
 #include <stdio.h>
 #include "map.h"
