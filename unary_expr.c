@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)unary_expr.c	1.3";
+static char sccs_id[] = "@(#)unary_expr.c	1.4";
 
 #include <stdio.h>
 #include "dex.h"
@@ -7,6 +7,7 @@ static char sccs_id[] = "@(#)unary_expr.c	1.3";
 #include "tree.h"
 #include "unary_expr.h"
 #include "base_expr.h"
+#include "fcall.h"
 
 /* simple constant leaf nodes */
 
@@ -79,7 +80,6 @@ st *st_gaddr(expr *n)
 }
 
 /* local var address nodes */
-extern int frame_ptr;
 
 signed char *sc_laddr(expr *n)
 {
@@ -242,6 +242,7 @@ float f_null(expr *n) { return 0; }
 double d_null(expr *n) { return 0; }
 st st_null(expr *n) { static st s; return s; }
 
+#ifdef Not_Used
 signed char *sc_v2f(expr *n)
 {
     return v2f_type(signed char *, sc_addr(n->e_left));
@@ -351,6 +352,7 @@ st *st_f2v(expr *n)
 {
     return f2v_type(st *, st_addr(n->e_left));
 }
+#endif
 
 int sc_lnot(expr *n) { return !sc_val(n->e_left); }
 signed char sc_bnot(expr *n) { return ~sc_val(n->e_left); }
