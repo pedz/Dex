@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.2";
+static char sccs_id[] = "@(#)map.c	1.3";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -39,9 +39,11 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
     v_ptr vaddr = f2v(paddr);
 
-    if (++count > 5) {
-	fprintf(stderr, "Recursive SIGSEGV padd: %08x vaddr: %08x\n",
-		paddr, vaddr);
+    if (count >= 5)
+	exit(1);
+    if (++count >= 5) {
+	fprintf(stderr, "Recursive SIGSEGV iar: %08x padd: %08x vaddr: %08x\n",
+		scp->sc_jmpbuf.jmp_context.iar, paddr, vaddr);
 	exit(1);
     }
 
@@ -75,9 +77,8 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 	--count;
 	longjmp(map_jmp_ptr, vaddr);
     }
-    printf("\nCan not map: iar=%08x paddr=%08x vaddr=%08x\n",
-	   scp->sc_jmpbuf.jmp_context.iar, paddr, vaddr);
-    dump_symtable();
+    fprintf(stderr, "\nCan not map: iar=%08x paddr=%08x vaddr=%08x\n",
+	    scp->sc_jmpbuf.jmp_context.iar, paddr, vaddr);
     exit(1);
 }
 
