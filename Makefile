@@ -1,4 +1,4 @@
-# @(#)Makefile	1.4
+# @(#)Makefile	1.5
 #
 # COMPONENT_NAME:
 #
@@ -66,7 +66,7 @@ asgn_expr.c : pre-asgn_expr.c
 
 scan.o : gram.h
 gram.o : gram.c
-gram.h : gram.y
+stab.o : stab.c
 tree.o : gram.h
 
 .include <${RULES_MK}>
