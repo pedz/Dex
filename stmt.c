@@ -1,9 +1,5 @@
-static char sccs_id[] = "@(#)stmt.c	1.1";
+static char sccs_id[] = "@(#)stmt.c	1.2";
 
-/*
- * TODO's
- * #### switch statements
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include "map.h"
@@ -28,34 +24,34 @@ static char sccs_id[] = "@(#)stmt.c	1.1";
 struct nesting {
     struct nesting *n_next;
     struct link *n_link;
-    stmt n_stmt;
+    stmt_index n_stmt;
 };
 struct link {
     struct link *l_list;		/* list of stmts to fix */
-    stmt l_stmt;			/* statement to fix */
+    stmt_index l_stmt;			/* statement to fix */
 };
 static struct nesting *breaks;
 static struct nesting *conts;
 
 struct goto_ref {			/* used for "goto dog;" */
     struct goto_ref *gr_next;
-    stmt gr_stmt;
+    stmt_index gr_stmt;
     char *gr_id;
 };
 struct goto_ref *goto_refs;
 
 struct goto_def {			/* used for "dog: i++;" */
     struct goto_def *gd_next;
-    stmt gd_stmt;
+    stmt_index gd_stmt;
     char *gd_id;
 };
 struct goto_def *goto_defs;
     
 struct stmt *statements;
-static stmt current_stmt = 1;
-static stmt current_max;
+static stmt_index current_stmt = 1;
+static stmt_index current_max;
 
-static stmt next_stmt(enum stmt_type t)
+static stmt_index next_stmt(enum stmt_type t)
 {
 
     if (!statements)
@@ -87,7 +83,7 @@ static struct link *new_link(void)
     return ret;
 }
 
-expr *execute_statement(stmt s)
+expr *execute_statement(stmt_index s)
 {
     struct stmt *sp;
     expr *e;
@@ -145,38 +141,38 @@ expr *execute_statement(stmt s)
 	}
 }
 
-stmt get_current_stmt(void)
+stmt_index get_current_stmt(void)
 {
     return current_stmt;
 }
 
-stmt mk_expr_stmt(expr *e)
+stmt_index mk_expr_stmt(expr *e)
 {
-    stmt ret = next_stmt(EXPR_STMT);
+    stmt_index ret = next_stmt(EXPR_STMT);
 
     statements[ret].stmt_expr = e;
     return ret;
 }
 
-stmt mk_switch_stmt(expr *e)
+stmt_index mk_switch_stmt(expr *e)
 {
-    stmt ret = next_stmt(SWITCH_STMT);
+    stmt_index ret = next_stmt(SWITCH_STMT);
 
     statements[ret].stmt_expr = e;
     return ret;
 }
 
-stmt mk_goto_stmt(stmt s)
+stmt_index mk_goto_stmt(stmt_index s)
 {
-    stmt ret = next_stmt(GOTO_STMT);
+    stmt_index ret = next_stmt(GOTO_STMT);
 
     statements[ret].stmt_stmt = (s == NO_STMT) ? current_stmt : s;
     return ret;
 }
 
-stmt mk_br_true(expr *e, stmt s)
+stmt_index mk_br_true(expr *e, stmt_index s)
 {
-    stmt ret = next_stmt(BR_TRUE);
+    stmt_index ret = next_stmt(BR_TRUE);
     struct stmt *sp = statements + ret;
 
     sp->stmt_expr = e;
@@ -184,9 +180,9 @@ stmt mk_br_true(expr *e, stmt s)
     return ret;
 }
 
-stmt mk_br_false(expr *e, stmt s)
+stmt_index mk_br_false(expr *e, stmt_index s)
 {
-    stmt ret = next_stmt(BR_FALSE);
+    stmt_index ret = next_stmt(BR_FALSE);
     struct stmt *sp = statements + ret;
 
     sp->stmt_expr = e;
@@ -194,23 +190,23 @@ stmt mk_br_false(expr *e, stmt s)
     return ret;
 }
 
-stmt mk_return_stmt(expr *e)
+stmt_index mk_return_stmt(expr *e)
 {
-    stmt ret = next_stmt(RETURN_STMT);
+    stmt_index ret = next_stmt(RETURN_STMT);
 
     statements[ret].stmt_expr = e;
     return ret;
 }
 
-void link_stmt(stmt from_stmt, stmt to_stmt)
+void link_stmt(stmt_index from_stmt, stmt_index to_stmt)
 {
     statements[from_stmt].stmt_stmt =
 	(to_stmt == NO_STMT) ? current_stmt : to_stmt;
 }
 
-stmt mk_add_break_stmt(void)
+stmt_index mk_add_break_stmt(void)
 {
-    stmt ret = mk_goto_stmt(NO_STMT);
+    stmt_index ret = mk_goto_stmt(NO_STMT);
     struct link *l = new_link();
 
     l->l_stmt = ret;
@@ -219,9 +215,9 @@ stmt mk_add_break_stmt(void)
     return ret;
 }
 
-stmt mk_add_cont_stmt(void)
+stmt_index mk_add_cont_stmt(void)
 {
-    stmt ret = mk_goto_stmt(NO_STMT);
+    stmt_index ret = mk_goto_stmt(NO_STMT);
     struct link *l = new_link();
 
     l->l_stmt = ret;
@@ -230,9 +226,9 @@ stmt mk_add_cont_stmt(void)
     return ret;
 }
 
-stmt mk_add_goto_stmt(char *id)
+stmt_index mk_add_goto_stmt(char *id)
 {
-    stmt ret = mk_goto_stmt(NO_STMT);
+    stmt_index ret = mk_goto_stmt(NO_STMT);
     struct goto_ref *ref = new(struct goto_ref);
 
     ref->gr_next = goto_refs;
@@ -242,7 +238,7 @@ stmt mk_add_goto_stmt(char *id)
     return ret;
 }
 
-void mk_goto_def(stmt s, char *id)
+void mk_goto_def(stmt_index s, char *id)
 {
     struct goto_def *def = new(struct goto_def);
 
@@ -278,20 +274,20 @@ void resolv_gotos(void)
     }
 }
 
-stmt mk_alloc_stmt(void)
+stmt_index mk_alloc_stmt(void)
 {
     return next_stmt(ALLOC_STMT);
 }
 
-stmt mk_print_stmt(cnode *c)
+stmt_index mk_print_stmt(cnode *c)
 {
-    stmt ret = next_stmt(PRINT_STMT);
+    stmt_index ret = next_stmt(PRINT_STMT);
 
     statements[ret].stmt_print = *c;
     return ret;
 }
 
-void push_breaks(stmt s)
+void push_breaks(stmt_index s)
 {
     struct nesting *n = new_nesting();
     
@@ -300,7 +296,7 @@ void push_breaks(stmt s)
     breaks = n;
 }
 
-void push_conts(stmt s)
+void push_conts(stmt_index s)
 {
     struct nesting *n = new_nesting();
     
@@ -309,10 +305,10 @@ void push_conts(stmt s)
     conts = n;
 }
 
-stmt link_breaks(void)
+stmt_index link_breaks(void)
 {
     struct nesting *t = breaks;
-    stmt ret = t->n_stmt;
+    stmt_index ret = t->n_stmt;
     struct link *l = t->n_link;
 
     while (l) {
@@ -328,10 +324,10 @@ stmt link_breaks(void)
     return ret;
 }
 
-stmt link_conts(void)
+stmt_index link_conts(void)
 {
     struct nesting *t = conts;
-    stmt ret = t->n_stmt;
+    stmt_index ret = t->n_stmt;
     struct link *l = t->n_link;
 
     while (l) {
@@ -354,12 +350,12 @@ static void dump_init(void)
     stmt_names[NULL_STMT] = "%3d: null\n";
     stmt_names[EXPR_STMT] = "%3d: expr 0x%08x\n";
     stmt_names[SWITCH_STMT] = "%3d: switch (0x%08x) <%3d>\n";
-    stmt_names[GOTO_STMT] = "%3d: %.0sgoto <%3d>\n";
+    stmt_names[GOTO_STMT] = "%3d: goto <%3d>\n";
     stmt_names[BR_TRUE] = "%3d: if (0x%08x) <%3d>\n";
     stmt_names[BR_FALSE] = "%3d: if NOT (0x%08x) <%3d>\n";
     stmt_names[RETURN_STMT] = "%3d: return (0x%08x)\n";
     stmt_names[ALLOC_STMT] = "%3d: alloc %d\n";
-    stmt_names[PRINT_STMT] = "%3d: print (0x%08x)\n";
+    stmt_names[PRINT_STMT] = "%3d: print %s (0x%08x)\n";
 }
 
 void dump_stmts(void)
@@ -371,6 +367,40 @@ void dump_stmts(void)
     if (!stmt_names[0])
 	dump_init();
 
-    for ( ; s < send; ++s, ++i)
-	printf(stmt_names[s->stmt_type], i, s->stmt_expr, s->stmt_stmt);
+    for ( ; s < send; ++s, ++i) {
+	switch (s->stmt_type) {
+	case NULL_STMT:
+	    break;
+
+	case ALLOC_STMT:
+	    printf(stmt_names[s->stmt_type], i, s->stmt_alloc);
+	    break;
+
+	case GOTO_STMT:
+	    printf(stmt_names[s->stmt_type], i, s->stmt_stmt);
+	    break;
+
+	case EXPR_STMT:
+	case SWITCH_STMT:
+	case BR_TRUE:
+	case BR_FALSE:
+	case RETURN_STMT:
+	    printf(stmt_names[s->stmt_type], i, s->stmt_expr, s->stmt_stmt);
+	    if (s->stmt_expr)
+		tree_dump(s->stmt_expr);
+	    break;
+
+	case PRINT_STMT:
+	    printf(stmt_names[s->stmt_type], i,
+		   type_2_string[s->stmt_print.c_base], s->stmt_print.c_expr);
+	    if (s->stmt_print.c_expr)
+		tree_dump(s->stmt_print.c_expr);
+	    break;
+	}
+    }
+}
+
+void set_alloc(stmt_index s, int alloc)
+{
+    statements[s].stmt_alloc = alloc;
 }
