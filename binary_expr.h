@@ -1,4 +1,8 @@
-/* @(#)binary_expr.h	1.3 */
+
+/* @(#)binary_expr.h	1.4 */
+
+#ifndef __BINARY_EXPR_H
+#define __BINARY_EXPR_H
 
 signed char sc_comma(expr *n);
 signed char sc_times(expr *n);
@@ -266,3 +270,5 @@ double d_qc(expr *n);
 
 st st_comma(expr *n);
 st st_qc(expr *n);
+
+#endif /* __BINARY_EXPR_H */
