@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)unary_expr.c	1.2";
+static char sccs_id[] = "@(#)unary_expr.c	1.3";
 
 #include <stdio.h>
 #include "dex.h"
@@ -206,11 +206,12 @@ unsigned long ul_l2p(expr *n)
 {
     if (n->e_bsize)
 	return (unsigned long)get_field(v2f(ul_addr(n->e_left)),
-			 n->e_boffset, n->e_bsize);
-    else if (n->e_size == sizeof(ularge_t))
+					n->e_boffset, n->e_bsize);
+    if (n->e_size == sizeof(ularge_t)) {
+	PRINTF("hey %08x\n", n);
 	return *v2f_type(ularge_t *, ul_addr(n->e_left));
-    else
-	return *v2f_type(unsigned long *, ul_addr(n->e_left));
+    }
+    return *v2f_type(unsigned long *, ul_addr(n->e_left));
 }
 
 float f_l2p(expr *n)
