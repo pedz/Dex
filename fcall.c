@@ -1,6 +1,7 @@
-static char sccs_id[] = "@(#)fcall.c	1.2";
+static char sccs_id[] = "@(#)fcall.c	1.3";
 
 #include <stdio.h>
+#include <setjmp.h>
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
@@ -101,7 +102,7 @@ static void process_args(cnode_list *l)
 
 	case void_type:
 	default:
-	    printf("bogus type dude!!!\n");
+	    fprintf(stderr, "bogus type dude!!!\n");
 	    break;
 	}
 	push(v, size);
@@ -114,10 +115,9 @@ static void release_stack(void)
     frame_ptr = *v2f_type(long *, frame_ptr);
 }
 
-static expr *basic_fcall(expr *n)
+static stmt_index basic_fcall(expr *n)
 {
     stmt_index s;
-    expr *e;
 
     s = i_val(n->e_call);
     process_args(n->e_args);
@@ -125,8 +125,7 @@ static expr *basic_fcall(expr *n)
 	fprintf(stderr, "Function called but not defined\n");
 	exit(1);
     }
-    mark_stack();
-    return execute_statement(s);
+    return s;
 }
 
 void alloc_stack(int n)
@@ -139,12 +138,20 @@ base_type prefix ## _fcall(expr *n) \
 { \
     base_type result; \
     expr *e; \
+    stmt_index s; \
     int cur_stack = stack_ptr; \
- \
-    if (e = basic_fcall(n)) \
+    volatile int had_fault; \
+     \
+    s = basic_fcall(n); \
+    mark_stack(); \
+    BEGIN_PROTECT(&had_fault); \
+    if (e = execute_statement(s)) \
 	result = prefix ## _val(e); \
+    END_PROTECT(); \
     release_stack(); \
     stack_ptr = cur_stack; \
+    if (had_fault) \
+	return 0; \
     return result; \
 }
 
