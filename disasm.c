@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)disasm.c	1.3";
+static char sccs_id[] = "@(#)disasm.c	1.4";
 
 #include <sys/types.h>
 #include "map.h"
