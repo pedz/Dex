@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.4";
+static char sccs_id[] = "@(#)gram.y	1.5";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -62,7 +62,22 @@ static arg_list *current_arg_list;
 #define yytoks GRAMtoks
 #define yyreds GRAMreds
 
+static int nesting_level;
+static symptr current_function;
+static long global_index = (long)h_base;
+static int param_index;
+static int variable_index;
+static int variable_max;
+
 void yyerror(char *s, ...);
+static symptr gram_enter_sym(anode *attr, int line, cnode_list *init);
+static int increase_nesting(void);
+static void decrease_nesting(int new);
+static void start_function(symptr f);
+static void end_function(void);
+static void do_parameter_allocation(arg_list *old_list, arg_list *args);
+static void change_to_int(cnode *c);
+
 %}
 
 %union {
@@ -151,7 +166,7 @@ void yyerror(char *s, ...);
 %right ELSE
 
 %type <anode> type simple_type struct_declaration enum_declaration
-%type <anode> type_name non_type_def class non_function_declarator
+%type <anode> type_name class_name class non_function_declarator
 %type <anode> function_declarator ptr_function_declarator null_decl
 %type <anode> non_empty_decl str_head enum_head
 
@@ -165,7 +180,8 @@ void yyerror(char *s, ...);
 %type <stmt> else_preamble data_def init_declaration_list
 %type <stmt> init_declarator function_body declaration_stat_list
 
-%type <clist> expression_list opt_expression_list
+%type <clist> expression_list opt_expression_list init_list
+%type <clist> initializer
 
 %type <alist> name_list typed_name_list typed_name arg_declaration
 %type <alist> arg_declaration_list arg_declarator_list
@@ -180,13 +196,7 @@ void yyerror(char *s, ...);
 %%
 user_input
     : user_input command
-	{
-	    prompt();
-	}
     | /* NULL */
-	{
-	    prompt();
-	}
     ;
 
 command
@@ -263,7 +273,7 @@ function_heading
 		yyerror("Can not typedef a function");
 		YYERROR;
 	    }
-	    f = gram_enter_sym(&$1, __LINE__);
+	    f = gram_enter_sym(&$1, __LINE__, (cnode_list *)0);
 	    $$ = increase_nesting();
 	    f->s_stmt = mk_alloc_stmt();
 	    f->s_size = sizeof(stmt_index);
@@ -369,7 +379,7 @@ attributes			/* forced attrs for arguments and local vars */
     ;
 
 class				/* storage class of a var or func */
-    : non_type_def
+    : class_name
 	{
 	    $$.a_class = $1.a_class;
 	    $$.a_valid_class = 1;
@@ -377,17 +387,9 @@ class				/* storage class of a var or func */
 	    $$.a_valid_base = 0;
 	    $$.a_valid_name = 0;
 	}
-    | TYPEDEF
-	{
-	    $$.a_class = typedef_class;
-	    $$.a_valid_class = 1;
-	    $$.a_valid_type = 0;
-	    $$.a_valid_base = 0;
-	    $$.a_valid_name = 0;
-	}
     ;
 
-non_type_def
+class_name
     : AUTO
 	{
 	    $$.a_class = auto_class;
@@ -403,6 +405,10 @@ non_type_def
     | STATIC
 	{
 	    $$.a_class = static_class;
+	}
+    | TYPEDEF
+	{
+	    $$.a_class = typedef_class;
 	}
     ;
 
@@ -609,6 +615,7 @@ struct_declaration
 		}
 	    }
 	    pos += (sizeof(int) * 8) - 1;
+	    pos &= ~((sizeof(int) * 8) - 1);
 	    pos /= 8;
 	    t->t_val.val_s.s_size = pos;
 	    $$ = $1;
@@ -943,7 +950,7 @@ init_declarator			/* single local or global var */
 		add_typedef(t, $1.a_name);
 		copy_type(t, $1.a_type);
 	    } else {
-		(void) gram_enter_sym(&$1, __LINE__);
+		(void) gram_enter_sym(&$1, __LINE__, (cnode_list *)0);
 	    }
 	    $$ = NO_STMT;
 	}
@@ -954,7 +961,7 @@ init_declarator			/* single local or global var */
 		add_typedef(t, $1.a_name);
 		copy_type(t, $1.a_type);
 	    } else {
-		(void) gram_enter_sym(&$1, __LINE__);
+		(void) gram_enter_sym(&$1, __LINE__, (cnode_list *)0);
 	    }
 	    $$ = NO_STMT;
 	}
@@ -967,7 +974,7 @@ init_declarator			/* single local or global var */
 		yyerror("Cannot initialize a typedef");
 		YYERROR;
 	    }
-	    (void) gram_enter_sym(&$1, __LINE__);
+	    (void) gram_enter_sym(&$1, __LINE__, (cnode_list *)0);
 	    if (mk_ident(&id, $1.a_name)) {
 		yyerror("identifier %s not defined", $1.a_name);
 		YYERROR;
@@ -982,27 +989,45 @@ init_declarator			/* single local or global var */
 		yyerror("Cannot initialize a typedef");
 		YYERROR;
 	    }
-	    (void) gram_enter_sym(&$1, __LINE__);
+	    (void) gram_enter_sym(&$1, __LINE__, $4);
+	    $$ = NO_STMT;
 	}
     ;
 
 init_list
     : initializer
+	{
+	    $$ = $1;
+	}
     | init_list ',' initializer
+	{
+	    $$ = $3;
+	    $$->cl_next = $1;
+	    $$->cl_down = 0;
+	}
     ;
 
 initializer
     : nce
 	{
+	    cnode_list *e = new(cnode_list);
+	    e->cl_next = 0;
+	    e->cl_down = 0;
+	    e->cl_cnode = $1;
+	    $$ = e;
 	}
     | '{' init_list opt_comma '}'
+	{
+	    cnode_list *e = new(cnode_list);
+	    e->cl_next = 0;
+	    e->cl_down = $2;
+	    $$ = e;
+	}
     ;
 
 opt_comma
     : /* NULL */
     | ','
-	{
-	}
     ;
 
 opt_semi
@@ -1351,7 +1376,7 @@ pvalue
 	{
 	    $$ = $2;
 	}
-    | '(' type_name ')' nce
+    | '(' type_name ')' pvalue
 	{
 	    $$ = $4;
 	    cast_to(&$$, $2.a_type, $2.a_base);
@@ -1537,6 +1562,7 @@ expression_list
 	{
 	    cnode_list *e = new(cnode_list);
 	    e->cl_next = 0;
+	    e->cl_down = 0;
 	    e->cl_cnode = $1;
 	    $$ = e;
 	}
@@ -1545,6 +1571,7 @@ expression_list
 	    cnode_list *e = new(cnode_list);
 
 	    e->cl_next = $1;
+	    e->cl_down = 0;
 	    e->cl_cnode = $3;
 	    $$ = e;
 	}
@@ -1657,13 +1684,6 @@ non_empty_decl
 
 #include <stdio.h>
 
-static int nesting_level;
-static symptr current_function;
-static long global_index = (long)h_base;
-static int param_index;
-static int variable_index;
-static int variable_max;
-
 void yyerror(char *s, ...)
 {
     extern int yylineno;
@@ -1678,7 +1698,7 @@ void yyerror(char *s, ...)
     fprintf(stderr, "%s:%d %s\n", f, yylineno, smallbuf);
 }
 
-static symptr gram_enter_sym(anode *attr, int line)
+static symptr gram_enter_sym(anode *attr, int line, cnode_list *init)
 {
     symptr ret;
 
@@ -1801,10 +1821,11 @@ static void do_parameter_allocation(arg_list *old_list, arg_list *args)
     for (a1 = args; a1; a1 = a1->a_next) {
 	a1->a_anode.a_class = param_class;
 	a1->a_anode.a_valid_class = 1;
-	(void) gram_enter_sym(&a1->a_anode, __LINE__);
+	(void) gram_enter_sym(&a1->a_anode, __LINE__, (cnode_list *)0);
     }
 }
 
+#if 0
 static void prompt(void)
 {
     extern FILE *yyin;
@@ -1815,25 +1836,7 @@ static void prompt(void)
 	fflush(stdout);
     }
 }
-
-static int allocate_fields(fieldptr f)
-{
-    int pos = 0;
-
-    for ( ; f; f = f->f_next) {
-	/* if foo : size was specified */
-	if (f->f_numbits < 0)
-	    f->f_numbits = -f->f_numbits;
-	else {
-	    /* No size specified so move to proper boundry */
-	    pos += (f->f_numbits - 1);
-	    pos &= ~(f->f_numbits - 1);
-	}
-	f->f_offset = pos;
-	pos += f->f_numbits;
-    }
-    return pos;
-}
+#endif
 
 static void change_to_int(cnode *c)
 {
