@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.7";
+static char sccs_id[] = "@(#)map.c	1.8";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -91,14 +91,21 @@ p_ptr v2f(v_ptr v)
 	v2f_map[n] = next_pseg << VSEG_SHIFT;
 	f2v_map[next_pseg] = n << VSEG_SHIFT;
 #ifdef MAP_DEBUG
-	printf("v2f: map of %08x, map vseg %d to vseg %d\n", r, n, next_pseg);
-	printf("v2f: setting v2f[%x] to %x\n", n, v2f_map[n]);
-	printf("v2f: setting f2v[%x] to %x\n", next_pseg, f2v_map[next_pseg]);
+	printf("v2f: map of %0*x, map vseg %d to vseg %d\n", sizeof(long) * 2,
+	       r, n, next_pseg);
+	printf("v2f: setting v2f[%0*x] to %0*x\n",
+	       sizeof(long) * 2, n << VSEG_SHIFT,
+	       sizeof(long) * 2, v2f_map[n]);
+	printf("v2f: setting f2v[%0*x] to %0*x\n",
+	       sizeof(long) * 2, next_pseg << VSEG_SHIFT,
+	       sizeof(long) * 2, f2v_map[next_pseg]);
 #endif
 	++next_pseg;
     }
 #ifdef MAP_DEBUG_2
-    printf("v2f: map %08x to %08x\n", r, (v2f_map[n] | ((long)v & VSEG_MASK_LO)));
+    printf("v2f: map %0*x to %0*x\n",
+	   sizeof(long) * 2, r,
+	   sizeof(long) * 2, (v2f_map[n] | ((long)v & VSEG_MASK_LO)));
 #endif
     return (p_ptr)(v2f_map[n] | ((long)v & VSEG_MASK_LO));
 }
@@ -116,33 +123,49 @@ v_ptr f2v(p_ptr p)
 	f2v_map[n] = next_vseg << VSEG_SHIFT;
 	v2f_map[next_vseg] = n << VSEG_SHIFT;
 #ifdef MAP_DEBUG
-	printf("f2v: map of %08x, map fseg %d to vseg %d\n", r, n, next_vseg);
-	printf("f2v: setting f2v[%x] to %x\n", n, f2v_map[n]);
-	printf("f2v: setting v2f[%x] to %x\n", next_vseg, v2f_map[next_vseg]);
+	printf("f2v: map of %0*x, map fseg %d to vseg %d\n",
+	       sizeof(long) * 2, r, n, next_vseg);
+	printf("f2v: setting f2v[%0*x] to %0*x\n",
+	       sizeof(long) * 2, n << VSEG_SHIFT,
+	       sizeof(long) * 2, f2v_map[n]);
+	printf("f2v: setting v2f[%0*x] to %0*x\n",
+	       sizeof(long) * 2, next_vseg << VSEG_SHIFT,
+	       sizeof(long) * 2, v2f_map[next_vseg]);
 #endif
 	next_vseg++;
     }
 #ifdef MAP_DEBUG_2
-    printf("f2v: map %08x to %08x\n", r, (f2v_map[n] | ((long)p & VSEG_MASK_LO)));
+    printf("f2v: map %0*x to %0*x\n",
+	   sizeof(long) * 2, r,
+	   sizeof(long) * 2, (f2v_map[n] | ((long)p & VSEG_MASK_LO)));
 #endif
     return (v_ptr)(f2v_map[n] | ((long)p & VSEG_MASK_LO));
 }
 
-static void map_catch(int sig, int code, struct sigcontext *scp)
+static void map_catch(int sig, siginfo_t *info, ucontext_t *context)
 {
     static volatile int count;
     sigset_t t;
-    long paddr = scp->sc_jmpbuf.jmp_context.except[0];
+    /*
+     * The documentation says this is not correct but it seems to work for now.
+     */
+    long paddr = (long)info->si_band;
     v_ptr vaddr = f2v((void *)paddr);
 
 #ifdef MAP_DEBUG
-    printf("catch %d 0x%08x 0x%08x\n", sig, paddr, vaddr);
+    printf("catch sig:%d info:0x%0*x context:0x%0*x\n\tpaddr:0x%0*x vaddr:0x%0*x\n",
+	   sig,
+	   sizeof(long)*2, info,
+	   sizeof(long)*2, context,
+	   sizeof(long)*2, paddr,
+	   sizeof(long)*2, vaddr);
 #endif
     if (count >= 10)
 	exit(1);
     if (++count >= 10) {
-	fprintf(stderr, "Recursive SIGSEGV iar: %08x padd: %08x vaddr: %08x\n",
-		scp->sc_jmpbuf.jmp_context.iar, paddr, vaddr);
+	fprintf(stderr, "Recursive SIGSEGV padd: %0*x vaddr: %0*x\n",
+		sizeof(long) * 2, paddr,
+		sizeof(long) * 2, vaddr);
 	exit(1);
     }
 
@@ -157,11 +180,11 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     if (vaddr >= h_base && vaddr < h_high) {
 	paddr &= ~(PAGESIZE - 1);
 #ifdef MAP_DEBUG
-	printf("mmap 1 0x%08x\n", paddr);
+	printf("mmap 1 0x%0*x\n", sizeof(long) * 2, paddr);
 #endif
 	if ((long)mmap((void *)paddr, PAGESIZE, PROT_READ|PROT_WRITE,
 		       MAP_ANONYMOUS|MAP_FIXED|MAP_PRIVATE, -1, 0) != paddr) {
-	    fprintf(stderr, "paddr = %08x: ", paddr);
+	    fprintf(stderr, "paddr = %0*x: ", sizeof(long) * 2, paddr);
 	    perror("mmap4");
 	    exit(1);
 	}
@@ -180,8 +203,9 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 	--count;
 	longjmp(map_jmp_ptr, vaddr);
     }
-    fprintf(stderr, "\nCan not map: iar=%08x paddr=%08x vaddr=%08x\n",
-	    scp->sc_jmpbuf.jmp_context.iar, paddr, vaddr);
+    fprintf(stderr, "\nCan not map: paddr=%0*x vaddr=%0*x\n",
+	    sizeof(long) * 2, paddr,
+	    sizeof(long) * 2, vaddr);
     exit(1);
 }
 
@@ -192,7 +216,7 @@ void map_init(void)
 
     s.sa_handler = (void (*)())map_catch;
     sigemptyset(&s.sa_mask);
-    s.sa_flags = 0;
+    s.sa_flags = SA_SIGINFO;
     if (sigaction(SIGSEGV, &s, (struct sigaction *)0) < 0) {
 	perror("sigaction");
 	exit(1);
