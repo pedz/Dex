@@ -1,6 +1,6 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.3";
+static char sccs_id[] = "@(#)stab.y	1.4";
 
 #include <strings.h>
 #include <stdlib.h>
@@ -92,7 +92,7 @@ stab_def
     | ':' 'T' typeid
     | NAME ':' symbol_declaration
 	{
-	    cur_sym = enter_sym(cur_ns, $1);
+	    cur_sym = enter_sym(cur_ns, $1, 0);
 	    /*
 	     * We don't really care if the symbol is already defined
 	     * or not.  We do not set s_defined or s_offset and let
