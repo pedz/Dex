@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.6 */
+/* @(#)sym.h	1.7 */
 
 #define HASH_SIZE 128
 
@@ -26,8 +26,8 @@ struct type {
 	struct type *val_v;		/* base type for volatile */
 	struct {			/* range type */
 	    struct type *r_typeptr;	/* type of range */
-	    long r_lower;		/* lower bound */
-	    long r_upper;		/* upper bound */
+	    char *r_lower;		/* lower bound */
+	    char *r_upper;		/* upper bound */
 	} val_r;
 	struct {			/* float and complex */
 	    struct type *g_typeptr;	/* type of float */
@@ -155,7 +155,7 @@ typedef unsigned int stmt_index;
 struct sym {
     struct sym *s_hash;			/* hash chain */
     char *s_name;			/* name of symbol */
-    struct name_space *s_ns;		/* pointer back to name space */
+    struct name_space *s_ns;		/* pointer to name space */
     enum expr_type s_base;		/* base type of symbol */
     typeptr s_type;			/* type */
     union {
@@ -164,7 +164,7 @@ struct sym {
     } _s_u;
 #define s_offset _s_u._s_offset
 #define s_stmt   _s_u._s_stmt
-
+    struct expr *s_expr;		/* one expr per symbol */
     int s_size;				/* size of symbol */
     int s_nesting;			/* nesting level */
     unsigned int s_global : 1;		/* true if a global */
@@ -226,6 +226,7 @@ typeptr newtype(ns *nspace, enum stab_type t);
 typeptr find_type(ns *nspace, int typeid);
 paramptr newparam(int typeid, int passby);
 void copy_type(typeptr new, typeptr old);
+void copy_type_and_record(typeptr new, typeptr old);
 char *store_string(ns *nspace, char *name, int len, char *suffix);
 int get_size(typeptr t);
 ns *ns_create(ns *nspace, char *name);
@@ -239,3 +240,4 @@ symptr enter_sym(ns *nspace, char *name, int force);
 void dump_symtable(void);
 void dump_types(void);
 int allocate_fields(fieldptr f);
+void finish_copies(void);
