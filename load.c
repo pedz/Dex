@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.8";
+static char sccs_id[] = "@(#)load.c	1.9";
 
 #include <a.out.h>
 #include <string.h>
@@ -297,6 +297,7 @@ void load(char *path, long text_base, long data_base)
 						&func_int_type);
 			break;
 
+		    case MAP(XMC_PR, XTY_SD):
 		    case MAP(XMC_PR, XTY_LD): /* data */
 		    case MAP(XMC_RW, XTY_LD): /* data */
 		    case MAP(XMC_RW, XTY_CM): /* data */
