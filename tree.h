@@ -1,5 +1,5 @@
 
-/* @(#)tree.h	1.4 */
+/* @(#)tree.h	1.5 */
 
 /*
  * When a struct is evaulated, the address of the structure is
@@ -131,8 +131,12 @@ typedef struct arg_list {
 /*
  * During the compile phase, this struct is used to keep track of the
  * expression node, its type, and other information.
+ *
+ * History: The original concept was that only expression trees would
+ * be kept af the compile phase.  But the print statement violates
+ * this idea and the final cnode for the expression to be printed is
+ * kept as well.
  */
-
 typedef struct cnode {
     typeptr c_type;			/* pointer to typenode */
     enum expr_type c_base;		/* base type of cnode */
