@@ -1,10 +1,12 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.7";
+static char sccs_id[] = "@(#)scan.l	1.8";
 
 #define yylval GRAMlval
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <mbstr.h>
 #include "dex.h"
 #include "map.h"
 #include "sym.h"
@@ -12,7 +14,14 @@ static char sccs_id[] = "@(#)scan.l	1.7";
 #include "stmt.h"
 #include "gram.h"
 #include "inter.h"
-#include "scan.h"
+#include "scan_pre.h"
+#if USE_READLINE
+#define READLINE_LIBRARY
+#include "lib/history.h"
+#include "lib/readline.h"
+#endif
+
+#define DEBUG_BIT SCAN_L_BIT
 
 typedef struct keywords *keyptr;
 struct keywords {
@@ -62,10 +71,15 @@ struct keywords {
 #define yylex GRAMlex
 char string_buf[1024];
 char *str_ptr;
+large_t ltemp;
 
 #ifdef getc
 #undef getc
 #endif
+
+int yylook(void);
+extern int yywrap(void);
+int yywinput(void);
 
 %}
 
@@ -78,7 +92,7 @@ char *str_ptr;
 
     for (k = keywords; k->name; ++k)
 	if (!strcmp(k->name, yytext)) {
-	    yylval.val = k->token;
+	    yylval.ival = k->token;
 	    return k->token;
 	}
     if (t = name2typedef_all(yytext)) { /* look for typedefs */
@@ -91,18 +105,78 @@ char *str_ptr;
 }
 
 <normal>[1-9][0-9]* {
-    sscanf(yytext, "%lld", &yylval.val);
+    sscanf(yytext, "%lld", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.ival = (int)ltemp;
     return ICON;
 }
 
 <normal>0[0-7]* {
-    sscanf(yytext, "%llo", &yylval.val);
+    sscanf(yytext, "%llo", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.ival = (int)ltemp;
     return ICON;
 }
 
 <normal>"0x"[0-9a-fA-F]+ {
-    sscanf(yytext, "%llx", &yylval.val);
+    sscanf(yytext, "%llx", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.ival = (int)ltemp;
     return ICON;
+}
+
+<normal>[1-9][0-9]*[lL] {
+    sscanf(yytext, "%lld", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.lval = (long)ltemp;
+    return LCON;
+}
+
+<normal>0[0-7]*[lL] {
+    sscanf(yytext, "%llo", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.lval = (long)ltemp;
+    return LCON;
+}
+
+<normal>"0x"[0-9a-fA-F]+[lL] {
+    sscanf(yytext, "%llx", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.lval = (long)ltemp;
+    return LCON;
+}
+
+<normal>[1-9][0-9]*[lL][lL] {
+    sscanf(yytext, "%lld", &yylval.llval);
+    return LLCON;
+}
+
+<normal>0[0-7]*[lL][lL] {
+    sscanf(yytext, "%llo", &yylval.llval);
+    return LLCON;
+}
+
+<normal>"0x"[0-9a-fA-F]+[lL][lL] {
+    sscanf(yytext, "%llx", &yylval.llval);
+    return LLCON;
 }
 
 <normal>'([^\\]|\\(.|[0-7][0-7][0-7]?))' {
@@ -117,19 +191,19 @@ char *str_ptr;
 		i *= 8;
 		i += *p - '0';
 	    }
-	    yylval.val = i;
+	    yylval.ival = i;
 	    break;
-	case '\'': yylval.val = '\''; break;
-	case '\\': yylval.val = '\\'; break;
-	case 'b': yylval.val = '\b'; break;
-	case 'f': yylval.val = '\f'; break;
-	case 'n': yylval.val = '\n'; break;
-	case 'r': yylval.val = '\r'; break;
-	case 't': yylval.val = '\t'; break;
-	default: yylval.val = yytext[2]; break;
+	case '\'': yylval.ival = '\''; break;
+	case '\\': yylval.ival = '\\'; break;
+	case 'b': yylval.ival = '\b'; break;
+	case 'f': yylval.ival = '\f'; break;
+	case 'n': yylval.ival = '\n'; break;
+	case 'r': yylval.ival = '\r'; break;
+	case 't': yylval.ival = '\t'; break;
+	default: yylval.ival = yytext[2]; break;
 	}
     } else {
-	yylval.val = yytext[1];
+	yylval.ival = yytext[1];
     }
     return ICON;
 }
@@ -150,107 +224,107 @@ char *str_ptr;
 }
 
 <normal>"->" {
-    yylval.val = PTROP;
+    yylval.ival = PTROP;
     return PTROP;
 }
 
 <normal>"<<" {
-    yylval.val = LSHIFT;
+    yylval.ival = LSHIFT;
     return LSHIFT;
 }
 
 <normal>">>" {
-    yylval.val = RSHIFT;
+    yylval.ival = RSHIFT;
     return RSHIFT;
 }
 
 <normal>"++" {
-    yylval.val = INCOP;
+    yylval.ival = INCOP;
     return INCOP;
 }
 
 <normal>"--" {
-    yylval.val = DECOP;
+    yylval.ival = DECOP;
     return DECOP;
 }
 
 <normal>"<=" {
-    yylval.val = LTOREQUAL;
+    yylval.ival = LTOREQUAL;
     return LTOREQUAL;
 }
 
 <normal>">=" {
-    yylval.val = GTOREQUAL;
+    yylval.ival = GTOREQUAL;
     return GTOREQUAL;
 }
 
 <normal>"==" {
-    yylval.val = EQUALITY;
+    yylval.ival = EQUALITY;
     return EQUALITY;
 }
 
 <normal>"!=" {
-    yylval.val = NOTEQUAL;
+    yylval.ival = NOTEQUAL;
     return NOTEQUAL;
 }
 
 <normal>"&&" {
-    yylval.val = ANDAND;
+    yylval.ival = ANDAND;
     return ANDAND;
 }
 
 <normal>"||" {
-    yylval.val = OROR;
+    yylval.ival = OROR;
     return OROR;
 }
 
 <normal>"+=" {
-    yylval.val = PLUSEQUAL;
+    yylval.ival = PLUSEQUAL;
     return PLUSEQUAL;
 }
 
 <normal>"-=" {
-    yylval.val = MINUSEQUAL;
+    yylval.ival = MINUSEQUAL;
     return MINUSEQUAL;
 }
 
 <normal>"*=" {
-    yylval.val = TIMESEQUAL;
+    yylval.ival = TIMESEQUAL;
     return TIMESEQUAL;
 }
 
 <normal>"/=" {
-    yylval.val = DIVEQUAL;
+    yylval.ival = DIVEQUAL;
     return DIVEQUAL;
 }
 
 <normal>"%=" {
-    yylval.val = MODEQUAL;
+    yylval.ival = MODEQUAL;
     return MODEQUAL;
 }
 
 <normal>"<<=" {
-    yylval.val = LSEQUAL;
+    yylval.ival = LSEQUAL;
     return LSEQUAL;
 }
 
 <normal>">>=" {
-    yylval.val = RSEQUAL;
+    yylval.ival = RSEQUAL;
     return RSEQUAL;
 }
 
 <normal>"&=" {
-    yylval.val = ANDEQUAL;
+    yylval.ival = ANDEQUAL;
     return ANDEQUAL;
 }
 
 <normal>"^=" {
-    yylval.val = XOREQUAL;
+    yylval.ival = XOREQUAL;
     return XOREQUAL;
 }
 
 <normal>"|=" {
-    yylval.val = OREQUAL;
+    yylval.ival = OREQUAL;
     return OREQUAL;
 }
 
@@ -269,6 +343,15 @@ char *str_ptr;
 }
 
 <string>"\"" {
+    BEGIN normal;
+    *str_ptr++ = 0;
+    yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
+    return STRING;
+}
+
+<string>"\n" {
+    fprintf(stderr, "%s: newline in string at line %d of %s\n",
+	    progname, yyfilename ? yyfilename : "<stdin>", yylineno);
     BEGIN normal;
     *str_ptr++ = 0;
     yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
@@ -323,10 +406,16 @@ char *str_ptr;
 <normal>"\n# "[0-9]+" \"".*"\"\n" {
 }
 
-<normal>" "|"\t"|"\n" ;
+<normal>" "|"\t" ;
+
+<normal>"\n" {
+#define xxx(a) # a
+    DEBUG_PRINTF(("%s: %s:%d\n", xxx(yylex),
+		  yyfilename ? yyfilename : "<stdin>", yylineno));
+}
 
 <normal>. {
-    yylval.val = yytext[0];
+    yylval.ival = yytext[0];
     return yytext[0];
 }
 
@@ -343,11 +432,9 @@ struct fs {
     int fs_line;
 };
 static struct fs *file_stack;
-char *yyfilename;
+char *yyfilename = "<stdin>";
 
 #if USE_READLINE
-#include <readline/history.h>
-#include <readline/readline.h>
 
 static char *do_fgets(FILE *in)
 {
