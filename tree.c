@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree.c	1.4";
+static char sccs_id[] = "@(#)tree.c	1.5";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -157,16 +157,26 @@ int mk_dot(cnode *result, cnode *c, char *s)
     result->c_type = f->f_typeptr;
     result->c_base = base_type(result->c_type);
 
-    /* If we need to use bit ops */
+    /*
+     * The bit field routines are designed to work with an address
+     * that is word aligned.  The other routines, like to read and
+     * write a short or a byte, can operate on any byte boundry.  The
+     * test for the need of a bit field is based upon either the
+     * offset not being on a byte boundry or the size of the field not
+     * being a multiple of bytes.
+     *
+     * So in the case of a bit field, byte_offset will be forced to be
+     * a multiple of sizeof(int).
+     */
+    byte_offset = f->f_offset / 8;
     if ((f->f_offset | f->f_numbits) & 7) {
-	byte_offset = f->f_offset / (sizeof(int) * 8);
+	byte_offset &= ~(sizeof(int) - 1); /* make it word aligned */
+	bit_offset = f->f_offset - (byte_offset * 8);
 	byte_size = sizeof(int);
-	bit_offset = f->f_offset - (byte_offset * sizeof(int) * 8);
 	bit_size = f->f_numbits;
     } else {
 	bit_offset = 0;
 	bit_size = 0;
-	byte_offset = f->f_offset / 8;
 	byte_size = f->f_numbits / 8;
     }
 
@@ -175,7 +185,7 @@ int mk_dot(cnode *result, cnode *c, char *s)
 
 	c_expr = new_expr();
 	c_expr->e_func.ul = ul_leaf;
-	c_expr->e_i = f->f_offset / 8;
+	c_expr->e_i = byte_offset;
 	c_expr->e_size = f->f_numbits / 8;
 
 	/* Make the plus node */
@@ -202,12 +212,16 @@ int mk_ptr(cnode *result, cnode *c, char *s)
     typeptr t = c->c_type;
     cnode x;
 
-    if (t->t_type != PTR_TYPE) {
-	GRAMerror("not a pointer type");
+    if (t->t_type == PTR_TYPE) {
+	mk_l2p(&x, c);
+	x.c_type = t->t_val.val_p;
+    } else if (t->t_type != ARRAY_TYPE) {
+	mk_l2p(&x, c);
+	x.c_type = t->t_val.val_a.a_typeptr;
+    } else {
+	GRAMerror("not a pointer or array type");
 	return 1;
     }
-    mk_l2p(&x, c);
-    x.c_type = t->t_val.val_p;
     return mk_dot(result, &x, s);
 }
 
@@ -568,10 +582,12 @@ void tree_init(void)
     s.sa_handler = (void (*)())sigill_handler;
     SIGINITSET(s.sa_mask);
     s.sa_flags = 0;
+/*
     if (sigaction(SIGILL, &s, (struct sigaction *)0) < 0) {
 	perror("sigaction");
 	exit(1);
     }
+*/
 
 #define do_xy(from_type, to_type) \
     for (in = FIRST_TYPE; in <= LAST_TYPE; ++in) \
