@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.7";
+static char sccs_id[] = "@(#)builtins.c	1.8";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -352,7 +352,7 @@ static void do_int_vars(void)
     }
 }
 
-void extra_hack()
+void builtin_init()
 {
     do_int_funcs();
     do_char_ptr_funcs();
