@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)stmt.c	1.5";
+static char sccs_id[] = "@(#)stmt.c	1.6";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +7,7 @@ static char sccs_id[] = "@(#)stmt.c	1.5";
 #include "tree.h"
 #include "stmt.h"
 #include "dex.h"
+#include "scan.h"
 
 /*
  * Each statement that can have a break (or a continue) calls
@@ -53,13 +54,17 @@ static stmt_index current_max;
 
 static stmt_index next_stmt(enum stmt_type t)
 {
+    struct stmt *s;
 
     if (!statements)
 	statements = smalloc(sizeof(struct stmt) * (current_max = 100));
     if (current_stmt == current_max)
 	statements = srealloc(statements,
 			      sizeof(struct stmt) * (current_max += 100));
-    statements[current_stmt].stmt_type = t;
+    s = statements + current_stmt;
+    s->stmt_type = t;
+    s->stmt_file = yyfilename;
+    s->stmt_line = yylineno;
     return current_stmt++;
 }
 
