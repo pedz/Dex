@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.5";
+static char sccs_id[] = "@(#)gram.y	1.6";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -9,13 +9,13 @@ static char sccs_id[] = "@(#)gram.y	1.5";
 #include <stdarg.h>
 #include <string.h>
 #include <dbxstclass.h>
+#include "dex.h"
 #include "map.h"
 #include "sym.h"
 #include "tree.h"
 #include "stmt.h"
 #include "unary_expr.h"
 #include "inter.h"
-#include "dex.h"
 
 #define YYDEBUG 1
 
@@ -77,6 +77,7 @@ static void start_function(symptr f);
 static void end_function(void);
 static void do_parameter_allocation(arg_list *old_list, arg_list *args);
 static void change_to_int(cnode *c);
+static char *save_as_string(int i);
 
 %}
 
@@ -275,9 +276,13 @@ function_heading
 	    }
 	    f = gram_enter_sym(&$1, __LINE__, (cnode_list *)0);
 	    $$ = increase_nesting();
-	    f->s_stmt = mk_alloc_stmt();
-	    f->s_size = sizeof(stmt_index);
-	    start_function(f);
+	    if (f) {
+		f->s_stmt = mk_alloc_stmt();
+		f->s_size = sizeof(stmt_index);
+		if (f->s_expr)
+		    f->s_expr->e_addr = f->s_offset;
+		start_function(f);
+	    }
 	    do_parameter_allocation($2, current_arg_list);
 	}
     ;
@@ -778,7 +783,7 @@ non_function_declarator		/* argument, var, or field */
 	    $$ = $1;
 	    t1->t_val.val_r.r_typeptr = 0;
 	    t1->t_val.val_r.r_lower = 0;
-	    t1->t_val.val_r.r_upper = $3 - 1;
+	    t1->t_val.val_r.r_upper = save_as_string($3 - 1);
 	    t2->t_val.val_a.a_typedef = t1;
 	    t2->t_val.val_a.a_typeptr = $1.a_type;
 	    $$.a_type = t2;
@@ -825,7 +830,7 @@ function_declarator		/* function name */
 	    $$ = $1;
 	    t1->t_val.val_r.r_typeptr = 0;
 	    t1->t_val.val_r.r_lower = 0;
-	    t1->t_val.val_r.r_upper = $3 - 1;
+	    t1->t_val.val_r.r_upper = save_as_string($3 - 1);
 	    t2->t_val.val_a.a_typedef = t1;
 	    t2->t_val.val_a.a_typeptr = $1.a_type;
 	    $$.a_type = t2;
@@ -1365,6 +1370,7 @@ asgn_op
     | RSEQUAL
     | ANDEQUAL
     | OREQUAL
+    | XOREQUAL
     ;
 
 pvalue
@@ -1667,7 +1673,7 @@ non_empty_decl
 
 	    t1->t_val.val_r.r_typeptr = 0;
 	    t1->t_val.val_r.r_lower = 0;
-	    t1->t_val.val_r.r_upper = $3 - 1;
+	    t1->t_val.val_r.r_upper = save_as_string($3 - 1);
 	    t2->t_val.val_a.a_typedef = t1;
 	    t2->t_val.val_a.a_typeptr = $1.a_type;
 	    $$.a_class = $1.a_class;
@@ -1717,10 +1723,17 @@ static symptr gram_enter_sym(anode *attr, int line, cnode_list *init)
      * most of them.
      */
     if (ret->s_defined)
-	if (ret->s_nesting == nesting_level)
-	    yyerror("Duplicate symbol");
-	else
+	if (ret->s_nesting == nesting_level) {
+	    if (0) {
+		yyerror("Duplicate symbol");
+		return 0;
+	    } else {
+		return ret;
+	    }
+	} else {
 	    ret = enter_sym(ns_inter, attr->a_name, 1);
+	}
+
     ret->s_defined = 1;
     ret->s_base = attr->a_base;
     ret->s_type = attr->a_type;
@@ -1843,4 +1856,12 @@ static void change_to_int(cnode *c)
     c->c_type = find_type(ns_inter, TP_INT);
     c->c_base = int_type;
     c->c_expr->e_size = sizeof(int);
+}
+
+static char *save_as_string(int i)
+{
+    char buf[32];
+
+    sprintf(buf, "%d", i);
+    return store_string(ns_inter, buf, 0, (char *)0);
 }
