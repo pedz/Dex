@@ -1,5 +1,5 @@
 
-/* @(#)inter.h	1.1 */
+/* @(#)inter.h	1.2 */
 
 /*
  * This is the set of globals needed between the scanner in scan.l and
