@@ -1,11 +1,11 @@
-static char sccs_id[] = "@(#)builtins.c	1.3";
+static char sccs_id[] = "@(#)builtins.c	1.4";
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/signal.h>
 #include <setjmp.h>
 #include <string.h>
-#include <dbxstclass.h>
+#include <a.out.h>
 #include "map.h"
 #include "dmap.h"
 #include "sym.h"
@@ -132,18 +132,43 @@ int int_v2f(expr *n)
     return (int)v2f(f[1]);
 }
 
+/*
+ * called as: find(void *addr, char **func_name_p, void **start_p,
+ *                 char **file_name_p, int *lineno_p);
+ */
 int int_find(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
     void *qaddr = (void *)(f[1]);
-    char **name = v2f_type(char **, f[2]);
-    void **raddr = v2f_type(void **, f[3]);
+    char **func_name_p = v2f_type(char **, f[2]);
+    void **start_p = v2f_type(void **, f[3]);
+    char **file_name_p = v2f_type(char **, f[4]);
+    int *lineno_p = v2f_type(int *, f[5]);
     symptr s = addr2userdef_all(qaddr);
+    ns *nspace;
 
     if (!s)
 	return 0;
-    *name = f2v_type(char *, s->s_name);
-    *raddr = s->s_offset;
+    
+    nspace = s->s_ns;
+    for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
+	if (!strcmp(s->s_name, nspace->ns_name))
+	    break;
+    if (nspace) {
+	struct lineno *lines;
+	int diff = (ulong)qaddr - (ulong)s->s_offset;
+
+	if (nspace->ns_parent && file_name_p)
+	    *file_name_p = f2v_type(char *, nspace->ns_parent->ns_name);
+	if (lineno_p && (lines = nspace->ns_lines)) {
+	    for (++lines; lines->l_lnno; ++lines)
+		if (lines->l_addr.l_paddr > diff)
+		    break;
+	    *lineno_p = nspace->ns_lineoffset + lines[-1].l_lnno - 1;
+	}
+    }
+    *func_name_p = f2v_type(char *, s->s_name);
+    *start_p = s->s_offset;
     return 1;
 }
 
