@@ -1,5 +1,8 @@
 
-/* @(#)stmt.h	1.5 */
+/* @(#)stmt.h	1.6 */
+
+#ifndef __STMT_H
+#define __STMT_H
 
 /*
  * Rather than trying to minimize space, the structure for statements
@@ -38,6 +41,9 @@ struct stmt {
 };
 
 struct stmt *statements;
+#define STMT_STACK_SIZE 1024
+int stmt_stack[STMT_STACK_SIZE];
+int cur_stmt_index;
 
 expr *execute_statement(stmt_index s);
 stmt_index get_current_stmt(void);
@@ -61,3 +67,6 @@ stmt_index link_breaks(void);
 stmt_index link_conts(void);
 void dump_stmts(void);
 void set_alloc(stmt_index s, int alloc);
+void fail(int err);
+
+#endif /* __STMT_H */
