@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.7";
+static char sccs_id[] = "@(#)sym.c	1.8";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,27 +12,9 @@ static ns *ns_head;
 static ns *ns_tail;
 
 extern char *type_2_string[];		/* Ick! */
-static char *stab_type_2_string[] = {
-    "struct",
-    "union",
-    "ptr",
-    "array",
-    "range",
-    "proc",
-    "float",
-    "enum",
-    "stringptr",
-    "complex",
-    "ellipses",
-    "volatile",
-    "BOGUS"
-};
 
 static int hash(char *s);
 static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr);
-static int sym_compare(void *v1, void *v2);
-static void print_sym(symptr s);
-static void _dump_symtable(ns *nspace, symtabptr old_sytp);
 
 static int hash(char *s)
 {
@@ -386,6 +368,36 @@ paramptr newparam(int typeid, int passby)
     return ret;
 }
 
+struct copy_rec {
+    struct copy_rec *cr_next;
+    typeptr cr_new;
+    typeptr cr_old;
+};
+
+struct copy_rec *record_list;
+
+void copy_type_and_record(typeptr new, typeptr old)
+{
+    struct copy_rec *cr = new(struct copy_rec);
+    
+    cr->cr_new = new;
+    cr->cr_old = old;
+    cr->cr_next = record_list;
+    record_list = cr;
+    copy_type(new, old);
+}
+
+void finish_copies(void)
+{
+    struct copy_rec *cr;
+
+    for (cr = record_list; cr; cr = record_list) {
+	record_list = cr->cr_next;
+	copy_type(cr->cr_new, cr->cr_old);
+	free(cr);
+    }
+}
+
 void copy_type(typeptr new, typeptr old)
 {
     new->t_type = old->t_type;
@@ -446,8 +458,10 @@ int get_size(typeptr t)
 {
     typeptr l;
     attrptr a;
-    double d;
+    ularge_t r;
+    ularge_t e;
     ns *nspace = t->t_ns;
+    int size;
 
     for (a = t->t_attrs; a; a = a->a_next)
 	if (a->a_type == SIZE_ATTR)
@@ -465,15 +479,32 @@ int get_size(typeptr t)
 	    exit(1);
 	}
 	return get_size(t->t_val.val_a.a_typeptr) *
-	    (l->t_val.val_r.r_upper - l->t_val.val_r.r_lower + 1);
+	    (atolarge(l->t_val.val_r.r_upper) -
+	     atolarge(l->t_val.val_r.r_lower) +
+	     1);
     case RANGE_TYPE:			/* no size for a range? */
-	d = (double)t->t_val.val_r.r_upper - t->t_val.val_r.r_lower + 1;
-	if (d <= 256)
-	    return 8;
-	else if (d <= (256 * 256))
-	    return 16;
-	else
+	/*
+	 * We special case the 32 and 64 bit cases to be safer
+	 */
+	if (is_zero(t->t_val.val_r.r_lower)) {
+	    if (!strcmp(t->t_val.val_r.r_upper, "18446744073709551615"))
+		return 64;
+	    if (!strcmp(t->t_val.val_r.r_upper, "4294967295"))
+		return 32;
+	}
+	if (!strcmp(t->t_val.val_r.r_lower, "-9223372036854775808") &&
+	    !strcmp(t->t_val.val_r.r_upper, "9223372036854775807"))
+	    return 64;
+	if (!strcmp(t->t_val.val_r.r_lower, "-2147483648") &&
+	    !strcmp(t->t_val.val_r.r_upper, "2147483647"))
 	    return 32;
+	r = atolarge(t->t_val.val_r.r_upper) -
+	    atolarge(t->t_val.val_r.r_lower) + 1;
+	for (e = 256, size = 8; e && e < r; ) {
+	    e = e * e;
+	    size <<= 1;
+	}
+	return size;
     case FLOAT_TYPE:
 	return t->t_val.val_g.g_size * 8;
     case ENUM_TYPE:
@@ -661,9 +692,6 @@ symptr enter_sym(ns *nspace, char *name, int force)
     symtabptr sytp;
     symptr ret;
     
-    if (!strcmp(name, "mstsave"))
-	printf("name = %s(%08x), nspace = %s\n", name, name, nspace->ns_name);
-
     if (!(sytp = nspace->ns_syms)) {
 	sytp = nspace->ns_syms = new(struct sym_table);
 	bzero(nspace->ns_syms, sizeof(*sytp));
@@ -688,95 +716,18 @@ symptr enter_sym(ns *nspace, char *name, int force)
     return ret;
 }
 
-static int sym_compare(void *v1, void *v2)
-{
-    symptr *p1 = v1;
-    symptr *p2 = v2;
-    return strcmp((*p1)->s_name, (*p2)->s_name);
-}
-	
-static void print_sym(symptr s)
-{
-    typeptr t = s->s_type;
-    typeptr oldt;
-
-    printf("%s: ", s->s_name);
-    while (t) {
-	printf("%s%s", (t == s->s_type) ? "" : "->",
-	       stab_type_2_string[(t->t_type > A_SIZE(stab_type_2_string) ||
-				   t->t_type < 0) ?
-				  (A_SIZE(stab_type_2_string) - 1) :
-				  t->t_type]);
-	oldt = t;
-	switch (t->t_type) {
-	case PTR_TYPE:
-	    t = t->t_val.val_p;
-	    break;
-	case ARRAY_TYPE:
-	    t = t->t_val.val_a.a_typeptr;
-	    break;
-	case RANGE_TYPE:
-	    t = t->t_val.val_r.r_typeptr;
-	    break;
-	case PROC_TYPE:
-	    t = t->t_val.val_f.f_typeptr;
-	    break;
-	case FLOAT_TYPE:
-	    t = t->t_val.val_g.g_typeptr;
-	    break;
-	}
-	if (oldt == t)
-	    break;
-    }
-    if (s->s_base > LAST_TYPE || s->s_base < 0)
-	printf("(%s:%d), addr=%08x, size=%d, nesting=%d\n",
-	       "bad", s->s_base, s->s_offset, s->s_size, s->s_nesting);
-    else
-	printf("(%s), addr=%08x, size=%d, nesting=%d\n",
-	       type_2_string[s->s_base], s->s_offset, s->s_size, s->s_nesting);
-}
-
-static void _dump_symtable(ns *nspace, symtabptr old_sytp)
-{
-    symtabptr sytp = nspace->ns_syms;
-    symptr *all;
-    symptr *a, *a_end;
-    symptr s;
-    int i;
-
-    if (sytp) {
-	if (sytp == old_sytp)
-	    printf("Symbols for %s point to the parent\n", nspace->ns_name);
-	else {
-	    printf("Symbols for %s\n", nspace->ns_name);
-	    a = all = (symptr *)smalloc(sizeof(symptr) * sytp->sy_count);
-	    a_end = a + sytp->sy_count;
-	    for (i = 0; i < HASH_SIZE; i++)
-		for (s = sytp->sy_hash[i]; s; s = s->s_hash)
-		    if (a == a_end)
-			printf("nspace->ns_symcount is off\n");
-		    else
-			*a++ = s;
-	    qsort(all, sytp->sy_count, sizeof(symptr), sym_compare);
-	    for (a = all; a < a_end; ++a)
-		print_sym(*a);
-	    free(all);
-	}
-    }
-
-    for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
-	_dump_symtable(nspace, sytp);
-}
-
 void dump_symtable(void)
 {
     ns *nspace;
 
     for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	_dump_symtable(nspace, (symtabptr)0);
-    dump_stmts();
 }
 
 void dump_types(void)
 {
+    ns *nspace;
+
+    for (nspace = ns_head; nspace; nspace = nspace->ns_next)
+	_dump_types(nspace);
 }
