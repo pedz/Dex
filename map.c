@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.4";
+static char sccs_id[] = "@(#)map.c	1.5";
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/mman.h>
@@ -30,7 +30,86 @@ static char sccs_id[] = "@(#)map.c	1.4";
  * The plan is to do a longjmp in the case the address being accessed
  * is not in the dump so that routines can simply do a setjmp and then
  * go screaming around without doing checks for 0's.
+ *
+ * Update: The flipping of the high bit stopped working in later
+ * versions of AIX 4.3.2 so I implemented two maps v2f_map and f2v_map
+ * which use the high nibble as the index to map into what the new
+ * high nibble should be.  The pseudo variables are at 0x30000000.  I
+ * moved the dump mmap to 0x40000000.  So the first segment available
+ * is 5.  A call in map_init sets up a mapping for real segment 2 so
+ * the pseudo code can get to real C variables.  The rest of the
+ * virtual to physical mappings happen as they come.  map_catch will
+ * look to see if a mapping already exists and if not, will set up a
+ * new mapping for the segment.  With this scheme (and assume mmap
+ * still craps out after segment C, we can map 7 segments from the
+ * dump into the pseudo code.  In the past, 3 is all we needed.  With
+ * all the new features, etc, we can run out of them under extreme
+ * conditions.
+ *
+ * This may change but another change is to make v2f and f2v real
+ * functions.  The mappings are created automatically when they are
+ * called rather than from map_catch.
  */
+
+static long v2f_map[16] = {
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+static long f2v_map[16] = {
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+/*
+ * Physical segments 5 and up can be used to map virtual segments.
+ * 0-2 can not be used because mmap barfs.  3 is for the dump file.
+ */
+static int next_pseg = 5;
+
+/*
+ * right now, all the virtual segments can be used except for 3-6.  We
+ * give segment 3 to the pseudo variables.
+ */
+static int next_vseg = 4;
+
+p_ptr v2f(v_ptr v)
+{
+    unsigned long r = (long)v;
+    int n = (r >> 28) & 0xf;
+
+    if (v2f_map[n] == -1) {
+	if (next_pseg == 16) {
+	    fprintf(stderr, "Out of segments in v2f %d\n", n);
+	    exit(1);
+	}
+	v2f_map[n] = next_pseg << 28;
+	f2v_map[next_pseg++] = n << 28;
+#if 0
+	printf("v2f: setting v2f[%x] to %x\n", n, v2f_map[n]);
+	printf("v2f: setting f2v[%x] to %x\n", next_pseg-1, f2v_map[next_pseg-1]);
+#endif
+    }
+    return (p_ptr)(v2f_map[n] | ((long)v & 0x0fffffff));
+}
+
+v_ptr f2v(p_ptr p)
+{
+    unsigned long r = (long)p;
+    int n = (r >> 28) & 0xf;
+
+    if (f2v_map[n] == -1) {
+	if (next_vseg == 6) {
+	    fprintf(stderr, "Out of segments in f2v %d\n", n);
+	    exit(1);
+	}
+	f2v_map[n] = next_vseg << 28;
+	v2f_map[next_vseg++] = n << 28;
+#if 0
+	printf("f2v: setting f2v[%x] to %x\n", n, f2v_map[n]);
+	printf("f2v: setting v2f[%x] to %x\n", next_vseg-1, v2f_map[next_vseg-1]);
+#endif
+    }
+    return (v_ptr)(f2v_map[n] | ((long)p & 0x0fffffff));
+}
 
 static void map_catch(int sig, int code, struct sigcontext *scp)
 {
