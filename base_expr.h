@@ -1,4 +1,4 @@
-/* @(#)base_expr.h	1.1 */
+/* @(#)base_expr.h	1.2 */
 signed char sc_comma(expr *n);
 signed char sc_times(expr *n);
 signed char sc_divide(expr *n);
@@ -375,3 +375,27 @@ unsigned long ul_null(expr *n);
 float f_null(expr *n);
 double d_null(expr *n);
 st st_null(expr *n);
+
+signed char *sc_v2f(expr *n);
+unsigned char *uc_v2f(expr *n);
+int *i_v2f(expr *n);
+unsigned int *ui_v2f(expr *n);
+short *s_v2f(expr *n);
+unsigned short *us_v2f(expr *n);
+long *l_v2f(expr *n);
+unsigned long *ul_v2f(expr *n);
+float *f_v2f(expr *n);
+double *d_v2f(expr *n);
+st *st_v2f(expr *n);
+
+signed char *sc_f2v(expr *n);
+unsigned char *uc_f2v(expr *n);
+int *i_f2v(expr *n);
+unsigned int *ui_f2v(expr *n);
+short *s_f2v(expr *n);
+unsigned short *us_f2v(expr *n);
+long *l_f2v(expr *n);
+unsigned long *ul_f2v(expr *n);
+float *f_f2v(expr *n);
+double *d_f2v(expr *n);
+st *st_f2v(expr *n);
