@@ -1,25 +1,24 @@
-static char sccs_id[] = "@(#)load.c	1.9";
+static char sccs_id[] = "@(#)load.c	1.10";
+
+#ifdef __64BIT__
+#define __XCOFF64__
+#endif
 
 #include <a.out.h>
-#include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <fcntl.h>
-
-/*
- * I would prefer to use mmap but it has a bug in it right now that
- * shmat does not have so I'll use shmat for now.
- */
-#define USE_MMAP
-#ifdef USE_MMAP
 #include <sys/mman.h>
 #include <sys/stat.h>
-#else
-#include <sys/shm.h>
-#endif
+#include <stdlib.h>
 
 #include "map.h"
 #include "sym.h"
 #include "dex.h"
+#include "tree.h"
+#include "stab_pre.h"
+
+#define DEBUG_BIT LOAD_C_BIT
 
 /*
  * This file implements the "load" command which loads in a object
@@ -45,6 +44,23 @@ static typeptr get_int(ns *nspace, typeptr *int_type_p)
     return ret;
 }
 
+/*
+ * A "long" in this particular case is always 64 bits.  What we do is
+ * look up "long" and get its size.  If it is only 32 bits, we look up
+ * "long long" and use it.
+ */
+static typeptr get_long(ns *nspace, typeptr *long_type_p)
+{
+    typeptr ret;
+
+    if (ret = *long_type_p)
+	return ret;
+    if (get_size(ret = name2typedef(nspace, "long")) < 64)
+	ret = name2typedef(nspace, "long long");
+    *long_type_p = ret;
+    return ret;
+}
+
 static typeptr get_func_int(ns *nspace,
 			    typeptr *int_type_p,
 			    typeptr *func_int_type_p)
@@ -57,19 +73,6 @@ static typeptr get_func_int(ns *nspace,
     ret->t_val.val_f.f_typeptr = get_int(nspace, int_type_p);
     ret->t_val.val_f.f_params = -1;
     ret->t_val.val_f.f_paramlist = 0;
-    return ret;
-}
-
-static typeptr get_ptr_int(ns *nspace,
-			   typeptr *int_type_p,
-			   typeptr *ptr_int_type_p)
-{
-    typeptr ret;
-    
-    if (ret = *ptr_int_type_p)
-	return ret;
-    ret = *ptr_int_type_p = newtype(nspace, PTR_TYPE);
-    ret->t_val.val_p = get_int(nspace, int_type_p);
     return ret;
 }
     
@@ -94,15 +97,15 @@ struct for_ref {
 };
 
 static char *stab_buf;
-static int stab_buf_size;
+static size_t stab_buf_size;
 
 static void add_to_buf(char *s, int size)
 {
-    int new_stab_buf_size = strlen(stab_buf) + size + 1;
+    size_t new_stab_buf_size = strlen(stab_buf) + size + 1;
 
     if (new_stab_buf_size >= stab_buf_size)
 	if (stab_buf)
-	    stab_buf = srealloc(stab_buf, new_stab_buf_size);
+	    stab_buf = srealloc(stab_buf, new_stab_buf_size, stab_buf_size);
 	else
 	    stab_buf = smalloc(new_stab_buf_size);
     strncat(stab_buf, s, size);
@@ -112,7 +115,24 @@ static void add_to_buf(char *s, int size)
 	stab_buf[new_stab_buf_size - 1] = 0;
 }
 
-void load(char *path, long text_base, long data_base)
+static void resolv_dup(symptr *sym_p, char **name_p, ns *ns, void *offset)
+{
+    symptr sym = *sym_p;
+
+    if ((sym = *sym_p)->s_defined && sym->s_offset != offset) {
+	char *name = *name_p;
+	char buf[16];
+	
+	sprintf(buf, "$dup%d", ns->ns_lastdup++);
+	name = store_string(ns, name, 0, buf);
+	sym = enter_sym(ns, name, 0);
+
+	*sym_p = sym;
+	*name_p = name;
+    }
+}
+
+int load(char *path, long text_base, long data_base)
 {
     int fd;
     caddr_t m;
@@ -126,43 +146,45 @@ void load(char *path, long text_base, long data_base)
     int size;
     long lnnoptr_base;
     typeptr int_type = 0;
-    typeptr ptr_int_type = 0;
+    typeptr long_type = 0;
     typeptr func_int_type = 0;
     typeptr ptr_func_int_type = 0;
     char *suffix;
     typeptr thistype;
     int haddot;
     int have_stab_buf = 0;
-#ifdef USE_MMAP
     struct stat sbuf;
-#endif
+
+    DEBUG_PRINTF(("load: called with %s 0x%s 0x%s\n",
+		  path, P(text_base), P(data_base)));
 
     if ((fd = open(path, O_RDONLY)) < 0) {
 	perror(path);
-	return;
+	return -1;
     }
 
-#ifdef USE_MMAP
     if (fstat(fd, &sbuf) < 0) {
 	perror("stat");
 	close(fd);
-	return;
+	return -1;
     }
-    m = mmap(LOAD_BASE, sbuf.st_size, PROT_READ,
+    /*
+     * This is done as MAP_VARIABLE because when the unix file is
+     * loaded, map_top has not been set yet.  It really does not
+     * matter where the file is mapped because it is unmapped after we
+     * are done and we do not do any other mapping while it is
+     * mapped.
+     */
+    m = mmap((void *)map_top, sbuf.st_size, PROT_READ,
 	     MAP_FILE|MAP_VARIABLE, fd, 0);
-    if ((int)m == -1) {
+    DEBUG_PRINTF(("load: map_top=0x%s m=0x%s\n", P(map_top), P(m)));
+
+    if (m == (caddr_t)-1) {
 	perror("mmap3");
 	close(fd);
-	return;
+	return -1;
     }
-#else
-    m = shmat(fd, 0x40000000, SHM_MAP|SHM_RDONLY);
-    if ((int)m == -1) {
-	perror("shmat");
-	close(fd);
-	return;
-    }
-#endif
+    DEBUG_PRINTF(("load: m=%s\n", P(m)));
 
     load_ns = ns_create((ns *)0, path);
     load_base_types(load_ns);
@@ -182,19 +204,19 @@ void load(char *path, long text_base, long data_base)
 	    (struct scnhdr *)(m + sizeof(struct filehdr) + fhdr->f_opthdr);
 	int i;
 
+	DEBUG_PRINTF(("load: doing %d sections\n", fhdr->f_nscns));
 	for (i = 0; i < fhdr->f_nscns; ++i, ++shdr) {
 	    switch (shdr->s_flags & 0xffff) {
 	    case STYP_TEXT:
 		load_ns->ns_text_size = shdr->s_size;
 		if (lnnoptr_base = shdr->s_lnnoptr) {
 		    int cnt = shdr->s_nlnno;
-		    int size = sizeof(LINENO) * cnt;
+		    size_t size = sizeof(LINENO) * cnt;
 		    caddr_t from, to;
 
 		    load_ns->ns_lines = smalloc(size);
 		    from = m + shdr->s_lnnoptr;
 		    to = (caddr_t)load_ns->ns_lines;
-		    bzero(to, size);
 		    while (--cnt >= 0) {
 			struct lineno *l = (struct lineno *)to;
 
@@ -233,6 +255,9 @@ void load(char *path, long text_base, long data_base)
 	    struct ldsym *lsym = (struct ldsym *)(lhdr + 1);
 	    char *strings = (char *)lhdr + lhdr->l_stoff;
 	    struct ldrel *lrel;
+
+	    DEBUG_PRINTF(("load: doing %d loader symbols\n",
+			  lhdr->l_nsyms));
 
 	    for (i = 0; i < lhdr->l_nsyms; ++i, ++lsym) {
 		if (lsym->l_smtype & L_EXPORT) {
@@ -303,7 +328,11 @@ void load(char *path, long text_base, long data_base)
 		    case MAP(XMC_RW, XTY_CM): /* data */
 		    case MAP(XMC_RW, XTY_SD): /* data */
 			suffix = 0;
-			thistype = get_int(load_ns, &int_type);
+			/*
+			 * The loader section does not have sizes.  We
+			 * guess that everything is long.
+			 */
+			thistype = get_long(load_ns, &long_type);
 			break;
 
 		    default:
@@ -326,7 +355,8 @@ void load(char *path, long text_base, long data_base)
 		    else if (lsym->l_scnum == 0) /* Treat these as absolute */
 			offset = (void *)lsym->l_value;
 		    else
-			fprintf(stderr, "Bad loader section number for %s(%d)\n",
+			fprintf(stderr,
+				"Bad loader section number for %s(%d)\n",
 				name, lsym->l_scnum);
 
 		    name = store_string(load_ns, name, size, suffix);
@@ -350,10 +380,7 @@ void load(char *path, long text_base, long data_base)
 			    void *old_offset = s->s_offset;
 			    typeptr thistype2;
 
-			    while (s2->s_defined && s2->s_offset != offset) {
-				n2 = store_string(load_ns, n2, 0, "$dup");
-				s2 = enter_sym(load_ns, n2, 0);
-			    }
+			    resolv_dup(&s2, &n2, load_ns, offset);
 			    if (s2->s_defined)
 				continue;
 
@@ -361,7 +388,7 @@ void load(char *path, long text_base, long data_base)
 			    thistype2->t_val.val_p = thistype;
 			    s2->s_base = base_type(thistype2);
 			    s2->s_type = thistype2;
-			    s2->s_size = sizeof(int);
+			    s2->s_size = sizeof(void *);
 			    s2->s_nesting = 0;
 			    s2->s_global = 1;
 			    s2->s_defined = 1;
@@ -369,19 +396,18 @@ void load(char *path, long text_base, long data_base)
 			    if (haddot)	{ /* the old guy is the toc */
 				s2->s_offset = old_offset;
 				s->s_offset = offset;
+				DEBUG_PRINTF(("load: 1\n"));
 			    } else {	/* the new guy is the toc */
 				s->s_offset = old_offset;
 				s2->s_offset = offset;
+				DEBUG_PRINTF(("load: 2\n"));
 			    }
 
 			    s2->s_haddot = 0;
 			    s->s_haddot = 1;
 			    continue;
 			}
-			while (s->s_defined && s->s_offset != offset) {
-			    name = store_string(load_ns, name, 0, "$dup");
-			    s = enter_sym(load_ns, name, 0);
-			}
+			resolv_dup(&s, &name, load_ns, offset);
 			if (s->s_defined)
 			    continue;
 		    }
@@ -389,7 +415,7 @@ void load(char *path, long text_base, long data_base)
 		    s->s_offset = (void *)offset;
 		    s->s_base = base_type(thistype);
 		    s->s_type = thistype;
-		    s->s_size = sizeof(int);
+		    s->s_size = get_size(thistype) / 8;
 		    s->s_nesting = 0;
 		    s->s_global = 1;
 		    s->s_haddot = haddot;
@@ -411,6 +437,7 @@ void load(char *path, long text_base, long data_base)
 	    (struct scnhdr *)(m + sizeof(struct filehdr) + fhdr->f_opthdr);
 	int i;
 
+	DEBUG_PRINTF(("load: doing relocation section\n"));
 	for (i = 0; i < fhdr->f_nscns; ++i, ++shdr) {
 	    if (shdr->s_relptr) {
 		int j;
@@ -444,12 +471,14 @@ void load(char *path, long text_base, long data_base)
 	int sym_index;
 	int cur_index;
 	struct for_ref *ref_head = 0;
+	long scnlen;
 
 #define Set_cur_block(arg) { \
 	cur_block = (arg); \
-	int_type = ptr_int_type = func_int_type = ptr_func_int_type = 0; \
+	long_type = int_type = func_int_type = ptr_func_int_type = 0; \
 }
 
+	DEBUG_PRINTF(("load: doing %d symbols\n", fhdr->f_nsyms));
 	for (cur_index = 0;
 	     cur_index < fhdr->f_nsyms;
 	     cur_index += s->n_numaux, base += s->n_numaux * SYMESZ) {
@@ -505,12 +534,16 @@ void load(char *path, long text_base, long data_base)
 			s->n_offset;
 		size = 0;
 	    }
+	    if (name[0] == '\0')
+		name = "$NONAME";
+
 	    if (haddot = (name[0] == '.')) {
 		++name;
 		if (size)
 		    --size;
 	    }
 
+#if 0
 	    /*
 	     * I can't figure out what the STATIC stuff is before the
 	     * first C_FILE.  I want to keep them for each file so we
@@ -518,11 +551,21 @@ void load(char *path, long text_base, long data_base)
 	     * particular thing causes duplicate symbols at different
 	     * addresses.
 	     */
-	    if (cur_file == load_ns && !strncmp(name, "_$STATIC", 8))
+	    if (cur_file == load_ns &&
+		(!strncmp(name, "_$STATIC", 8) ||
+		 !strncmp(name, "$NONAME", 7)))
 		continue;
+#endif
 
 	    if (aux && s->n_sclass != C_FILE && s->n_sclass != C_FCN &&
 		s->n_sclass != C_BLOCK) {
+#ifdef __XCOFF64__
+		scnlen = (aux->x_csect.x_scnlen_hi << 32) |
+		    aux->x_csect.x_scnlen_lo;
+#else
+		scnlen = aux->x_csect.x_scnlen;
+#endif
+
 		switch (MAP(aux->x_csect.x_smclas, aux->x_csect.x_smtyp)) {
 		    /*
 		     * A PR SD entry defines a csect and the PR LD
@@ -559,9 +602,10 @@ void load(char *path, long text_base, long data_base)
 			thistype = get_func_int(cur_block,
 						&int_type,
 						&func_int_type);
+		    else if (scnlen == sizeof(int))
+			thistype = get_int(cur_block, &int_type);
 		    else
-			thistype = get_int(cur_block,
-					   &int_type);
+			thistype = get_long(cur_block, &long_type);
 		    break;
 
 		case MAP(XMC_RO, XTY_SD):
@@ -569,8 +613,10 @@ void load(char *path, long text_base, long data_base)
 		case MAP(XMC_RW, XTY_SD):
 		case MAP(XMC_RW, XTY_LD):
 		    suffix = 0;
-		    thistype = get_int(cur_block,
-				       &int_type);
+		    if (scnlen == sizeof(int))
+			thistype = get_int(cur_block, &int_type);
+		    else
+			thistype = get_long(cur_block, &long_type);
 		    break;
 
 		case MAP(XMC_GL, XTY_SD):
@@ -606,13 +652,19 @@ void load(char *path, long text_base, long data_base)
 		case MAP(XMC_TD, XTY_CM): /* An TC SD entry may point to a  */
 		case MAP(XMC_TD, XTY_SD): /* TOC data entry */
 		    suffix = 0;
-		    thistype = get_int(cur_block, &int_type);
+		    if (scnlen == sizeof(int))
+			thistype = get_int(cur_block, &int_type);
+		    else
+			thistype = get_long(cur_block, &long_type);
 		    break;
 #endif
 
 		case MAP(XMC_RW, XTY_CM): /* BSS */
 		    suffix = 0;
-		    thistype = get_int(cur_block, &int_type);
+		    if (scnlen == sizeof(int))
+			thistype = get_int(cur_block, &int_type);
+		    else
+			thistype = get_long(cur_block, &long_type);
 		    break;
 
 		case MAP(XMC_TC, XTY_SD): /* TOC entry */
@@ -651,14 +703,18 @@ void load(char *path, long text_base, long data_base)
 		    break;
 
 		default:
-		    fprintf(stderr, "Unknown class/type pair of %d/%d for %s\n",
+		    fprintf(stderr,
+			    "Unknown class/type pair of %d/%d for %s\n",
 			    aux->x_csect.x_smclas, aux->x_csect.x_smtyp & 7,
 			    name);
 		    continue;
 		}
 	    } else {
 		suffix = 0;
-		thistype = get_int(cur_block, &int_type);
+		if (scnlen == sizeof(int))
+		    thistype = get_int(cur_block, &int_type);
+		else
+		    thistype = get_long(cur_block, &long_type);
 	    }
 
 	    switch (s->n_sclass) {
@@ -666,7 +722,8 @@ void load(char *path, long text_base, long data_base)
 		if (s->n_numaux != 1)
 		    fprintf(stderr, "Missing aux entry for %d\n", sym_index);
 		if (!cur_func) {
-		    fprintf(stderr, ".bb outsize of a func at %d\n", sym_index);
+		    fprintf(stderr, ".bb outsize of a func at %d\n",
+			    sym_index);
 		    continue;
 		}
 		if (!strcmp(name, "bb")) {	/* Begin Block */
@@ -719,10 +776,7 @@ void load(char *path, long text_base, long data_base)
 			void *old_offset = sptr->s_offset;
 			typeptr thistype2;
 
-			while (s2->s_defined && s2->s_offset != offset) {
-			    n2 = store_string(cur_block, n2, 0, "$dup");
-			    s2 = enter_sym(cur_block, n2, 0);
-			}
+			resolv_dup(&s2, &n2, cur_block, offset);
 			if (s2->s_defined)
 			    goto after_enter_sym;
 
@@ -730,7 +784,7 @@ void load(char *path, long text_base, long data_base)
 			thistype2->t_val.val_p = thistype;
 			s2->s_base = base_type(thistype2);
 			s2->s_type = thistype2;
-			s2->s_size = sizeof(int);
+			s2->s_size = sizeof(void *);
 			s2->s_nesting = 0;
 			s2->s_global = 1;
 			s2->s_defined = 1;
@@ -747,10 +801,7 @@ void load(char *path, long text_base, long data_base)
 			sptr->s_haddot = 1;
 			goto after_enter_sym;
 		    }
-		    while (sptr->s_defined && sptr->s_offset != offset) {
-			name = store_string(cur_block, name, 0, "$dup");
-			sptr = enter_sym(cur_block, name, 0);
-		    }
+		    resolv_dup(&sptr, &name, cur_block, offset);
 		    if (sptr->s_defined)
 			goto after_enter_sym;
 		}
@@ -759,12 +810,7 @@ void load(char *path, long text_base, long data_base)
 		sptr->s_offset = (void *)offset;
 		sptr->s_base = base_type(thistype);
 		sptr->s_type = thistype;
-#ifdef __XCOFF64__
-		sptr->s_size = (aux->x_csect.x_scnlen_hi << 32) |
-				     aux->x_csect.x_scnlen_lo;
-#else
-		sptr->s_size = aux->x_csect.x_scnlen; /* #### not always */
-#endif
+		sptr->s_size = scnlen;
 		sptr->s_nesting = 0;
 		sptr->s_global = 1;
 		sptr->s_haddot = haddot;
@@ -787,7 +833,8 @@ void load(char *path, long text_base, long data_base)
 
 		    ref_head = ref_head->fr_next;
 		    temp->fr_sym->s_offset = (void *)
-			((ulong)temp->fr_sym->s_offset + (ulong)sptr->s_offset);
+			((ulong)temp->fr_sym->s_offset +
+			 (ulong)sptr->s_offset);
 		    free(temp);
 		}
 
@@ -815,7 +862,8 @@ void load(char *path, long text_base, long data_base)
 		     * create a seperate name space for this function.
 		     */
 #ifdef __XCOFF64__
-		    if (a1->x_fcn.x_lnnoptr) {
+		    if (load_ns->ns_lines &&
+			a1->x_fcn.x_lnnoptr) {
 			Set_cur_block(cur_func = ns_create(cur_file, name));
 			new_symbols(cur_func);
 			cur_func->ns_text_start = text_base + s->n_value;
@@ -826,15 +874,17 @@ void load(char *path, long text_base, long data_base)
 			cur_func->ns_text_size = a1->x_fcn.x_fsize;
 		    }
 #else
-		    if (a1->x_sym.x_fcnary.x_fcn.x_lnnoptr) {
+		    if (load_ns->ns_lines &&
+			a1->x_sym.x_fcnary.x_fcn.x_lnnoptr) {
 			Set_cur_block(cur_func = ns_create(cur_file, name));
 			new_symbols(cur_func);
 			cur_func->ns_text_start = text_base + s->n_value;
 			cur_func->ns_lines = load_ns->ns_lines +
-			    ((a1->x_sym.x_fcnary.x_fcn.x_lnnoptr - lnnoptr_base)
-			     / LINESZ);
+			    ((a1->x_sym.x_fcnary.x_fcn.x_lnnoptr -
+			      lnnoptr_base) / LINESZ);
 			end_func = a1->x_sym.x_fcnary.x_fcn.x_endndx;
-			cur_func->ns_text_size = a1->x_sym.x_misc.x_lnsz.x_size;
+			cur_func->ns_text_size =
+			    a1->x_sym.x_misc.x_lnsz.x_size;
 		    }
 #endif
 		}
@@ -901,7 +951,8 @@ void load(char *path, long text_base, long data_base)
 		    if (s->n_value > sym_index) { /* forward reference */
 			static_forward_reference = s->n_value;
 		    } else {		/* backward confused reference */
-			fprintf(stderr, "C_BSTAT is confused %d should be %d\n",
+			fprintf(stderr,
+				"C_BSTAT is confused %d should be %d\n",
 				last_csect_index, s->n_value);
 		    }
 		} else {		/* normal reference */
@@ -957,13 +1008,13 @@ void load(char *path, long text_base, long data_base)
 
 		if (have_stab_buf) {
 		    add_to_buf(name, (size ? size : strlen(name)));
-		    parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block, stab_buf,
-			       0, &dbx_sptr);
+		    parse_stab((s->n_sclass == C_FUN ? cur_file : cur_block),
+			       stab_buf, 0, &dbx_sptr);
 		    have_stab_buf = 0;
 		    stab_buf[0] = 0;
 		} else {
-		    parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block, name,
-			       size, &dbx_sptr);
+		    parse_stab(s->n_sclass == C_FUN ? cur_file : cur_block,
+			       name, size, &dbx_sptr);
 		}
 
 		/* These guys have an undefined n_value field */
@@ -991,7 +1042,8 @@ void load(char *path, long text_base, long data_base)
 			 * Insert in order
 			 */
 			for (pp = &ref_head;
-			     (p = *pp) && p->fr_index <= static_forward_reference;
+			     (p = *pp) &&
+				 (p->fr_index <= static_forward_reference);
 			     pp = &p->fr_next);
 			temp->fr_next = *pp;
 			*pp = temp;
@@ -1012,7 +1064,8 @@ void load(char *path, long text_base, long data_base)
 		 * guys.
 		 */
 		if (dbx_sptr->s_defined && dbx_sptr->s_offset != offset)
-		    fprintf(stderr, "Duplicate global symbol %s at %d %x != %x\n",
+		    fprintf(stderr,
+			    "Duplicate global symbol %s at %d %x != %x\n",
 			    dbx_sptr->s_name, sym_index, dbx_sptr->s_offset,
 			    offset);
 		else {
@@ -1036,10 +1089,11 @@ void load(char *path, long text_base, long data_base)
 #undef Set_cur_block
     }
     (void) close(fd);
-#ifdef USE_MMAP
     (void) munmap(m, sbuf.st_size);
-#endif
     if (have_stab_buf)
-	fprintf(stderr, "Load finished with %s still in stab_buf\n", stab_buf);
+	fprintf(stderr, "Load finished with %s still in stab_buf\n",
+		stab_buf);
     finish_copies();
+    DEBUG_PRINTF(("load: done\n"));
+    return 0;
 }
