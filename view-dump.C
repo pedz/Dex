@@ -2,7 +2,7 @@
  * These routines manage a system dump file.
  */
 
-static char sccsid[] = "@(#)view-dump.C	1.1";
+static char sccsid[] = "@(#)view-dump.C	1.2";
 
 #include <stdio.h>
 #include <sys/dump.h>
@@ -19,7 +19,7 @@ char *cur_pos;
 char *dump_file;
 char *dump_file_end;
 int total_pages;
-int page_bobs;
+int page_entries;
 
 /*
  * This code was developed for version 5.  In order to get it to work
@@ -100,9 +100,9 @@ void showbits(char *name, size_t sizeof_name,
 	    putc('x', stdout);
 	    ++total_pages;
 	    --col;
-	    if (!in_mapped)
-		++page_bobs;
-	    in_mapped = 1;
+	    if (!in_mapped || size != PAGESIZE)
+		++page_entries;
+	    in_mapped = size == PAGESIZE;
 	} else {
 	    putc('.', stdout);
 	    --col;
@@ -111,6 +111,8 @@ void showbits(char *name, size_t sizeof_name,
 	addr += size;
 	len -= size;
     }
+    if (in_mapped)
+	++page_entries;
     putc('\n', stdout);
 }
 
@@ -130,7 +132,7 @@ int open_dump(char *path)
     struct stat64 stat_buf;
     int dump_fd;
 
-    if ((dump_fd = open64(path, O_RDWR)) < 0) {
+    if ((dump_fd = open64(path, O_RDONLY)) < 0) {
 	perror(path);
 	return 1;
     }
@@ -138,7 +140,7 @@ int open_dump(char *path)
 	perror("stat");
 	return 1;
     }
-    dump_file = mmap64((void *)0, stat_buf.st_size, PROT_READ|PROT_WRITE,
+    dump_file = mmap64((void *)0, stat_buf.st_size, PROT_READ,
 		       MAP_VARIABLE|MAP_FILE, dump_fd, 0);
     if ((long)dump_file == -1L) {
 	perror("mmap");
@@ -227,6 +229,9 @@ int open_dump(char *path)
 	    }
 	    break;
 #endif
+	default:
+	    fprintf(stderr, "Unknown cdt_magic of %08x\n", cdt->cdt_magic);
+	    exit(1);
 	}
     }
     return 0;
@@ -242,6 +247,6 @@ int main(int argc, char *argv[])
 	progname = argv[0];
 
     rc = open_dump(argv[1]);
-    printf("Total pages: %d\nPage bobs: %d\n", total_pages, page_bobs);
+    printf("Total pages: %d\nPage entries: %d\n", total_pages, page_entries);
     return rc;
 }
