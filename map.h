@@ -1,8 +1,16 @@
 
-/* @(#)map.h	1.3 */
+/* @(#)map.h	1.4 */
 
-#define h_base ((v_ptr)0x40000000)
+#define h_base ((v_ptr)0x30000000)
 #define h_high ((v_ptr)(((long)(h_base)) + 0x10000000))
+
+/*
+ * Pseudo variables use f2v(hbase) which currently translates into
+ * 0x90000000
+ */
+
+#define DUMP_BASE ((void *)0xC0000000)	/* vaddr 0x40000000 */
+#define LOAD_BASE ((void *)0xD0000000)	/* vaddr 0x50000000 */
 
 /*
  * For reference purposes: An address like 0x00000123 in the kernel is
