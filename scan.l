@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.3";
+static char sccs_id[] = "@(#)scan.l	1.4";
 
 #define yylval GRAMlval
 
@@ -45,10 +45,12 @@ struct keywords {
     { "sizeof", SIZEOF },
     { "source", SOURCE },		/* Extension */
     { "static", STATIC },
+    { "stmtdump", STMT_DUMP },		/* Extension */
     { "struct", STRUCT },
     { "switch", SWITCH },
     { "symdump", SYM_DUMP },		/* Extension */
     { "typedef", TYPEDEF },
+    { "typedump", TYPE_DUMP },		/* Extension */
     { "union", UNION },
     { "unsigned", UNSIGNED },
     { "void", VOID },
