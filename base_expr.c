@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)base_expr.c	1.8";
+static char sccs_id[] = "@(#)base_expr.c	1.9";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -17,13 +17,25 @@ ularge_t get_field(void *addr, int offset, int size)
 {
   ularge_t *laddr = addr;
   ularge_t temp;
+  int orig_offset = offset;
 
+  DEBUG_PRINTF(("get field addr: %0*lx, offset: %d, size: %d\n",
+		sizeof(addr)*2, addr, offset, size));
+  DEBUG_PRINTF(("WSIZE = %d, sizeof(ularge_t) = %d\n", WSIZE, sizeof(ularge_t)));
   laddr += (offset / WSIZE);
   offset %= WSIZE;
-  if (offset + size > WSIZE) {
-    fprintf(stderr, "get_field spans alignment boundry\n");
-    exit(1);
+  DEBUG_PRINTF(("get field new laddr: %0*lx, new offset: %d\n",
+	       sizeof(addr)*2, laddr, offset));
+  /*
+   * We cheat and move laddr by single bytes up until the entire value
+   * fits into one fetch.
+   */
+  while (offset + size > WSIZE) {
+    laddr = (ularge_t *)(((char *)laddr) + 1);
+    offset -= 8;
   }
+  DEBUG_PRINTF(("get field new laddr: %0*lx, new offset: %d\n",
+	       sizeof(addr)*2, laddr, offset));
   temp = *laddr;
   temp >>= WSIZE - offset - size;
   temp &= (ularge_t)-1 >> (WSIZE - size);
