@@ -1,5 +1,5 @@
 
-/* @(#)sym.h	1.10 */
+/* @(#)sym.h	1.11 */
 
 #ifndef __SYM_H
 #define __SYM_H
@@ -163,7 +163,7 @@ struct sym {
     enum expr_type s_base;		/* base type of symbol */
     typeptr s_type;			/* type */
     union {
-	v_ptr _s_offset;		/* offset */
+	void *_s_offset;		/* offset */
 	stmt_index _s_stmt;		/* statement */
     } _s_u;
 #define s_offset _s_u._s_offset
@@ -222,8 +222,8 @@ typeptr name2typedef(ns *nspace, char *name);
 typeptr name2typedef_all(char *name);
 typeptr name2namedef(ns *nspace, char *name);
 typeptr name2namedef_all(char *name);
-typeptr insert_type(int typeid, typeptr t);
-int typedef2typeid(typeptr t);
+typeptr insert_type(int type_id, typeptr t);
+int typedef2type_id(typeptr t);
 int allocate_fields(fieldptr f);
 fieldptr newfield(char *name, typeptr tptr, int offset, int numbits);
 attrptr newattr(enum attr_type t, int val);
@@ -231,11 +231,11 @@ enumptr newenum(char *name, int val);
 void add_typedef(typeptr t, char *name);
 void add_namedef(typeptr t, char *name);
 typeptr newtype(ns *nspace, enum stab_type t);
-typeptr find_type(ns *nspace, int typeid);
-paramptr newparam(int typeid, int passby);
-void copy_type_and_record(typeptr new, typeptr old);
+typeptr find_type(ns *nspace, int type_id);
+paramptr newparam(int type_id, int passby);
+void copy_type_and_record(typeptr newp, typeptr oldp);
 void finish_copies(void);
-void copy_type(typeptr new, typeptr old);
+void copy_type(typeptr newp, typeptr oldp);
 char *store_string(ns *nspace, char *name, int len, char *suffix);
 int get_size(typeptr t);
 ns *ns_create(ns *nspace, char *name);
