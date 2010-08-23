@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)print.c	1.6";
+static char sccs_id[] = "@(#)print.c	1.7";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -148,6 +148,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
     int eval;				/* enum's are int's */
     void *pval;				/* for pointers */
     large_t rval;
+    large_t rval_signed;
     char *lower;
     char *upper;
     ularge_t range;
@@ -285,17 +286,30 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	}
 
 	rval = get_field(addr, offset, size);
-	if (tptr->t_val.val_r.r_lower < 0) /* signed */
-	    if (rval & (1 << (size - 1))) /* test sign big */
-		rval |= (-1 << size);	/* smash in sign extension */
+	rval_signed = rval;
+	lower_index = atolarge(lower = tptr->t_val.val_r.r_lower);
+	if (lower_index < 0) {		/* signed */
+	    if (rval & (1 << (size - 1))) { /* test sign big */
+		rval_signed |= ((large_t)-1 << size); /* smash in sign extension */
+	    }
+	}
 
 #ifdef _LONG_LONG
+	/*
+	 * For the decimal value, we want the sign extended value.
+	 * For the hex value, we want the original -- otherwise, we
+	 * get tons of leadings 0xf's for negative numbers.
+	 */
 	if (size == 8)
-	    printf("%lld(0x%0*llx)'%c'\n", rval, (size + 3) / 4, rval,
+	    printf("%lld(0x%0*llx)'%c'\n", rval_signed, (size + 3) / 4, rval,
 		   (int)rval);
 	else
-	    printf("%lld(0x%0*llx)\n", rval, (size + 3) / 4, rval);
+	    printf("%lld(0x%0*llx)\n", rval_signed, (size + 3) / 4, rval);
 #else
+	/*
+	 * I don't have a platform to test this on so I'll won't
+	 * change it -- but it appears broken to me.
+	 */
 	if (size == 8)
 	    printf("%d(0x%0*x)'%c'\n", rval, (size + 3) / 4, rval, rval);
 	else
