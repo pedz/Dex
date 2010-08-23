@@ -1,4 +1,4 @@
-/* @(#)unary_expr.h	1.4 */
+/* @(#)unary_expr.h	1.5 */
 
 #ifndef __UNARY_EXPR_H
 #define __UNARY_EXPR_H
@@ -17,7 +17,7 @@ long long ll_leaf(expr *n);
 unsigned long long ull_leaf(expr *n);
 float f_leaf(expr *n);
 double d_leaf(expr *n);
-st st_leaf(expr *n);
+st_t st_leaf(expr *n);
 
 /* global var address nodes */
 signed char *sc_gaddr(expr *n);
@@ -32,7 +32,7 @@ long long *ll_gaddr(expr *n);
 unsigned long long *ull_gaddr(expr *n);
 float *f_gaddr(expr *n);
 double *d_gaddr(expr *n);
-st *st_gaddr(expr *n);
+st_t *st_gaddr(expr *n);
 
 /* local var address nodes */
 signed char *sc_laddr(expr *n);
@@ -47,7 +47,7 @@ long long *ll_laddr(expr *n);
 unsigned long long *ull_laddr(expr *n);
 float *f_laddr(expr *n);
 double *d_laddr(expr *n);
-st *st_laddr(expr *n);
+st_t *st_laddr(expr *n);
 
 /* Routines which take an lvalue into a pvalue */
 signed char sc_l2p(expr *n);
@@ -62,7 +62,7 @@ long long ll_l2p(expr *n);
 unsigned long long ull_l2p(expr *n);
 float f_l2p(expr *n);
 double d_l2p(expr *n);
-st st_l2p(expr *n);
+st_t st_l2p(expr *n);
 
 /* Routines to call when an improper expression is found */
 signed char sc_null(expr *n);
@@ -77,7 +77,7 @@ long long ll_null(expr *n);
 unsigned long long ull_null(expr *n);
 float f_null(expr *n);
 double d_null(expr *n);
-st st_null(expr *n);
+st_t st_null(expr *n);
 
 /* Unary math operators */
 int sc_lnot(expr *n);
