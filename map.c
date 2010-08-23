@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.12";
+static char sccs_id[] = "@(#)map.c	1.13";
 
 #include <sys/param.h>
 #include <sys/signal.h>
@@ -18,6 +18,7 @@ static char sccs_id[] = "@(#)map.c	1.12";
 #include "stmt.h"
 #include "inter.h"
 #include "fcall.h"
+#include "cdt.h"
 
 #define DEBUG_BIT MAP_C_BIT
 /*
@@ -99,8 +100,10 @@ static char sccs_id[] = "@(#)map.c	1.12";
  * circumstances, a hash table is kept of the rmap entries based upon
  * the virtual address, segment id, and type of stage.  This "normal
  * circumstances" will be explained shortly.  Note that there are rmap
- * entries created for each full page found in the dump.  I can not
- * recall the reason these entries are created.
+ * entries created for each full page found in the dump.  I believe
+ * this is because f2v does an rmap lookup and if we are doing an f2v
+ * of an address in the dump file, we will need an rmap entry or we
+ * will exit with an error.
  *
  * After the initialization code is complete, dex begins to run and
  * eventually will touch a page that has been allocated but not
@@ -143,7 +146,7 @@ static char sccs_id[] = "@(#)map.c	1.12";
  * Whatever part is not in the dump is left as 0.
  *
  * The third stage setup routine called span_seg_setup is the most
- * wierd.  This is the case where the pte's each cover less than a
+ * weird.  This is the case where the pte's each cover less than a
  * segment but the range of all of the pte's of the stage cover more
  * than a segment.  In the 32 bit case, this is the top level stage
  * (initial_stage).  In the 64 bit case, this is stage2 (starting from
@@ -155,14 +158,15 @@ static char sccs_id[] = "@(#)map.c	1.12";
  * beauty of this is that all of the data system structures are not
  * known by the real C code but are defined from debugging information
  * pulled in by an object file that is loaded.  (Currently this object
- * file come from base.c and is called base.o for 32 bit and base.64o
+ * file comes from base.c and is called base.o for 32 bit and base.64o
  * for 64 bit.)  addr2seg can then use pseudo-C code to dig around in
  * the kernel to find the value of the segment register for the
  * address that it is passed.
  *
  * The down fall with this is that addr2seg can page fault.  So, while
- * addr2seg is being to resolve a page fault, a second page fault can
- * happen.  This is span_seg_setup is "wierd" or hard to do.
+ * addr2seg is being called to resolve a page fault, a second page
+ * fault can happen.  This is why span_seg_setup is "weird" or hard to
+ * do.
  *
  * The way the above problem is solved is to first allocate (but not
  * map) pages for all of the pte's in the stage.  But this needs to be
@@ -221,13 +225,13 @@ static char sccs_id[] = "@(#)map.c	1.12";
  *
  * Additions:
  *
- * The r_initialized bit is kept off unstead of a special segment
+ * The r_initialized bit is kept off instead of a special segment
  * value of UNKNOWN.
  *
  * We can add a bit like r_true_segval which will be set if addr2seg
  * is called.  In that case, in span_seg_setup, before addr2seg is
  * called, pte entries in the same segment can be scanned and if they
- * are initialized and true_segval is set, then we can not call
+ * are initialized and true_segval is set, then we do not call
  * addr2seg.  Otherwise, we can not tell if the segment value is the
  * true segment value or if there happened to be only one segment
  * value for all the pages in the dump for that range.
@@ -243,24 +247,17 @@ static char sccs_id[] = "@(#)map.c	1.12";
 struct rmap {
     unsigned long r_phys;		/* physical address in dex */
     unsigned long r_psize;		/* size of structure */
-    /* */
+
     unsigned long r_virt;		/* virtual address */
     int r_thread;			/* thread this is for (0 => all) */
     enum stages r_stage;		/* what stage is this */
-    /* */
-    union {
-	struct {			/* if initialized */
-	    unsigned long _r_seg;	/* segment value */
-	    struct rmap *_r_hash;	/* hash chain */
-	} r_init;
-	struct {			/* if not initialized */
-	    int _r_parent;		/* rmap index of parent */
-	    int _r_slot;		/* pte index that points to us */
-	} r_pending;
-    } r_dog;
 
-    /* */
+    unsigned long r_seg;		/* segment value */
+    struct rmap *r_hash;		/* hash chain */
+
+    int r_lineno;			/* line # where added to hash */
     uint r_mapped : 1;			/* true if actually mmaped */
+    uint r_hashed : 1;			/* true if in hash */
     uint r_freed : 1;			/* true if freed */
     uint r_initialized : 1;		/* true if initilized */
     uint r_phys_set : 1;		/* true if r_phys/r_psize is valid */
@@ -268,36 +265,74 @@ struct rmap {
     uint r_in_addr2seg : 1;
 };
 
-#define r_seg    r_dog.r_init._r_seg
-#define r_hash   r_dog.r_init._r_hash
-#define r_parent r_dog.r_pending._r_parent
-#define r_slot   r_dog.r_pending._r_slot
-
 struct dump_entry {
     unsigned int de_isreal : 1;
-    unsigned short de_len;		/* length of entry */
+    unsigned long de_len;		/* length of entry */
     union {
 	struct {
 	    unsigned long dv_virt;	/* virtual address */
 	    unsigned long dv_segval;	/* segment register */
-	} de_virt;
-	unsigned long long de_real;	/* real address */
-    };
+	    unsigned long dv_end;	/* end of region */
+	    unsigned long dv_min;	/* see note just below */
+	} du_virt;
+	unsigned long long du_real;	/* real address */
+    } de_union;
     void *de_dump;			/* offset into dump */
 };
 
+#define de_virt   de_union.du_virt.dv_virt
+#define de_segval de_union.du_virt.dv_segval
+#define de_end    de_union.du_virt.dv_end
+#define de_min    de_union.du_virt.dv_min
+#define de_real   de_union.du_real
+
+/*
+ * Note about dv_min: The dump entries are sorted by du_virt.dv_end
+ * with the smaller du_virt.dv_end addresses at the lower end of the
+ * dump_entries.  After the sort, the array is traversed from high to
+ * low and dv_min is set to the lowest beginning address found so far.
+ *
+ * When we went to look for entries, we do a binary search using
+ * du_virt.dv_end to find where in the array to start.  We will know
+ * that all entries below the one we start at will have ending
+ * addresses lower than the lowest address we are trying to fill and
+ * so can not possibly be useful to look at.  We will look at entries
+ * until dv_min is above the highest address that we are trying to
+ * fill which will tell us that all entries above that point start
+ * above the point we are trying to fill.
+ *
+ * This should limit the range of entries we look at considerably.
+ */
+
+/* C++ funky prototypes to make the link work */
+extern "C" p_ptr v2f(v_ptr v);
+extern "C" v_ptr f2v(p_ptr p);
+extern "C" long get_addr2seg(long addr);
+extern "C" int purge_all_pages(void);
+extern "C" int purge_user_pages(void);
+extern "C" int return_range(char *t_name, char *d_name, void **startp, int *lenp);
+extern "C" void trace_mappings(void);
+extern "C" int open_dump(char *path);
+extern "C" int map_init(void);
+extern "C" char *print_field(int,...);
+extern "C" void fail(int);
+extern "C" void *safe_malloc(unsigned long,char*,int);
+extern "C" symptr name2userdef_all(char*);
+extern "C" void mk_const(name_space*,cnode*,long long,int);
+extern "C" int mk_ident(cnode*,char*);
+extern "C" void mk_fcall(cnode*,cnode*,cnode_list*);
+extern "C" long l_fcall(expr*);
+extern "C" void *safe_realloc(void*,unsigned long,unsigned long,char*,int);
+
 /* Local Prototypes */
-p_ptr v2f(v_ptr v);
-v_ptr f2v(p_ptr p);
 static struct rmap *rmap_find(long l);
-static void add_to_hash(struct rmap *r);
+static void add_to_hash(struct rmap *r, int lineno);
 static int map_addr(long l);
 #if 1 /* def __64BIT__ */
 static void map_catch(int sig, siginfo_t *info, ucontext_t *context);
 #else
 static void map_catch(int sig, int code, struct sigcontext *scp);
 #endif
-int map_init(void);
 static int xmap_compare(struct rmap *ra, struct rmap *rb);
 static int rmap_hash(struct rmap *r);
 static struct rmap *rmap_alloc(int size);
@@ -346,15 +381,9 @@ static int setup_partial_page(unsigned long s,
 			      int thread,
 			      unsigned long segval,
 			      unsigned long addr);
-static int de_compare(void *a, void *b);
 static int init_dump(void);
-int return_range(char *t_name, char *d_name, void **startp, int *lenp);
-int purge_all_pages(void);
-int purge_user_pages(void);
-int open_dump(char *path);
-void trace_mappings(void);
 long get_addr2seg(long addr);
-
+static void rmap_dump(void);
 
 /* Locals */
 static struct rmap *rmap;
@@ -367,15 +396,18 @@ static int dump_fd;
 static char *dump_file;
 static char *dump_file_end;
 static struct dump_entry *dump_entries;
+#if 0
+static struct dump_entry **dump_entries_end;
+#endif
 static int dump_entry_cnt;
 static long no_page_start;
 static long no_page_end;
 static int quick_dump;
-static long bos_segval;
-static long bos_addr_start;
-static long bos_addr_end;
+static unsigned long bos_segval;
+static unsigned long bos_addr_start;
+static unsigned long bos_addr_end;
 static char *s_strings[] = {
-    "stage0", "stage1", "stage2", "final_stage", "partial_page", "real_stage"
+    "stage0", "stage1", "stage2", "final", "partial", "real"
 };
 
 int thread_slot = -1;
@@ -386,12 +418,72 @@ int fromdump = 1;			/* always from a dump for now */
 void * volatile last_v;
 void * volatile last_f;
 
+#define FAST_MAP
+
+#ifdef FAST_MAP
 p_ptr v2f(v_ptr v)
 {
     last_v = v;
     last_f = (void *)-1;
     return last_f = V2F_MACRO(v);
 }
+#else
+#ifdef __64BIT__
+
+p_ptr v2f(v_ptr v)
+{
+    volatile struct stage0 *S0;
+    volatile struct stage1 *S1;
+    volatile struct stage2 *S2;
+    volatile struct final_stage *FS;
+    volatile unsigned long FN;
+    volatile unsigned long I0;
+    volatile unsigned long I1;
+    volatile unsigned long I2;
+    volatile unsigned long I3;
+    volatile unsigned long I4;
+
+    last_v = v;
+    last_f = (void *)-1;
+
+    S0 = page_table[THREAD_SLOT];
+    I0 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*3)) & STAGE_MASK;
+    I1 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*2)) & STAGE_MASK;
+    I2 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*1)) & STAGE_MASK;
+    I3 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*0)) & STAGE_MASK;
+    I4 = (((unsigned long)(v)) & (PAGESIZE - 1));
+    S1 = S0->pte[I0];
+    S2 = S1->pte[I1];
+    FS = S2->pte[I2];
+    FN = FS->pte[I3];
+    return (p_ptr)(FN + I4);
+}
+
+#else
+
+p_ptr v2f(v_ptr v)
+{
+    volatile struct stage2 *S2;
+    volatile struct final_stage *FS;
+    volatile unsigned long FN;
+    volatile unsigned long I2;
+    volatile unsigned long I3;
+    volatile unsigned long I4;
+
+    last_v = v;
+    last_f = (void *)-1;
+
+    S2 = page_table[THREAD_SLOT];
+    I2 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*1)) & STAGE_MASK;
+    I3 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*0)) & STAGE_MASK;
+    I4 = (((unsigned long)(v)) & (PAGESIZE - 1));
+    FS = S2->pte[I2];
+    FN = FS->pte[I3];
+    return (p_ptr)(FN + I4);
+}
+
+#endif /* __64BIT__ */
+#endif /* FAST_MAP */
 
 v_ptr f2v(p_ptr p)
 {
@@ -417,6 +509,35 @@ v_ptr f2v(p_ptr p)
 	fail(1);
     }
     return (v_ptr)(l - r->r_phys + r->r_virt);
+}
+
+/*
+ * This is a "predicate" that is true if the value passed in is an
+ * "invalid" segment value.  On 64 bit systems, a 0 segment value is
+ * sometimes found in dumps but the bos segment value is not 0 so on
+ * 64 bit systems, a 0 is "invalid".  On all systems, a -1 is also
+ * invalid.
+ *
+ * This routine is used in searchs and basically an "invalid" segment
+ * value is effectively a wild card -- it could match any segment
+ * value.  The code should pick a page that has an exact matching
+ * segment value.  But if there is not one with an exact match, a page
+ * in (with the same address range) and an invalid (or wild card)
+ * segment value is used.  (If there are more than one of these --
+ * tough.)
+ *
+ * Had to modify this to pass in addr since a some dump table entries
+ * put a segment value of 0 even if they are in a completely different
+ * segment than the bos segment.  So, for a segval of 0 to be valid,
+ * bos_segval must be 0 and the address must be between bos_addr_start
+ * and bos_addr_end.
+ */
+static int invalid_segval_p(unsigned long segval, unsigned long addr)
+{
+    return ((segval == (unsigned long)-1) ||
+	    (sizeof(segval) == 4 && segval == 0x007fffff) ||
+	    (segval == 0 &&(bos_segval != 0 ||
+			    (addr < bos_addr_start || addr >= bos_addr_end))));
 }
 
 static struct rmap *rmap_find(long l)
@@ -454,9 +575,25 @@ static struct rmap *rmap_find(long l)
     return 0;
 }
 
-static void add_to_hash(struct rmap *r)
+static void add_to_hash(struct rmap *r, int lineno)
 {
     int hash = rmap_hash(r);
+
+    DEBUG_PRINTF(("add_to_hash: %s, %d\n", P(r), lineno));
+    if (r->r_hashed) {
+	fflush(stdout);
+	fprintf(stderr, "add_to_hash: %s:%d already in hash from %d\n", P(r),
+		lineno, r->r_lineno);
+	exit(1);
+    }
+
+    /*
+     * An extra bit is needed for r_hashed since it can be at the end
+     * of the list and r_hash will be 0.  r_hashed is only used to
+     * catch programming errors.
+     */
+    r->r_hashed = 1;
+    r->r_lineno = lineno;
     r->r_hash = (*rmap_hash_table)[hash];
     (*rmap_hash_table)[hash] = r;
 }
@@ -466,15 +603,32 @@ static int map_addr(long l)
     struct rmap *r;
     unsigned long skip;
     void *mmap_ret;
-    int stage;
+    enum stages stage;
     int i;
 
     /*
      * If we hit the page that says "the page does not exist in the
      * dump" then we just return unhappy.
      */
-    if (no_page_start <= l && l < no_page_end)
+    if (no_page_start <= l && l < no_page_end) {
+	long temp = (long)last_v;
+	struct stage0 *p;
+	int offset;
+	int shift;
+
+	DEBUG_PRINTF(("thread slot:%d\n", thread_slot));
+	DEBUG_PRINTF(("last_v:0x%s last_f=0x%s\n", P(last_v), P(last_f)));
+	p = (struct stage0 *)page_table[THREAD_SLOT];
+	DEBUG_PRINTF(("page_table[%d]=0x%s\n", THREAD_SLOT, P(p)));
+	for (shift = MAX_SHIFT_CNT; shift >= 0; --shift) {
+	    if (!p || ((long)p >= no_page_start && (long)p < no_page_end))
+		break;
+	    offset = (temp >> (PGSHIFT+(STAGE_BITS*shift))) & STAGE_MASK;
+	    p = (struct stage0 *)(p->pte[offset]);
+	    DEBUG_PRINTF(("p[%d]=0x%s\n", offset, P(p)));
+	}
 	return 1;
+    }
 
     if (!(r = rmap_find(l))) {
 	fflush(stdout);
@@ -500,7 +654,8 @@ static int map_addr(long l)
 	int hash;
 
 	if (r->r_in_addr2seg) {
-	    printf("addr2seg recursed %d %s\n", r->r_thread, P(r->r_virt));
+	    DEBUG_PRINTF(("addr2seg recursed %d %s\n", r->r_thread,
+			  P(r->r_virt)));
 	    return 1;
 	}
 	r->r_in_addr2seg = 1;
@@ -509,9 +664,12 @@ static int map_addr(long l)
 	r->r_initialized = 1;
 	r->r_true_segval = 1;
 	r->r_seg = segval;
-	add_to_hash(r);
+	add_to_hash(r, __LINE__);
     }
 
+    if (debug_mask & MMAP_BIT)
+	printf("mmap: s=%s l=%s e=%s\n", P(r->r_phys), P(r->r_psize),
+	       P(r->r_phys + r->r_psize));
     mmap_ret = mmap((void *)r->r_phys, r->r_psize, PROT_READ|PROT_WRITE,
 		    MAP_FIXED|MAP_ANONYMOUS, -1, 0);
     DEBUG_PRINTF(("mmap_ret = 0x%s\n", P(mmap_ret)));
@@ -528,7 +686,7 @@ static int map_addr(long l)
 	return setup_thread(r->r_thread);
 
     case STAGE1:
-	stage = r->r_stage + 1;
+	stage = STAGE2;
 	skip = ((((unsigned long)-1) >> (STAGE_BITS * 2)) + 1);
 	return setup_stage((struct stage0 *)r->r_phys, r->r_thread, r->r_seg,
 			   r->r_virt, skip, stage);
@@ -536,7 +694,7 @@ static int map_addr(long l)
     case STAGE2:
 	if (INITIAL_STAGE == STAGE2)
 	    return setup_thread(r->r_thread);
-	stage = r->r_stage + 1;
+	stage = FINAL_STAGE;
 	skip = ((((unsigned long)-1) >> (STAGE_BITS * 3)) + 1);
 	return setup_stage((struct stage0 *)r->r_phys, r->r_thread, r->r_seg,
 			   r->r_virt, skip, stage);
@@ -564,16 +722,31 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 {
     static volatile int count;
     sigset_t t;
+    long paddr;
+
     /*
      * The documentation says this is not correct but it seems to work for now.
      */
 #if 1 /* def __64BIT__ */
-    long paddr = (long)info->si_addr;
+    /*
+     * This keeps changing.  It use to be this:
+     paddr = (long)info->si_addr;
+     */
 
+    paddr = context->uc_mcontext.jmp_context.except[0];
+
+#if 0
+    fprintf(stderr, "si_addr=%s except=%s\n", P(info->si_addr),
+	    P(context->uc_mcontext.jmp_context.except[0]));
+    fprintf(stderr, "thread slot = %d\n", thread_slot);
+#endif
+
+#if 0
     {
-	long *l = (long *)info;
+	long *l;
 	int i;
 
+	l = (long *)info;
 	DEBUG_PRINTF(("map_catch: info=0x%s context=0x%s\n",
 		      P(info), P(context)));
 	for (i = sizeof(siginfo_t)/sizeof(long); --i >= 0; ++l)
@@ -586,11 +759,21 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 	DEBUG_PRINTF(("map_catch: iar=0x%s\n",
 		      P(context->uc_mcontext.jmp_context.iar)));
     }
+#endif
+
 #else
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
 #endif
 
-    DEBUG_PRINTF(("map_catch: paddr:0x%s\n", P(paddr)));
+    DEBUG_PRINTF(("map_catch: last_v:0x%s thread:%d paddr:0x%s\n",
+		  P(last_v), thread_slot, P(paddr)));
+    if (stmt_stack[cur_stmt_index]) {
+	struct stmt *s = statements + stmt_stack[cur_stmt_index];
+
+	if (s)
+	    DEBUG_PRINTF(("map_catch: File %s line %d\n",
+			  s->stmt_file, s->stmt_line));
+    }
 
     if (++count >= 10) {
 	fflush(stdout);
@@ -629,7 +812,7 @@ int map_init(void)
     struct rmap *r;
     
 
-    s.sa_handler = (void (*)())map_catch;
+    s.sa_handler = (void (*)(int))map_catch;
     sigemptyset(&s.sa_mask);
 
 #ifdef SA_SIGINFO
@@ -662,6 +845,9 @@ int map_init(void)
      * is not in the dump.  We must do this before calling init_dump
      * since init_dump uses map_top.
      */
+    if (debug_mask & MMAP_BIT)
+	printf("mmap: s=%s l=%s e=%s\n", P(0), P(sizeof(initial_stage_t)),
+	       P(sizeof(initial_stage_t)));
     map_top = (long) mmap((void *)0,
 			  sizeof(initial_stage_t),
 			  PROT_READ|PROT_WRITE,
@@ -692,7 +878,7 @@ int map_init(void)
 	return 1;
 
     DEBUG_PRINTF(("thread_max=%d\n", thread_max));
-    page_table = smalloc((size_t)(thread_max + 1) * sizeof(page_table[0]));
+    page_table = (initial_stage_t **)smalloc((size_t)(thread_max + 1) * sizeof(page_table[0]));
     ++page_table;			/* allow for -1 entry */
     page_table[-1] = (initial_stage_t *)first_map;
 
@@ -751,9 +937,11 @@ static int rmap_hash(struct rmap *r)
 	temp >>= rmap_shift;
     }
 
+#if 1
     DEBUG_PRINTF(("rmap_hash: %s s=%s a=%s max=%d returning %d\n",
 		  s_strings[r->r_stage], P(r->r_seg), P(r->r_virt),
 		  rmap_max, index));
+#endif
     return index;
 }
 
@@ -788,20 +976,26 @@ static struct rmap *rmap_alloc(int size)
 	    rmap_shift = 12;
 	    rmap_max = 1 << rmap_shift;
 
-	    rmap = smalloc(rmap_max * sizeof(*rmap));
-	    rmap_hash_table = smalloc(rmap_max*sizeof((*rmap_hash_table)[0]));
+	    rmap = (struct rmap *)smalloc(rmap_max * sizeof(*rmap));
+	    rmap_hash_table = (struct rmap *(*)[])
+		smalloc(rmap_max*sizeof((*rmap_hash_table)[0]));
+	    DEBUG_PRINTF(("rmap initialized to %d\n", rmap_max));
 	} else {
-	    int i;
 	    size_t r_old = rmap_max * sizeof(*rmap);
 	    size_t r_new = (rmap_max = (1 << ++rmap_shift)) * sizeof(*rmap);
 	    size_t h_new = rmap_max * sizeof((*rmap_hash_table)[0]);
+	    struct rmap *r, *r_end;
 
-	    rmap = srealloc(rmap, r_new, r_old);
+	    r = rmap = (struct rmap *)srealloc(rmap, r_new, r_old);
+	    r_end = r + rmap_used;
 	    free(rmap_hash_table);
-	    rmap_hash_table = smalloc(h_new);
+	    rmap_hash_table = (struct rmap *(*)[])smalloc(h_new);
 
-	    for (i = 0; i < rmap_used; ++i)
-		add_to_hash(rmap + i);
+	    for ( ; r < r_end; ++r)
+		if (r->r_hashed) {
+		    r->r_hashed = 0;
+		    add_to_hash(r, __LINE__);
+		}
 	    
 	    DEBUG_PRINTF(("rmap's increased to %d\n", rmap_max));
 	}
@@ -827,6 +1021,11 @@ static void rmap_free(struct rmap *r)
 	fprintf(stderr, "rmap_free: r_freed set for %s\n", P(r));
 	exit(1);
     }
+    if (r->r_hashed) {
+	fflush(stdout);
+	fprintf(stderr, "rmap_free: r_hashed set for %s\n", P(r));
+	exit(1);
+    }
     if (r->r_mapped) {
 	fflush(stdout);
 	fprintf(stderr, "rmap_free: r_mapped set for %s\n", P(r));
@@ -843,6 +1042,11 @@ static void rmap_free(struct rmap *r)
 	rmap_first_free = index;
 }
 
+static void rmap_debug(void)
+{
+    DEBUG_PRINTF(("rmap is out of whack!!\n"));
+}
+
 static void rmap_fill(unsigned long phys,
 		      unsigned long psize,
 		      enum stages stage,
@@ -850,6 +1054,7 @@ static void rmap_fill(unsigned long phys,
 		      unsigned long seg,
 		      unsigned long virt)
 {
+    static unsigned long last_phys;
     struct rmap *rp;
     int hash;
 
@@ -858,6 +1063,10 @@ static void rmap_fill(unsigned long phys,
 		      "           v=%s seg=%s\n",
 		      P(phys), P(psize), s_strings[stage], thread, P(virt),
 		      P(seg)));
+
+    if (phys < last_phys)
+	rmap_debug();
+    last_phys = phys;
 
     rp = rmap_alloc(0);
 
@@ -872,7 +1081,7 @@ static void rmap_fill(unsigned long phys,
 
     rp->r_seg = seg;
     rp->r_initialized = 1;
-    add_to_hash(rp);
+    add_to_hash(rp, __LINE__);
 }
 
 static struct rmap *xmap_find(enum stages stage,
@@ -919,7 +1128,7 @@ static long allocate_map(int thread,
 
     r->r_initialized = 1;
     r->r_seg = seg;
-    add_to_hash(r);
+    add_to_hash(r, __LINE__);
 
     return r->r_phys;
 }
@@ -934,7 +1143,14 @@ static struct dump_entry *starting_d(unsigned long addr)
 	int mid = (low + high) / 2;
 	struct dump_entry *de = dump_entries + mid;
 
-	if (!de->de_isreal && (addr > de->de_virt.dv_virt))
+#if 0
+	DEBUG_PRINTF(("starting_d: %6d %6d %6d %s %s\n",
+		      low, mid, high, P(de->de_virt),
+		      P(de->de_virt + de->de_len)));
+
+#endif
+
+	if (!de->de_isreal && addr > de->de_end)
 	    low = mid + 1;
 	else
 	    high = mid - 1;
@@ -952,32 +1168,13 @@ static struct dump_entry *starting_d(unsigned long addr)
      (USER_START < top && top <= USER_END) || \
      (addr <= USER_START && USER_END <= top))
 
-/*
- * This use to be in setup_thread a way back ago
- */
-#if 0 /* removed while working on 64 bit stuff */
-	/*
-	 * #### This is a quick fix to the problem when a thread is
-	 * not in kernel space and we switch to it, then segment
-	 * register 0 can be something beside 0.  In that case, we can
-	 * not get access to the normal kernel segment 0 and things
-	 * fail rapidly.  So we force all threads to have segment
-	 * register 0 set to 0.
-	 *
-	 * This may not be needed now with the first_segval and
-	 * only_one_segval changes.
-	 */
-	if (!(addr & 0xf0000000))
-	    segval = 0;
-#endif
-
 static int setup_thread(int thread)
 {
     initial_stage_t *s = page_table[thread];
     unsigned long segval = -thread;
     unsigned long addr = 0;
     unsigned long skip = (((unsigned long)-1) >> STAGE_BITS) + 1;
-    int stage = INITIAL_STAGE + 1;
+    enum stages stage = INITIAL_STAGE_P1;
     char *routine = "setup_thread";
     int mult_segs = skip > SEGSIZE;
 
@@ -1034,42 +1231,43 @@ static int mult_seg_setup(struct stage0 *s,
 			  enum stages stage)
 {
     char *routine = "mult_seg_setup";
+    struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     unsigned long top;
     int i;
 
     for (i = 0; i < STAGE_SIZE; ++i)
-	s->pte[i] = (void *)no_page_start;
+	s->pte[i] = (struct stage1 *)no_page_start;
 
     for (i = 0; i < STAGE_SIZE; ++i, addr = top) {
-	struct dump_entry *first_d, *d;
+	struct dump_entry *first_d = 0, *d;
 	int one_hit = 0;
 
 	top = addr + skip;
 
 	if (IN_USER_RANGE(addr, top)) {
-	    s->pte[i] = (void *)allocate_map(thread, stage, skip, 0, addr);
+	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, 0, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
 			  routine, P(s), i, P(s->pte[i])));
 	    continue;
 	}
 
 	if (IN_BOS_RANGE(addr, top)) {
-	    s->pte[i] = (void *)allocate_map(thread, stage, skip,
+	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip,
 					     bos_segval, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s bos\n",
 			  routine, P(s), i, P(s->pte[i])));
 	    continue;
 	}
 
-	first_d = d = starting_d(addr);
+	d = starting_d(addr);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 		      routine, P(addr), P(top), P(segval)));
 	DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
 		      strlen(routine), "found",
-		      P(d->de_virt.dv_virt),
-		      P(d->de_virt.dv_virt+d->de_len),
-		      P(d->de_virt.dv_segval)));
+		      P(d->de_virt),
+		      P(d->de_virt+d->de_len),
+		      P(d->de_segval)));
 
 	/*
 	 * The for loop makes sure that d points to a valid entry,
@@ -1077,9 +1275,14 @@ static int mult_seg_setup(struct stage0 *s,
 	 * I will need to hook up support for real segments someday
 	 * probably to make the vmm people happy.
 	 */
-	for (; (d < (dump_entries + dump_entry_cnt) &&
-		!d->de_isreal &&
-		d->de_virt.dv_virt < top); ++d) {
+	for ( ; d < d_end && d->de_min < top; ++d) {
+	    if (d->de_isreal ||
+		(d->de_virt > top) ||
+		(d->de_end <= addr))
+		continue;
+
+	    if (!one_hit)
+		first_d = d;
 
 	    /* Flag that says we have at least one page in this range */
 	    one_hit = 1;
@@ -1089,11 +1292,14 @@ static int mult_seg_setup(struct stage0 *s,
 	     * we set up a map using the segval passed in and we are
 	     * done.
 	     */
-	    if (first_d->de_virt.dv_segval == d->de_virt.dv_segval ||
-		d->de_virt.dv_segval == 0)
+	    if (invalid_segval_p(first_d->de_segval, addr))
+		first_d = d;
+
+	    if (invalid_segval_p(d->de_segval, addr) ||
+		first_d->de_segval == d->de_segval)
 		continue;
 		    
-	    s->pte[i] = (void *)allocate_map(thread,
+	    s->pte[i] = (struct stage1 *)allocate_map(thread,
 					     stage,
 					     skip,
 					     segval,
@@ -1109,10 +1315,10 @@ static int mult_seg_setup(struct stage0 *s,
 	 * allocate a map using its segval.
 	 */
 	if (one_hit) {
-	    s->pte[i] =  (void *)allocate_map(thread,
+	    s->pte[i] =  (struct stage1 *)allocate_map(thread,
 					      stage,
 					      skip,
-					      first_d->de_virt.dv_segval,
+					      first_d->de_segval,
 					      addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
 			  routine, P(s), i, P(s->pte[i])));
@@ -1138,8 +1344,9 @@ static int span_seg_setup(struct stage0 *s,
 			  enum stages stage)
 {
     char *routine = "span_seg_setup";
+    struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     unsigned long addr_save = addr;
-    unsigned long segval_addr;
+    unsigned long segval_addr = addr & ~(SEGSIZE - 1);
     unsigned long top;
     struct rmap *rmaps[STAGE_SIZE];
     int pass;
@@ -1149,7 +1356,7 @@ static int span_seg_setup(struct stage0 *s,
 	addr = addr_save;
 
 	for (i = 0; i < STAGE_SIZE; ++i, addr = top) {
-	    struct dump_entry *first_d, *d;
+	    struct dump_entry *first_d = 0, *d;
 	    int one_hit = 0;
 	    struct rmap *r;
 
@@ -1157,7 +1364,7 @@ static int span_seg_setup(struct stage0 *s,
 
 	    if (IN_USER_RANGE(addr, top)) {
 		if (pass == 0) {
-		    s->pte[i] = (void *)allocate_map(thread, stage,
+		    s->pte[i] = (struct stage1 *)allocate_map(thread, stage,
 						     skip, 0,
 						     addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
@@ -1168,7 +1375,7 @@ static int span_seg_setup(struct stage0 *s,
 
 	    if (IN_BOS_RANGE(addr, top)) {
 		if (pass == 0) {
-		    s->pte[i] = (void *)allocate_map(thread, stage, skip,
+		    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip,
 						     bos_segval, addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s bos\n",
 				  routine, P(s), i, P(s->pte[i])));
@@ -1176,24 +1383,34 @@ static int span_seg_setup(struct stage0 *s,
 		continue;
 	    }
 
-	    first_d = d = starting_d(addr);
+	    d = starting_d(addr);
 
 	    DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 			  routine, P(addr), P(top), P(segval)));
 	    DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
 			  strlen(routine), "found",
-			  P(d->de_virt.dv_virt),
-			  P(d->de_virt.dv_virt+d->de_len),
-			  P(d->de_virt.dv_segval)));
+			  P(d->de_virt),
+			  P(d->de_virt+d->de_len),
+			  P(d->de_segval)));
 
-	    for (; (d < (dump_entries + dump_entry_cnt) &&
-		    !d->de_isreal &&
-		    d->de_virt.dv_virt < top); ++d) {
+	    for ( ; d < d_end && d->de_min < top; ++d) {
+		if (d->de_isreal ||
+		    (d->de_virt > top) ||
+		    (d->de_end <= addr))
+		    continue;
+
+		if (!one_hit)
+		    first_d = d;
+
 		one_hit = 1;
 
 		if (first_d) {
-		    if (first_d->de_virt.dv_segval == d->de_virt.dv_segval ||
-			d->de_virt.dv_segval == 0)
+
+		    if (invalid_segval_p(first_d->de_segval, addr))
+			first_d = d;
+
+		    if (invalid_segval_p(d->de_segval, addr) ||
+			(first_d->de_segval == d->de_segval))
 			continue;
 		    
 		    /*
@@ -1235,7 +1452,7 @@ static int span_seg_setup(struct stage0 *s,
 			 */
 			for (j = i+1, addr_tmp = addr + skip;
 			     (addr / SEGSIZE) == (addr_tmp / SEGSIZE);
-			     addr_tmp += addr, ++j) {
+			     addr_tmp += skip, ++j) {
 
 			    if (s->pte[j] == (struct stage1 *)no_page_start)
 				continue;
@@ -1271,12 +1488,12 @@ static int span_seg_setup(struct stage0 *s,
 		     * If the segval we want is actually what first_d,
 		     * we reset d to first_d and fall though.
 		     */
-		    if (first_d->de_virt.dv_segval == segval)
+		    if (first_d->de_segval == segval)
 			d = first_d;
 		    first_d = 0;
 		}
 
-		if (d->de_virt.dv_segval == segval) {
+		if (d->de_segval == segval) {
 		    if (!(r = rmap_find((long)s->pte[i]))) {
 			fflush(stdout);
 			fprintf(stderr, "%s: rmap_find(2) failed "
@@ -1284,27 +1501,46 @@ static int span_seg_setup(struct stage0 *s,
 				routine, P(s), i, P(s->pte[i]));
 			exit(1);
 		    }
-		    r->r_initialized = 1;
-		    r->r_true_segval = 1;
-		    r->r_seg = segval;
-		    add_to_hash(r);
+		    if (r->r_hashed) {
+			if (!r->r_initialized ||
+			    !r->r_true_segval ||
+			    r->r_seg != segval) {
+			    fflush(stdout);
+			    fprintf(stderr, "span_seg_setup: rehash with different values");
+			    exit(1);
+			}
+		    } else {
+			r->r_initialized = 1;
+			r->r_true_segval = 1;
+			r->r_seg = segval;
+			add_to_hash(r, __LINE__);
+		    }
 		    DEBUG_PRINTF(("%s: %s segval changed to %s\n",
-				  routine, s->pte[i], segval));
+				  routine, P(s->pte[i]), P(segval)));
 		    goto cont_loop;
 		}
 	    }
 
+	    DEBUG_PRINTF(("%s: pass:%d one_hit:%d first_d:%d\n",
+			  routine, pass, one_hit, first_d != 0));
+
+	    /*
+	     * Only one real segval in this range
+	     */
 	    if (pass == 0 && one_hit  && first_d) {
-		s->pte[i] =  (void *)allocate_map(thread,
+		s->pte[i] =  (struct stage1 *)allocate_map(thread,
 						  stage,
 						  skip,
-						  first_d->de_virt.dv_segval,
+						  first_d->de_segval,
 						  addr);
 		DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
 			      routine, P(s), i, P(s->pte[i])));
 		continue;
 	    }
 
+	    /*
+	     * No pages at all in this range
+	     */
 	    if (!one_hit) {
 		if (pass == 0)
 		    s->pte[i] = (struct stage1 *)no_page_start;
@@ -1339,10 +1575,6 @@ static int span_seg_setup(struct stage0 *s,
 /*
  * In this routine, we have to watch out for partial pages in the dump
  * because skip will be PAGESIZE.
- *
- * mult_segs is never true.  Right now, I've put the code it to make
- * the code easy to compare between the three different setup_*
- * functions.
  */
 static int setup_final(struct final_stage *s,
 		       int thread,
@@ -1352,8 +1584,8 @@ static int setup_final(struct final_stage *s,
 		       enum stages stage)
 {
     char *routine = "setup_final";
+    struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     unsigned long top;
-    int mult_segs = skip > SEGSIZE;
     unsigned long segval_addr = addr & ~(SEGSIZE - 1);
     int i;
 
@@ -1366,8 +1598,9 @@ static int setup_final(struct final_stage *s,
 	s->pte[i] = no_page_start;
 
     for (i = 0; i < STAGE_SIZE; ++i, addr = top) {
-	struct dump_entry *first_d, *d;
+	struct dump_entry *first_d = 0, *d, first_partial;
 	int one_hit = 0;
+	int partial_hit = 0;
 
 	top = addr + skip;
 
@@ -1378,90 +1611,94 @@ static int setup_final(struct final_stage *s,
 	    continue;
 	}
 
-#if 0
-	/*
-	 * We do not do this.  If a page exists in the dump, it will
-	 * get mapped normally below.
-	 */
-	if (IN_BOS_RANGE(addr, top)) {
-	    s->pte[i] = (void *)allocate_map(thread, stage, skip,
-					     bos_segval, addr);
-	    DEBUG_PRINTF(("%s: %s[%d]=%s bos\n",
-			  routine, P(s), i, P(s->pte[i])));
-	    continue;
-	}
-#endif
-
-	first_d = d = starting_d(addr);
+	d = starting_d(addr);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 		      routine, P(addr), P(top), P(segval)));
 	DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
-		      strlen(routine), "found", P(d->de_virt.dv_virt),
-		      P(d->de_virt.dv_virt+d->de_len),
-		      P(d->de_virt.dv_segval)));
+		      strlen(routine), "found", P(d->de_virt),
+		      P(d->de_virt+d->de_len),
+		      P(d->de_segval)));
 
-	for (; (d < (dump_entries + dump_entry_cnt) &&
-		!d->de_isreal &&
-		d->de_virt.dv_virt < top); ++d) {
+	for ( ; d < d_end && d->de_min < top; ++d) {
+	    if (d->de_isreal ||
+		(d->de_virt > top) ||
+		(d->de_end <= addr))
+		continue;
+
+	    if (!one_hit)
+		first_d = d;
 
 	    one_hit = 1;
 
+	    /* If this is an obvious match, then take it and go */
+	    if (!invalid_segval_p(segval, addr) && segval != -thread &&
+		d->de_segval == segval &&
+		d->de_virt <= addr &&
+		(d->de_virt + d->de_len) >= top) {
+		s->pte[i] = (long)d->de_dump +
+			(addr - d->de_virt);
+		DEBUG_PRINTF(("%s: %s[%d]=%s match\n",
+			      routine, P(s), i, P(s->pte[i])));
+		goto cont_loop;
+	    }
+
 	    if (first_d) {
-		if (first_d->de_virt.dv_segval == d->de_virt.dv_segval)
-		    continue;
-		    
-		if (mult_segs) {
-		    s->pte[i] = allocate_map(thread,
-					     stage,
-					     skip,
-					     segval,
-					     addr);
-		    DEBUG_PRINTF(("%s: %s[%d]=%s multi\n",
-				  routine, P(s), i, P(s->pte[i])));
-		    goto cont_loop;
+		DEBUG_PRINTF(("%s: first_d: true\n", routine));
+
+		if (invalid_segval_p(first_d->de_segval,
+				     addr)) {
+		    first_d = d;
+		    DEBUG_PRINTF(("%s: first_d: set first_d to d\n", routine));
 		}
 
+		if (invalid_segval_p(d->de_segval, addr) ||
+		    (first_d->de_segval == d->de_segval)) {
+		    DEBUG_PRINTF(("%s: first_d continue\n", routine));
+		    continue;
+		}
+		    
 		if (segval == -thread ||
 		    (segval_addr / SEGSIZE) != (addr / SEGSIZE)) {
 		    segval_addr = addr & ~(SEGSIZE - 1);
 		    segval = get_addr2seg(segval_addr);
-		    DEBUG_PRINTF(("%s: addr2seg(%s) returned %s\n",
+		    DEBUG_PRINTF(("%s: first_d: addr2seg(%s) returned %s\n",
 				  routine, P(addr), P(segval)));
 		}
 
-		if (first_d->de_virt.dv_segval == segval)
+		if (first_d->de_segval == segval) {
 		    d = first_d;
+		    DEBUG_PRINTF(("%s: first_d: set d to first_d\n", routine));
+		}
+
 		first_d = 0;
+		DEBUG_PRINTF(("%s: first_d: set to 0\n", routine));
 	    }
 
-	    if (d->de_virt.dv_segval == segval) {
-		/*
-		 * Note that because lower addresses are ordered first
-		 * and larger chunks are also ordered first, if the
-		 * first thing we hit that is within our range is not
-		 * a full page, then we have only a bunch of partial
-		 * pages.
-		 */
-		if (d->de_len == skip)
-		    s->pte[i] = (long)d->de_dump;
-		else
-		    s->pte[i] = allocate_map(thread, PARTIAL_PAGE, PAGESIZE,
-					     segval, addr);
-		DEBUG_PRINTF(("%s: %s[%d]=%s\n",
-			      routine, P(s), i, P(s->pte[i])));
-		goto cont_loop;
+	    if (d->de_segval == segval) {
+		if (d->de_len >= skip) {
+		    s->pte[i] = (long)d->de_dump + (addr - d->de_virt);
+		    DEBUG_PRINTF(("%s: %s[%d]=%s frog\n",
+				  routine, P(s), i, P(s->pte[i])));
+		    goto cont_loop;
+		}
+		partial_hit = 1;
 	    }
 	}
 
-	if (one_hit  && first_d) {
-	    if (first_d->de_len == skip)
-		s->pte[i] = (long)first_d->de_dump;
-	    else
+	if (one_hit && (first_d || partial_hit)) {
+	    if (first_d->de_len >= skip) {
+		s->pte[i] = (long)first_d->de_dump +
+		    (addr - first_d->de_virt);
+		DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
+			      routine, P(s), i, P(s->pte[i])));
+	    } else {
 		s->pte[i] = allocate_map(thread, PARTIAL_PAGE, PAGESIZE,
 					 segval, addr);
-	    DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
-			  routine, P(s), i, P(s->pte[i])));
+		DEBUG_PRINTF(("%s: %s[%d]=%s partial\n",
+			      routine, P(s), i, P(s->pte[i])));
+
+	    }
 	    continue;
 	}
 
@@ -1472,56 +1709,178 @@ static int setup_final(struct final_stage *s,
     return 0;
 }
 
+/*
+ * If things are working right (giggle), then we get here only if we
+ * are positive that we have only partial pages for this particular
+ * page and not a full page.
+ */
 static int setup_partial_page(unsigned long s,
 			      int thread,
 			      unsigned long segval,
 			      unsigned long addr)
 {
     struct dump_entry *d = starting_d(addr);
+    struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     long top = addr + PAGESIZE;
 
     DEBUG_PRINTF(("setup_partial_page: p=%s t=%d s=%s a=%s\n",
 		  P(s), thread, P(segval), P(addr)));
 
-    while (d->de_virt.dv_virt < top) {
-	if (d->de_virt.dv_segval == segval)
+    for ( ; d < d_end && d->de_min < top; ++d) {
+	if (d->de_isreal ||
+	    (d->de_virt > top) ||
+	    (d->de_end <= addr))
+	    continue;
+
+	if (d->de_segval == segval) {
+	    if (d->de_len > PAGESIZE) {
+		fflush(stdout);
+		fprintf(stderr, "Should not have set up partial page\n");
+		fprintf(stderr, "s=%s segval=%s addr=%s\n", P(s), P(segval),
+			P(addr));
+		fprintf(stderr, "virt=%s len=%s end=%s\n",
+			P(d->de_virt), P(d->de_len),
+			P(d->de_end));
+		fail(1);
+	    }
 	    bcopy((void *)d->de_dump,
-		  (void *)(s + (d->de_virt.dv_virt - addr)),
+		  (void *)(s + (d->de_virt - addr)),
 		  d->de_len);
-	d++;
+	}
     }
     DEBUG_PRINTF(("setup_partial_page: return\n"));
     return 0;
 }
 
-static int de_compare(void *a, void *b)
+/*
+ * The dump entries are sorted by ending address as the first key and
+ * starting address as the second key.
+ */
+static int de_compare_end(const void *a, const void *b)
 {
     struct dump_entry *da = (struct dump_entry *)a;
     struct dump_entry *db = (struct dump_entry *)b;
 
     if (da->de_isreal != db->de_isreal)
 	return (da->de_isreal) ? 1 : -1;
-    if (da->de_isreal) {
-	if (da->de_real == db->de_real)
-	    return 0;
-	return (da->de_real > db->de_real) ? 1 : -1;
+    return ((db->de_end == da->de_end) ?
+	    ((db->de_virt == da->de_virt) ?
+	     0 :
+	     (da->de_virt > db->de_virt) ?
+	     1 :
+	     -1) :
+	    (da->de_end > db->de_end) ?
+	    1 :
+	    -1);
+}
+
+/*
+ * This can set up to three dump entries.  An entry for a partial page
+ * on the front of the range, an entry for a sequence of full pages,
+ * and an entry for a partial page at the end of the range.  It also
+ * sets up an rmap if needed for the range of full pages.  If the
+ * entry is for a real range, only one entry is set up.
+ */
+static void setup_dump_entry(int *inmap,
+			     int *cntp,
+			     int i,
+			     int isreal,
+			     unsigned long total_size,
+			     unsigned long long real,
+			     unsigned long virt,
+			     unsigned long segval,
+			     char *pos)
+{
+    int cnt = *cntp;
+    unsigned long part_size;
+
+    if (*inmap) {
+	if (isreal) {
+	    if (i == 1) {
+		dump_entries[cnt].de_isreal = isreal;
+		dump_entries[cnt].de_len = total_size;
+		dump_entries[cnt].de_dump = pos;
+		dump_entries[cnt].de_real = real;
+	    }
+	    ++cnt;
+	} else {
+	    /* Partial page at front of range */
+	    if (virt & (PAGESIZE - 1)) {
+		if (i == 1) {
+		    part_size = PAGESIZE - (virt & (PAGESIZE - 1));
+		    if (part_size > total_size)
+			part_size = total_size;
+
+		    dump_entries[cnt].de_isreal = isreal;
+		    dump_entries[cnt].de_len = part_size;
+		    dump_entries[cnt].de_dump = pos;
+		    dump_entries[cnt].de_virt = virt;
+		    dump_entries[cnt].de_segval = segval;
+		    dump_entries[cnt].de_end = virt + part_size;
+
+		    total_size -= part_size;
+		    pos += part_size;
+		    virt += part_size;
+		}
+		++cnt;
+	    }
+
+	    /* Sequence of full pages */
+	    if (total_size >= PAGESIZE) {
+		if (i == 1) {
+		    part_size = total_size & ~(PAGESIZE - 1);
+
+		    dump_entries[cnt].de_isreal = isreal;
+		    dump_entries[cnt].de_len = part_size;
+		    dump_entries[cnt].de_dump = pos;
+		    dump_entries[cnt].de_virt = virt;
+		    dump_entries[cnt].de_segval = segval;
+		    dump_entries[cnt].de_end = virt + part_size;
+
+
+		    rmap_fill((unsigned long)pos, part_size, REAL_STAGE,
+			      0, segval, virt);
+
+		    total_size -= part_size;
+		    pos += part_size;
+		    virt += part_size;
+		}
+		++cnt;
+	    }
+
+	    /* Partial page at end of range */
+	    if (total_size) {
+		if (i == 1) {
+		    dump_entries[cnt].de_isreal = isreal;
+		    dump_entries[cnt].de_len = total_size;
+		    dump_entries[cnt].de_dump = pos;
+		    dump_entries[cnt].de_virt = virt;
+		    dump_entries[cnt].de_segval = segval;
+		    dump_entries[cnt].de_end = virt + total_size;
+
+		    total_size -= total_size;
+		    pos += total_size;
+		    virt += total_size;
+		}
+		++cnt;
+	    }
+	}
+	*cntp = cnt;
+	*inmap = 0;
     }
-    if (da->de_virt.dv_virt != db->de_virt.dv_virt)
-	return (da->de_virt.dv_virt > db->de_virt.dv_virt) ? 1 : -1;
-    if (da->de_virt.dv_segval != db->de_virt.dv_segval)
-	return (da->de_virt.dv_segval > db->de_virt.dv_segval) ? 1 : -1;
-    return db->de_len - da->de_len; /* larger one first */
 }
 
 static int init_dump(void)
 {
     struct stat64 stat_buf;
     char *cur_pos;
+    unsigned long min;
+    struct dump_entry *d;
     int i;
     int cnt = 0;
 
     quick_dump = 1;
-    if ((dump_fd = open64(dumpname, O_RDWR)) < 0) {
+    if ((dump_fd = open64(dumpname, O_RDONLY)) < 0) {
 	perror(dumpname);
 	return 1;
     }
@@ -1529,9 +1888,18 @@ static int init_dump(void)
 	perror("fstat");
 	return 1;
     }
-    dump_file = mmap((void *)map_top, stat_buf.st_size, PROT_READ|PROT_WRITE,
-		     MAP_FIXED|MAP_FILE, dump_fd, 0);
+    if (debug_mask & MMAP_BIT)
+	printf("mmap: s=%s l=%s e=%s\n", P(map_top),
+	       P(stat_buf.st_size),
+	       P(map_top + stat_buf.st_size));
+    if ((sizeof(long) == 4) && stat_buf.st_size > 2LL * 1024 * 1024 * 1024)
+	stat_buf.st_size = 2LL * 1024 * 1024 * 1024 - 1;
+    dump_file = (char *)mmap((void *)map_top, stat_buf.st_size, PROT_READ,
+			     MAP_FIXED|MAP_FILE, dump_fd, 0);
+
     if ((long)dump_file == -1L) {
+	fprintf(stderr, "st_size is %d st_size is %lld\n", sizeof(stat_buf.st_size),
+		stat_buf.st_size);
 	perror("mmap");
 	return 1;
     }
@@ -1544,11 +1912,199 @@ static int init_dump(void)
 	cur_pos = dump_file;
 	if (!VALID_DMP_MAGIC(((struct cdt *)cur_pos)->cdt_magic))
 	    cur_pos += 512;
-	while (cur_pos < dump_file_end &&
-	       VALID_DMP_MAGIC(((struct cdt *)cur_pos)->cdt_magic)) {
+	while (cur_pos < dump_file_end) {
+#if 1
+	    class CDT *cdt;
+	    class CDT_32 cdt_32;
+	    class CDT_64 cdt_64;
+	    class CDT_vr cdt_vr;
+	    class CDT_u32 cdt_u32;
+	    class CDT_u64 cdt_u64;
+	    char *header_name;
+
+	    switch (((struct cdt *)cur_pos)->cdt_magic) {
+	    case DMP_MAGIC_32:
+		cdt_32.header_setup(cur_pos);
+		cdt = & cdt_32;
+		break;
+
+	    case DMP_MAGIC_VR:
+		cdt_vr.header_setup(cur_pos);
+		cdt = & cdt_vr;
+		break;
+
+	    case DMP_MAGIC_64:
+		cdt_64.header_setup(cur_pos);
+		cdt = & cdt_64;
+		break;
+
+	    case DMP_MAGIC_U32:
+		cdt_u32.header_setup(cur_pos);
+		cdt = & cdt_u32;
+		break;
+
+	    case DMP_MAGIC_U64:
+		cdt_u64.header_setup(cur_pos);
+		cdt = & cdt_u64;
+		break;
+
+	    case DMP_MAGIC_UD32:
+	    case DMP_MAGIC_UD64:
+		fprintf(stderr, "Out of sync with magic equal to %08x\n",
+			((struct cdt *)cur_pos)->cdt_magic);
+		goto loop_end;
+	    case DMP_MAGIC_END:
+	    case 0:
+		goto loop_end;
+
+	    default:
+		fprintf(stderr, "Exiting with magic equal to %08x\n",
+			((struct cdt *)cur_pos)->cdt_magic);
+#if 0
+		{
+		    int *ip = (int *)cur_pos;
+
+		    printf("cur_pos = %08x %08x\n", cur_pos, cur_pos - dump_file);
+		    for (int i = -8*4; i < 8*4; i += 4) {
+			for (int j = 0; j < 4; ++j)
+			    printf("%c%08x", i == 0 && j == 0 ? '*' : ' ',
+				   ip[i+j]);
+			printf("    ");
+			for (int j = 0; j < 4; ++j) {
+			    unsigned int v = ip[i+j];
+			    for (int k = 4; --k >= 0; v <<= 8) {
+				unsigned char c = ((v >> 24) & 0xff);
+				if ((c & 0x80) || (c < ' ') || (c == 0x7f))
+				    c = '.';
+				printf("%c", c);
+			    }
+			}
+			printf("\n");
+		    }
+		}
+#endif
+		goto loop_end;
+	    }
+	    header_name = cdt->header_name();
+
+	    for (cur_pos = cdt->first_group(cur_pos);
+		 cdt->more_groups();
+		 cur_pos = cdt->next_group(cur_pos)) {
+		for (cur_pos = cdt->first_entry(cur_pos);
+		     cdt->more_entrys();
+		     cur_pos = cdt->next_entry(cur_pos)) {
+
+		    char *name = cdt->entry_name();
+		    size_t sizeof_name = cdt->entry_name_size();
+		    u_longlong_t addr = (u_longlong_t) cdt->entry_addr();
+		    size_t sizeof_addr = cdt->entry_addr_size();
+		    u_longlong_t segval = cdt->entry_segval();
+		    size_t sizeof_segval = cdt->entry_segval_size();
+		    size_t len = cdt->entry_len();
+		    int isreal = cdt->entry_isreal();
+		    unsigned long bit_entries = BITMAPSIZE(addr, len);
+		    unsigned long pages = NPAGES(addr, len);
+		    bitmap_t *bitmap = (bitmap_t *)cur_pos;
+		    int bit;
+
+		    int t_slot;
+		    char namebuf[32];
+		    int inmap;
+		    unsigned long total_size;
+		    unsigned long long start_addr;
+		    char *start_pos;
+
+		    cur_pos += (bit_entries * sizeof(bitmap_t));
+		    if (cur_pos > dump_file_end) {
+			if (i == 0)
+			    fprintf(stderr, "%s is empty due to short dump\n",
+				    name);
+			goto loop_end;
+		    }
+
+		    if (!strcmp(header_name, "bos") &&
+			!strcmp(name, "kernel")) {
+			bos_segval = segval;
+			bos_addr_start = (long)addr;
+			bos_addr_end = bos_addr_start + len;
+			DEBUG_PRINTF(("init_dump: bos_segval=%s"
+				      " bos_addr_start=%s"
+				      " bos_addr_end=%s\n",
+				      P(bos_segval),
+				      P(bos_addr_start),
+				      P(bos_addr_end)));
+		    }
+
+		    if (!strcmp(header_name, "thrd")) {
+			int idx;
+			char buf[8];
+
+			sscanf(name, "%d%s", &idx, buf);
+			if (i == 0) {
+			    if (thread_max < idx)
+				thread_max = idx;
+			} else {
+			    t_map[idx] = 1;
+			}
+		    }
+
+		    inmap = 0;
+		    total_size = 0;
+
+		    for (bit = 0; bit < pages; ++bit) {
+			int size = PAGESIZE - (addr % PAGESIZE);
+
+			if (size > len)
+			    size = len;
+
+			/*
+			 * Page is in the dump
+			 */
+			if (ISBITMAP(bitmap, bit)) {
+			    if (!inmap) {
+				start_addr = addr;
+				start_pos = cur_pos;
+				total_size = 0;
+				inmap = 1;
+			    }
+			    total_size += size;
+			    if ((cur_pos += size) > dump_file_end) {
+				if (i == 0)
+				    fprintf(stderr, "%s is not complete 0\n",
+					    name);
+				goto loop_end;
+			    }
+			} else {
+			    setup_dump_entry(&inmap, &cnt, i, isreal,
+					     total_size, start_addr,
+					     (long)start_addr,
+					     segval, start_pos);
+			}
+			addr += size;
+			len -= size;
+		    }
+		    setup_dump_entry(&inmap, &cnt, i, isreal, total_size,
+				     start_addr, (long)start_addr, segval,
+				     start_pos);
+		}
+	    }
+	    
+#else
 	    int num_entries = NUM_ENTRIES((struct cdt *)cur_pos);
 	    int index;
 
+	    if (num_entries == 0) {
+		int xa, xb;
+
+		for (xa = 0; xa < 8; ++xa) {
+		    for (xb = 0; xb < 32; ++xb) {
+			int c = cur_pos[xa * 32 + xb];
+			printf(" %02x", c);
+		    }
+		    printf("\n");
+		}
+		exit(1);
+	    }
 #ifndef __64BIT__
 	    if (ISDMPVR((struct cdt*)cur_pos)) {
 		struct cdt_vr *cdt = (struct cdt_vr *)cur_pos;
@@ -1556,11 +2112,14 @@ static int init_dump(void)
 		if ((cur_pos += cdt->cdt_len) > dump_file_end)
 		    break;
 
-
 		for (index = 0;
 		     (cur_pos < dump_file_end) && (index < num_entries);
 		     ++index) {
 		    struct cdt_entry_vr *e = cdt->cdt_entry + index;
+		    int inmap = 0;
+		    unsigned long total_size = 0;
+		    unsigned long long start_addr;
+		    char *start_pos;
 
 		    if (ISADDRREAL(e)) {
 			unsigned long long addr = (unsigned long)e->d_realaddr;
@@ -1588,23 +2147,29 @@ static int init_dump(void)
 			     * Page is in the dump
 			     */
 			    if (ISBITMAP(bitmap, bit)) {
-				if (i == 1) {
-				    dump_entries[cnt].de_isreal = 1;
-				    dump_entries[cnt].de_len = size;
-				    dump_entries[cnt].de_real = addr;
-				    dump_entries[cnt].de_dump = cur_pos;
+				if (!inmap) {
+				    start_addr = addr;
+				    start_pos = cur_pos;
+				    total_size = 0;
+				    inmap = 1;
 				}
-				++cnt;
+				total_size += size;
 				if ((cur_pos += size) > dump_file_end) {
 				    if (i == 0)
-					fprintf(stderr, "%s is not complete\n",
+					fprintf(stderr, "%s is not complete 1\n",
 						cdt->cdt_name);
 				    break;
 				}
+			    } else {
+				setup_dump_entry(&inmap, &cnt, i, 1,
+						 total_size, start_addr,
+						 0, 0, start_pos);
 			    }
 			    addr += size;
 			    len -= size;
 			}
+			setup_dump_entry(&inmap, &cnt, i, 1, total_size,
+					 start_addr, 0, 0, start_pos);
 		    } else {
 			unsigned long addr = (unsigned long)e->d_ptr_v;
 			size_t len = e->d_len;
@@ -1631,29 +2196,30 @@ static int init_dump(void)
 			     * Page is in the dump
 			     */
 			    if (ISBITMAP(bitmap, bit)) {
-				if (i == 1) {
-				    dump_entries[cnt].de_isreal = 0;
-				    dump_entries[cnt].de_len = size;
-				    dump_entries[cnt].de_virt.dv_virt = addr;
-				    dump_entries[cnt].de_virt.dv_segval =
-					e->d_segval_v;
-				    dump_entries[cnt].de_dump = cur_pos;
-				    if (size == PAGESIZE)
-					rmap_fill((unsigned long)cur_pos, size,
-						  REAL_STAGE, 0, e->d_segval_v,
-						  addr);
+				if (!inmap) {
+				    start_addr = addr;
+				    start_pos = cur_pos;
+				    total_size = 0;
+				    inmap = 1;
 				}
-				++cnt;
+				total_size += size;
 				if ((cur_pos += size) > dump_file_end) {
 				    if (i == 0)
-					fprintf(stderr, "%s is not complete\n",
+					fprintf(stderr, "%s is not complete 2\n",
 						cdt->cdt_name);
 				    break;
 				}
+			    } else {
+				setup_dump_entry(&inmap, &cnt, i, 0,
+						 total_size, 0, start_addr,
+						 e->d_segval_v, start_pos);
 			    }
 			    addr += size;
 			    len -= size;
 			}
+			setup_dump_entry(&inmap, &cnt, i, 0, total_size, 0,
+					 start_addr, e->d_segval_v,
+					 start_pos);
 		    }
 		}
 	    } else
@@ -1674,6 +2240,10 @@ static int init_dump(void)
 		    int bit;
 		    int t_slot;
 		    char namebuf[32];
+		    int inmap;
+		    unsigned long total_size;
+		    unsigned long long start_addr;
+		    char *start_pos;
 
 		    cur_pos += (bit_entries * sizeof(bitmap_t));
 		    if (cur_pos > dump_file_end) {
@@ -1709,6 +2279,9 @@ static int init_dump(void)
 			}
 		    }
 
+		    inmap = 0;
+		    total_size = 0;
+
 		    for (bit = 0; bit < pages; ++bit) {
 			int size = PAGESIZE - (addr % PAGESIZE);
 
@@ -1719,68 +2292,91 @@ static int init_dump(void)
 			 * Page is in the dump
 			 */
 			if (ISBITMAP(bitmap, bit)) {
-			    if (i == 1) {
-				dump_entries[cnt].de_isreal = 0;
-				dump_entries[cnt].de_len = size;
-				dump_entries[cnt].de_virt.dv_virt = addr;
-				dump_entries[cnt].de_virt.dv_segval =
-				    e->d_segval;
-				dump_entries[cnt].de_dump = cur_pos;
-				if (size == PAGESIZE)
-				    rmap_fill((unsigned long)cur_pos, size,
-					      REAL_STAGE, 0, e->d_segval,
-					      addr);
+			    if (!inmap) {
+				start_addr = addr;
+				start_pos = cur_pos;
+				total_size = 0;
+				inmap = 1;
 			    }
-			    ++cnt;
+			    total_size += size;
 			    if ((cur_pos += size) > dump_file_end) {
 				if (i == 0)
-				    fprintf(stderr, "%s is not complete\n",
+				    fprintf(stderr, "%s is not complete 3\n",
 					    cdt->cdt_name);
 				break;
 			    }
+			} else {
+			    setup_dump_entry(&inmap, &cnt, i, 0,
+					     total_size, 0, start_addr,
+					     e->d_segval, start_pos);
 			}
 			addr += size;
 			len -= size;
 		    }
+		    setup_dump_entry(&inmap, &cnt, i, 0, total_size, 0,
+				     start_addr, e->d_segval, start_pos);
 		}
 	    }
+#endif /* else 1 */
 	}
+    loop_end:
 	if (!cnt) {
 	    fprintf(stderr, "%s: Invalid dump\n", progname);
 	    return 1;
 	}
+
+	/*
+	 * First pass we allocate space for dump_entries and t_map.
+	 */
 	if (i == 0 && cnt) {
-	    dump_entries = mmap((void *)map_top,
-				cnt * sizeof(struct dump_entry),
-				PROT_READ|PROT_WRITE,
-				MAP_FIXED|MAP_ANONYMOUS,
-				-1, 0);
+	    if (debug_mask & MMAP_BIT)
+		printf("mmap: s=%s l=%s e=%s\n", P(map_top),
+		       P(cnt * sizeof(struct dump_entry)),
+		       P(map_top + cnt * sizeof(struct dump_entry)));
+	    dump_entries = (struct dump_entry *)
+		mmap((void *)map_top, cnt * sizeof(struct dump_entry),
+		     PROT_READ|PROT_WRITE, MAP_FIXED|MAP_ANONYMOUS,
+		     -1, 0);
 	    if ((long)dump_entries == -1L) {
 		perror("mmap2");
 		return 1;
 	    }
 
-	    map_top += ((cnt * sizeof(struct dump_entry) + PAGESIZE - 1) &
-			~(PAGESIZE - 1));
+	    map_top += ((cnt * sizeof(struct dump_entry) + PAGESIZE - 1L) &
+			~(PAGESIZE - 1L));
 	    ++thread_max;
-	    t_map = smalloc(thread_max);
+	    t_map = (char *)smalloc(thread_max);
 	}
     }
 
+    atexit(rmap_dump);
+
     dump_entry_cnt = cnt;
-    qsort(dump_entries, cnt, sizeof(struct dump_entry), de_compare);
+    qsort(dump_entries, cnt, sizeof(struct dump_entry), de_compare_end);
+    min = -1;
+    for (d = dump_entries + cnt; --d >= dump_entries; ) {
+	if (d->de_isreal)
+	    continue;
+
+	if (min > d->de_virt)
+	    min = d->de_virt;
+	d->de_min = min;
+    }
     DEBUG_PRINTF(("init_dump: dump of dump_entries\n"));
     for (i = 0; i < cnt; ++i) {
-	DEBUG_PRINTF(("%04x %s ", dump_entries[i].de_len,
-		      P(dump_entries[i].de_dump)));
+	DEBUG_PRINTF(("%s ", P(dump_entries[i].de_dump)));
 	if (dump_entries[i].de_isreal)
-	    DEBUG_PRINTF(("r=%s\n", P(dump_entries[i].de_real)));
+	    DEBUG_PRINTF(("r=%s", P(dump_entries[i].de_real)));
 	else
-	    DEBUG_PRINTF(("v=%s s=%s\n",
-			  P(dump_entries[i].de_virt.dv_virt),
-			  P(dump_entries[i].de_virt.dv_segval)));
+	    DEBUG_PRINTF(("v=%s s=%s",
+			  P(dump_entries[i].de_virt),
+			  P(dump_entries[i].de_segval)));
+	DEBUG_PRINTF((" min=%s e=%s\n",
+		      P(dump_entries[i].de_min),
+		      P(dump_entries[i].de_end)));
     }
     quick_dump = 0;
+
     DEBUG_PRINTF(("init_dump return 0\n"));
     return 0;
 }
@@ -1799,6 +2395,8 @@ int return_range(char *t_name, char *d_name, void **startp, int *lenp)
  */
 int purge_all_pages(void)
 {
+    printf("in purge_all_pages\n");
+    return 0;
 }
 
 /*
@@ -1806,7 +2404,8 @@ int purge_all_pages(void)
  */
 int purge_user_pages(void)
 {
-    
+    printf("in purge_user_pages\n");
+    return 0;
 }
 
 /*
@@ -1814,6 +2413,7 @@ int purge_user_pages(void)
  */
 int open_dump(char *path)
 {
+    return 0;
 }
 
 void trace_mappings(void)
@@ -1923,4 +2523,23 @@ long get_addr2seg(long addr)
     ret = l_fcall(fcall.c_expr);
     DEBUG_PRINTF(("get_addr2seg: return with addr=%s\n", P(ret)));
     return ret;
+}
+
+static void rmap_dump(void)
+{
+    int i = 0;
+    struct rmap *r = rmap;
+    struct rmap *r_end = r + rmap_used;
+
+    DEBUG_PRINTF(("rmap dump\n"));
+    DEBUG_PRINTF(("number %*s %*s %*s thread  stage mfiptx\n",
+		  sizeof(long)*2, "phys",
+		  sizeof(long)*2, "size",
+		  sizeof(long)*2, "virt"));
+    for ( ; r < r_end; ++r, ++i)
+	DEBUG_PRINTF(("%6d %s %s %s %6d %6s %d%d%d%d%d%d\n",
+		      i, P(r->r_phys), P(r->r_psize), P(r->r_virt),
+		      r->r_thread, s_strings[r->r_stage],
+		      r->r_mapped, r->r_freed, r->r_initialized,
+		      r->r_phys_set, r->r_true_segval, r->r_in_addr2seg));
 }
