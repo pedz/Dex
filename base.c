@@ -1,5 +1,8 @@
 
-/* @(#)base.c	1.1 */
+/* @(#)base.c	1.2 */
+
+#include "sym.h"
+#include <sys/debug.h>
 
 #define _KERNEL
 #define KERNEL
@@ -16,11 +19,17 @@
 #include <sys/systemcfg.h>
 #undef extern
 #undef _system_configuration
+extern system_configuration_t _system_configuration;
 
 #include <sys/types.h>
 #include <sys/malloc.h>
 #include <sys/lock_def.h>
 #include <sys/ppda.h>
+#include <sys/pnda.h>
+
+#ifdef __64BIT__
+#define __XCOFF64__
+#endif
 
 #include <a.out.h>
 #include <sys/ldr/ld_data.h>
@@ -30,18 +39,86 @@
 #endif
 
 #include <sys/stream.h>
+#ifdef reg
+#undef reg
+#endif
+
 #include <sys/file.h>
 #include <sys/vnode.h>
 #include <sys/socketvar.h>
+#include <sys/un.h>
+#include <sys/unpcb.h>
 #include <sys/socket.h>
+#include <sys/protosw.h>
 #include <net/if.h>
 #include <sys/domain.h>
 #include <net/route.h>
 #include <sys/mbuf.h>
 #include <termios.h>
+#include <netinet/ip_var.h>
+#include <netinet/udp.h>
+#include <netinet/udp_var.h>
+#include <netinet/tcp_var.h>
+#include <netinet/if_ether.h>
+#include <netinet/if_ether6.h>
+#include <sys/unpcb.h>
+#define _KERNSYS
+#include <sys/lockname.h>
+#ifdef PS_ID_LOCK
+#include <sys/pollset.h>
+#endif
+#include <sys/selpoll.h>
 
 #include <vmm/vmdefs.h>
 #include <sys/vmker.h>
+#include <lfs/lfs_numa.h>
+
+typedef unsigned char   uint8;
+typedef unsigned short  uint16;
+typedef unsigned int    uint32;
+
+typedef struct nlchash {
+	struct nlcbuf	*nlc_forw;	/* head buffer in hashlist */
+	struct nlcbuf	*nlc_back;	/* tail buffer in hashlist */
+	Simple_lock	 nlc_lock;   	/* lock per hash anchor    */
+} nlchash_t;
+
+typedef struct nlcbuf {
+	struct nlcbuf	*nlc_forw;  	/* head buffer in hash		    */
+	struct nlcbuf	*nlc_back;  	/* tail buffer in hash		    */
+	struct vfs	*nlc_vfsp;  	/* vfs pointer of node	    	    */
+
+	void		*nlc_dp;   	/* ptr to parent node of entry      */
+	uint32		nlc_did;    	/* parent filenode cap id ptr       */
+
+	void		*nlc_np;    	/* node ptr of cached entry	    */
+	uint32		*nlc_nidp;    	/* node capability id ptr           */
+	uint32		nlc_nid;    	/* node cap. id -- value at time
+					   of entry */
+
+	uint32		nlc_namelen;	/* name length			    */
+	union {				
+		char 	_namea[32];
+					/* static fast name <=NLC_STATICLEN */
+		char	*_namep;	/* alloc'd slow name >NLC_STATICLEN */
+	} _name;			/* component name		    */
+} nlcbuf_t;
+
+#define MAX_ALLOC_INDEX		495
+#define MAX_LEAF_INDEX		495
+#define MAX_ID			(MAX_ALLOC_INDEX*MAX_LEAF_INDEX)
+
+typedef struct {
+	ushort psl_free;
+	/* space for one extra bit */
+	char psl_alloc[(MAX_LEAF_INDEX+NBPB)/NBPB];
+	pcache_t *psl_pollcache[MAX_LEAF_INDEX];
+}ps_leaf_node_t;
+typedef struct {
+	char psa_alloc[(MAX_ALLOC_INDEX+NBPB)/NBPB];
+	ps_leaf_node_t *psa_leaf_node[MAX_ALLOC_INDEX];
+}ps_alloc_node_t;
+
 
 #define DEBUG_BIT BASE_C_BIT
 
@@ -526,6 +603,7 @@ int main(void)
     printf("LRU_UNMOD = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* LRU_UNMOD */
 
+#if 0
 #ifdef LTPIN_DEC
     ul = LTPIN_DEC;
     printf("LTPIN_DEC = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
@@ -540,6 +618,7 @@ int main(void)
     ul = LTPIN_MASK;
     printf("LTPIN_MASK = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* LTPIN_MASK */
+#endif
 
 #ifdef LTPIN_NBITS
     ul = LTPIN_NBITS;
@@ -551,10 +630,12 @@ int main(void)
     printf("LTPIN_ONE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* LTPIN_ONE */
 
+#if 0
 #ifdef LTPIN_OVERFLOW
     ul = LTPIN_OVERFLOW;
     printf("LTPIN_OVERFLOW = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* LTPIN_OVERFLOW */
+#endif
 
 #ifdef MAXAPT
     ul = MAXAPT;
@@ -576,10 +657,12 @@ int main(void)
     printf("MAXPGSP = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* MAXPGSP */
 
+#if 0
 #ifdef MAXPIN
     ul = MAXPIN;
     printf("MAXPIN = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* MAXPIN */
+#endif
 
 #ifdef MAXREPAGE
     ul = MAXREPAGE;
@@ -971,6 +1054,7 @@ int main(void)
     printf("STOIBITS_MAX = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* STOIBITS_MAX */
 
+#if 0
 #ifdef STPIN_DEC
     ul = STPIN_DEC;
     printf("STPIN_DEC = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
@@ -980,6 +1064,7 @@ int main(void)
     ul = STPIN_INC;
     printf("STPIN_INC = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* STPIN_INC */
+#endif
 
 #ifdef STPIN_MASK
     ul = STPIN_MASK;
@@ -996,10 +1081,12 @@ int main(void)
     printf("STPIN_ONE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* STPIN_ONE */
 
+#if 0
 #ifdef STPIN_OVERFLOW
     ul = STPIN_OVERFLOW;
     printf("STPIN_OVERFLOW = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* STPIN_OVERFLOW */
+#endif
 
 #ifdef SZBIT
     ul = SZBIT;
