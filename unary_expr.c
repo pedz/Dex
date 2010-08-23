@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)unary_expr.c	1.6";
+static char sccs_id[] = "@(#)unary_expr.c	1.7";
 
 #include <stdio.h>
 #include "dex.h"
@@ -24,7 +24,7 @@ long long ll_leaf(expr *n) { return n->e_ll; }
 unsigned long long ull_leaf(expr *n) { return n->e_ull; }
 float f_leaf(expr *n) { return n->e_f; }
 double d_leaf(expr *n) { return n->e_d; }
-st st_leaf(expr *n) { return n->e_st; }
+st_t st_leaf(expr *n) { return n->e_st; }
 
 /* global var address nodes */
 signed char *sc_gaddr(expr *n)
@@ -87,9 +87,9 @@ double *d_gaddr(expr *n)
     return (double *)n->e_addr;
 }
 
-st *st_gaddr(expr *n)
+st_t *st_gaddr(expr *n)
 {
-    return (st *)n->e_addr;
+    return (st_t *)n->e_addr;
 }
 
 /* local var address nodes */
@@ -154,9 +154,9 @@ double *d_laddr(expr *n)
     return (double *)(n->e_addr + frame_ptr);
 }
 
-st *st_laddr(expr *n)
+st_t *st_laddr(expr *n)
 {
-    return (st *)(n->e_addr + frame_ptr);
+    return (st_t *)(n->e_addr + frame_ptr);
 }
 
 /* Routines which take an lvalue into a pvalue */
@@ -231,8 +231,9 @@ unsigned long ul_l2p(expr *n)
 	return (unsigned long)get_field(V2F(ul_addr(n->e_left)),
 					n->e_boffset, n->e_bsize);
     if (n->e_size == sizeof(ularge_t)) {
-	DEBUG_PRINTF(("hey %s\n", P(n)));
-	return *v2f_type(ularge_t *, ul_addr(n->e_left));
+	ularge_t *temp = v2f_type(ularge_t *, ul_addr(n->e_left));
+	DEBUG_PRINTF(("hey1 %s %lx %lx %lx\n", P(n), ul_addr(n->e_left), temp, *temp));
+	return *temp;
     }
     return *v2f_type(unsigned long *, ul_addr(n->e_left));
 }
@@ -251,7 +252,7 @@ unsigned long long ull_l2p(expr *n)
 	return (unsigned long)get_field(V2F(ull_addr(n->e_left)),
 					n->e_boffset, n->e_bsize);
     if (n->e_size == sizeof(ularge_t)) {
-	DEBUG_PRINTF(("hey %s\n", P(n)));
+	DEBUG_PRINTF(("hey2 %s\n", P(n)));
 	return *v2f_type(ularge_t *, ull_addr(n->e_left));
     }
     return *v2f_type(unsigned long *, ull_addr(n->e_left));
@@ -267,9 +268,9 @@ double d_l2p(expr *n)
     return *v2f_type(double *, d_addr(n->e_left));
 }
 
-st st_l2p(expr *n)
+st_t st_l2p(expr *n)
 {
-    return (st)st_addr(n->e_left);
+    return (st_t)st_addr(n->e_left);
 }
 
 
@@ -285,7 +286,7 @@ long long ll_null(expr *n) { return 0; }
 unsigned long long ull_null(expr *n) { return 0; }
 float f_null(expr *n) { return 0; }
 double d_null(expr *n) { return 0; }
-st st_null(expr *n) { static st s; return s; }
+st_t st_null(expr *n) { static st_t s; return s; }
 
 int sc_lnot(expr *n) { return !sc_val(n->e_left); }
 signed char sc_bnot(expr *n) { return ~sc_val(n->e_left); }
