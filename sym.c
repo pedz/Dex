@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)sym.c	1.11";
+static char sccs_id[] = "@(#)sym.c	1.12";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +18,7 @@ static ns *ns_tail;
 extern char *type_2_string[];		/* Ick! */
 
 static int hash(char *s);
-static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr);
+static typeptr do_insert(int type_id, typeptr t, int *limit, typeptr **ptr);
 
 static int hash(char *s)
 {
@@ -109,32 +109,32 @@ typeptr name2namedef_all(char *name)
     return struct_temp;
 }
 
-static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
+static typeptr do_insert(int type_id, typeptr t, int *limit, typeptr **ptr)
 {
     int old_limit;
     typeptr old_type;
 
-    if (typeid >= (old_limit = *limit)) {
-	size_t old = old_limit * sizeof(typeptr);
-	size_t new = (*limit = typeid + 100) * sizeof(typeptr);
+    if (type_id >= (old_limit = *limit)) {
+	size_t oldp = old_limit * sizeof(typeptr);
+	size_t newp = (*limit = type_id + 100) * sizeof(typeptr);
 
 	if (*ptr)
-	    *ptr = srealloc(*ptr, new, old);
+	    *ptr = srealloc(*ptr, newp, oldp);
 	else
-	    *ptr = smalloc(new);
+	    *ptr = smalloc(newp);
     }
 
-    if (old_type = (*ptr)[typeid]) {
+    if (old_type = (*ptr)[type_id]) {
 	char *old_name = old_type->t_name;
 	struct type *old_hash = old_type->t_hash;
 
 	if (t->t_name) {		/* if this has a name then we freak */
 	    fprintf(stderr, "Replacing %s name of %s:%d\n",
-		    t->t_name, t->t_ns->ns_name, typeid);
+		    t->t_name, t->t_ns->ns_name, type_id);
 	    exit(1);
 	}
 
-	*old_type = *t;			/* copy new into old */
+	*old_type = *t;			/* copy newp into oldp */
 	old_type->t_name = old_name;
 	old_type->t_hash = old_hash;
 #if 0
@@ -171,29 +171,29 @@ static typeptr do_insert(int typeid, typeptr t, int *limit, typeptr **ptr)
 #endif
 	return old_type;
     } else
-	(*ptr)[typeid] = t;
+	(*ptr)[type_id] = t;
     return t;
 }
 
-typeptr insert_type(int typeid, typeptr t)
+typeptr insert_type(int type_id, typeptr t)
 {
     ns *nspace = t->t_ns;
     tidtabptr tid;
 
     /*
-     * A typeid of 0 seems to be for temp ranges.
+     * A type_id of 0 seems to be for temp ranges.
      */
-    if (typeid == 0)
+    if (type_id == 0)
 	return t;
     if (!(tid = nspace->ns_tids))
 	tid = nspace->ns_tids = new(struct typeid_table);
-    if (typeid < 0)
-	return do_insert(-typeid, t, &tid->tid_lower_limit,&tid->tid_type_neg);
+    if (type_id < 0)
+	return do_insert(-type_id, t, &tid->tid_lower_limit,&tid->tid_type_neg);
     else
-	return do_insert(typeid, t, &tid->tid_upper_limit, &tid->tid_type_pos);
+	return do_insert(type_id, t, &tid->tid_upper_limit, &tid->tid_type_pos);
 }
 
-int typedef2typeid(typeptr t)
+int typedef2type_id(typeptr t)
 {
     ns *nspace = t->t_ns;
     typeptr *p, *e;
@@ -328,22 +328,22 @@ typeptr newtype(ns *nspace, enum stab_type t)
     return ret;
 }
 
-typeptr find_type(ns *nspace, int typeid)
+typeptr find_type(ns *nspace, int type_id)
 {
     typeptr ret = 0;
     tidtabptr tid;
 
-    if (typeid == 0)
+    if (type_id == 0)
 	return 0;
 
     if (tid = nspace->ns_tids) {
-	if (typeid < 0) {
-	    int temp_typeid = -typeid;
+	if (type_id < 0) {
+	    int temp_type_id = -type_id;
 
-	    if (temp_typeid < tid->tid_lower_limit)
-		ret = tid->tid_type_neg[temp_typeid];
-	} else if (typeid < tid->tid_upper_limit)
-	    ret = tid->tid_type_pos[typeid];
+	    if (temp_type_id < tid->tid_lower_limit)
+		ret = tid->tid_type_neg[temp_type_id];
+	} else if (type_id < tid->tid_upper_limit)
+	    ret = tid->tid_type_pos[type_id];
     }
     /*
      * If this is a forward reference, we create and insert an empty
@@ -352,17 +352,17 @@ typeptr find_type(ns *nspace, int typeid)
     if (!ret) {
 	ret = new(struct type);
 	ret->t_ns = nspace;
-	insert_type(typeid, ret);
+	insert_type(type_id, ret);
     }
     return ret;
 }
 
-paramptr newparam(int typeid, int passby)
+paramptr newparam(int type_id, int passby)
 {
     paramptr ret = new(struct param);
 
     ret->p_next = 0;
-    ret->p_typeid = typeid;
+    ret->p_typeid = type_id;
     ret->p_passby = passby;
     return ret;
 }
@@ -375,15 +375,15 @@ struct copy_rec {
 
 struct copy_rec *record_list;
 
-void copy_type_and_record(typeptr new, typeptr old)
+void copy_type_and_record(typeptr newp, typeptr oldp)
 {
     struct copy_rec *cr = new(struct copy_rec);
     
-    cr->cr_new = new;
-    cr->cr_old = old;
+    cr->cr_new = newp;
+    cr->cr_old = oldp;
     cr->cr_next = record_list;
     record_list = cr;
-    copy_type(new, old);
+    copy_type(newp, oldp);
 }
 
 void finish_copies(void)
@@ -397,10 +397,10 @@ void finish_copies(void)
     }
 }
 
-void copy_type(typeptr new, typeptr old)
+void copy_type(typeptr newp, typeptr oldp)
 {
-    new->t_type = old->t_type;
-    new->t_val = old->t_val;
+    newp->t_type = oldp->t_type;
+    newp->t_val = oldp->t_val;
 }
 
 /*
@@ -680,7 +680,7 @@ symptr addr2userdef_all(void *addr)
     return closest;
 }
 
-/* after leaving a nesting level, we delete the old symbols */
+/* after leaving a nesting level, we delete the oldp symbols */
 void clean_symtable(ns *nspace, int nesting_level)
 {
     symptr *sym, *end, temp;
@@ -717,7 +717,7 @@ symptr enter_sym(ns *nspace, char *name, int force)
 		return ret;
 	    }
 
-    DEBUG_PRINTF(("enter_sym: new %s\n", name));
+    DEBUG_PRINTF(("enter_sym: newp %s\n", name));
     ++sytp->sy_count;
     sytp->sy_addr_sorted = 0;
     ret = new(struct sym);
