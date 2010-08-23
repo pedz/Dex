@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)disasm.c	1.7";
+static char sccs_id[] = "@(#)disasm.c	1.8";
 
 #include <sys/types.h>
 #include "map.h"
@@ -255,7 +255,7 @@ struct instr {
     {    "eqv",     "eqv", 0x1f, 0x11c,   X,         "%ra,%rs,%rb",   1},
     {        0,   "extsb", 0x1f, 0x3ba,   X,             "%ra,%rs",  16},
     {   "exts",   "extsh", 0x1f, 0x39a,   X,             "%ra,%rs",   1},
-    {        0,   "extsw", 0x1f, 0x380,   X,             "%ra,%rs",   1},
+    {        0,   "extsw", 0x1f, 0x3da,   X,             "%ra,%rs",   1},
     {   "fabs",    "fabs", 0x3f, 0x108,   X,           "%frt,%frb",   1},
     {     "fa",    "fadd", 0x3f, 0x015,   A,      "%frt,%fra,%frb",   1},
     {        0,   "fadds", 0x3b, 0x015,   A,      "%frt,%fra,%frb",  16},
@@ -607,10 +607,10 @@ char *instr(int *addr)
     i._i = *v2f_type(int *, addr);
     if (!(t = find_instr(i)))
 	return " illegal instruction ";
-    if (t->i_name)
-	strcpy(ibuf, t->i_name);
+    if (t->i_pname)
+	strcpy(ibuf, t->i_pname);
     else
-	strcat(ibuf, t->i_pname);
+	strcpy(ibuf, t->i_name);
     if (t->i_notes) {
 	int ntemp;
 
