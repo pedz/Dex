@@ -1,5 +1,5 @@
 
-/* @(#)tree.h	1.7 */
+/* @(#)tree.h	1.8 */
 
 #ifndef __TREE_H
 #define __TREE_H
@@ -11,7 +11,7 @@
  * When a struct is evaulated, the address of the structure is
  * returned on the stack.
  */
-typedef unsigned long st;
+typedef unsigned long st_t;
 
 /* This union can contain all of the types known to the interpreter */
 typedef union all {
@@ -27,7 +27,7 @@ typedef union all {
     unsigned short us;
     float f;
     double d;
-    st st;
+    st_t st;
 } all;
 
 typedef struct expr expr;
@@ -48,7 +48,7 @@ struct expr {
 	unsigned long long (*ull)(expr *);
 	float (*f)(expr *);
 	double (*d)(expr *);
-	st (*st)(expr *);
+	st_t (*st)(expr *);
 	void (*v)(expr *);
 
 	/* set of function pointers for lvalues */
@@ -64,7 +64,7 @@ struct expr {
 	unsigned long long *(*ulla)(expr *);
 	float *(*fa)(expr *);
 	double *(*da)(expr *);
-	st *(*sta)(expr *);
+	st_t *(*sta)(expr *);
 	void *(*va)(expr *);
     } e_func;
     union {
