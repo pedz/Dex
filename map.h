@@ -1,5 +1,5 @@
 
-/* @(#)map.h	1.9 */
+/* @(#)map.h	1.10 */
 
 #ifndef __MAP_H
 #define __MAP_H
@@ -18,16 +18,18 @@
  */
 
 #define STAGE_BITS 13
+#define MAX_SHIFT_CNT 3
 
 #define V2F_MACRO(p) \
     ((v_ptr)((page_table[THREAD_SLOT]-> \
-	pte[(((long)(p)) >> PGSHIFT+(STAGE_BITS*3)) & STAGE_MASK]-> \
-	pte[(((long)(p)) >> PGSHIFT+(STAGE_BITS*2)) & STAGE_MASK]-> \
-	pte[(((long)(p)) >> PGSHIFT+(STAGE_BITS*1)) & STAGE_MASK]-> \
-	pte[(((long)(p)) >> PGSHIFT+(STAGE_BITS*0)) & STAGE_MASK]) + \
-     (((long)(p)) & (PAGESIZE - 1))))
+	pte[(((unsigned long)(p)) >> PGSHIFT+(STAGE_BITS*3)) & STAGE_MASK]-> \
+	pte[(((unsigned long)(p)) >> PGSHIFT+(STAGE_BITS*2)) & STAGE_MASK]-> \
+	pte[(((unsigned long)(p)) >> PGSHIFT+(STAGE_BITS*1)) & STAGE_MASK]-> \
+	pte[(((unsigned long)(p)) >> PGSHIFT+(STAGE_BITS*0)) & STAGE_MASK]) + \
+     (((unsigned long)(p)) & (PAGESIZE - 1))))
 
 #define INITIAL_STAGE STAGE0
+#define INITIAL_STAGE_P1 STAGE1
 #define USER_START 0x0000000110000000L
 #define USER_END   0x000000011fffffffL
 
@@ -41,6 +43,7 @@ typedef struct stage0 initial_stage_t;
  */
 
 #define STAGE_BITS 10
+#define MAX_SHIFT_CNT 1
 
 #define V2F_MACRO(p) \
     ((p_ptr)((page_table[THREAD_SLOT]-> \
@@ -49,6 +52,7 @@ typedef struct stage0 initial_stage_t;
      (((unsigned long)(p)) & (PAGESIZE - 1))))
 
 #define INITIAL_STAGE STAGE2
+#define INITIAL_STAGE_P1 FINAL_STAGE
 #define USER_START 0x20000000
 #define USER_END   0x28000000
 
@@ -103,8 +107,8 @@ int map_init(void);
 typedef void *v_ptr;			/* A virtual address */
 typedef void *p_ptr;			/* A physical address */
 
-p_ptr v2f(v_ptr);
-v_ptr f2v(p_ptr);
+extern p_ptr v2f(v_ptr);
+extern v_ptr f2v(p_ptr);
 int open_dump(char *path);
 int purge_user_pages(void);
 int purge_all_pages(void);
