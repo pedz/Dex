@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)dex.c	1.10";
+static char sccs_id[] = "@(#)dex.c	1.11";
 
 #include <stdio.h>
 #include <strings.h>
@@ -26,6 +26,14 @@ void *stack_top;
 unsigned long debug_mask;
 extern int GRAMdebug;
 extern int STABdebug;
+
+#include <setjmp.h>
+static jmp_buf GRAMcatch;
+
+void sigint_catch(int sig)
+{
+    longjmp(GRAMcatch, 1);
+}
 
 int main(int argc, char *argv[])
 {
@@ -63,7 +71,7 @@ int main(int argc, char *argv[])
 	STABdebug = debug_mask & STAB_Y_BIT;
     }
 
-    if (argc) {				/* Optional first arg: dump */
+    if (argc) {				/* First arg: dump */
 	dumpname = argv[0];
 	++argv;
 	--argc;
@@ -89,7 +97,13 @@ int main(int argc, char *argv[])
     builtin_init();
     if (setup_pseudos())
 	return 1;
-    GRAMparse();
+    while (1) {
+	signal(SIGINT, sigint_catch);
+	if (setjmp(GRAMcatch) == 0) {
+	    GRAMparse();
+	    break;
+	}
+    }
     return 0;
 }
 
@@ -103,7 +117,9 @@ void *safe_malloc(size_t size, char *file, int lineno)
 		progname, file, lineno, size);
 	exit(1);
     }
+#if 0
     fprintf(stderr, "%s:%d allocated %ld\n", file, lineno, size);
+#endif
     bzero(ret, size);
     return ret;
 }
@@ -117,8 +133,10 @@ void *safe_realloc(void *old, size_t size, size_t old_size, char *file, int line
 		progname, file, lineno, size);
 	exit(1);
     }
+#if 0
     fprintf(stderr, "%s:%d reallocated %ld to %ld\n", file, lineno,
 	    old_size, size);
+#endif
     if (size > old_size)
 	bzero(ret + old_size, size - old_size);
     return ret;
