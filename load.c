@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)load.c	1.10";
+static char sccs_id[] = "@(#)load.c	1.11";
 
 #ifdef __64BIT__
 #define __XCOFF64__
@@ -33,6 +33,26 @@ static char sccs_id[] = "@(#)load.c	1.10";
  * what was loaded in the system.  That may be a bit tricky though.
  */
 #define MAP(class, type) (((class) << 3) | ((type) & 7))
+
+static typeptr get_char(ns *nspace, typeptr *int_type_p)
+{
+    typeptr ret;
+
+    if (ret = *int_type_p)
+	return ret;
+    ret = *int_type_p = name2typedef(nspace, "char");
+    return ret;
+}
+
+static typeptr get_short(ns *nspace, typeptr *int_type_p)
+{
+    typeptr ret;
+
+    if (ret = *int_type_p)
+	return ret;
+    ret = *int_type_p = name2typedef(nspace, "short");
+    return ret;
+}
 
 static typeptr get_int(ns *nspace, typeptr *int_type_p)
 {
@@ -145,6 +165,8 @@ int load(char *path, long text_base, long data_base)
     char *name;
     int size;
     long lnnoptr_base;
+    typeptr char_type = 0;
+    typeptr short_type = 0;
     typeptr int_type = 0;
     typeptr long_type = 0;
     typeptr func_int_type = 0;
@@ -175,6 +197,10 @@ int load(char *path, long text_base, long data_base)
      * are done and we do not do any other mapping while it is
      * mapped.
      */
+    if (debug_mask & MMAP_BIT)
+	printf("mmap: s=%s l=%s e=%s\n", P(map_top),
+	       P(sbuf.st_size),
+	       P(map_top + sbuf.st_size));
     m = mmap((void *)map_top, sbuf.st_size, PROT_READ,
 	     MAP_FILE|MAP_VARIABLE, fd, 0);
     DEBUG_PRINTF(("load: map_top=0x%s m=0x%s\n", P(map_top), P(m)));
@@ -330,9 +356,9 @@ int load(char *path, long text_base, long data_base)
 			suffix = 0;
 			/*
 			 * The loader section does not have sizes.  We
-			 * guess that everything is long.
+			 * guess that everything is int.
 			 */
-			thistype = get_long(load_ns, &long_type);
+			thistype = get_int(load_ns, &long_type);
 			break;
 
 		    default:
@@ -602,6 +628,10 @@ int load(char *path, long text_base, long data_base)
 			thistype = get_func_int(cur_block,
 						&int_type,
 						&func_int_type);
+		    else if (scnlen == sizeof(char))
+			thistype = get_char(cur_block, &char_type);
+		    else if (scnlen == sizeof(short))
+			thistype = get_short(cur_block, &short_type);
 		    else if (scnlen == sizeof(int))
 			thistype = get_int(cur_block, &int_type);
 		    else
@@ -613,7 +643,11 @@ int load(char *path, long text_base, long data_base)
 		case MAP(XMC_RW, XTY_SD):
 		case MAP(XMC_RW, XTY_LD):
 		    suffix = 0;
-		    if (scnlen == sizeof(int))
+		    if (scnlen == sizeof(char))
+			thistype = get_char(cur_block, &char_type);
+		    else if (scnlen == sizeof(short))
+			thistype = get_short(cur_block, &short_type);
+		    else if (scnlen == sizeof(int))
 			thistype = get_int(cur_block, &int_type);
 		    else
 			thistype = get_long(cur_block, &long_type);
@@ -652,7 +686,11 @@ int load(char *path, long text_base, long data_base)
 		case MAP(XMC_TD, XTY_CM): /* An TC SD entry may point to a  */
 		case MAP(XMC_TD, XTY_SD): /* TOC data entry */
 		    suffix = 0;
-		    if (scnlen == sizeof(int))
+		    if (scnlen == sizeof(char))
+			thistype = get_char(cur_block, &char_type);
+		    else if (scnlen == sizeof(short))
+			thistype = get_short(cur_block, &short_type);
+		    else if (scnlen == sizeof(int))
 			thistype = get_int(cur_block, &int_type);
 		    else
 			thistype = get_long(cur_block, &long_type);
@@ -661,7 +699,11 @@ int load(char *path, long text_base, long data_base)
 
 		case MAP(XMC_RW, XTY_CM): /* BSS */
 		    suffix = 0;
-		    if (scnlen == sizeof(int))
+		    if (scnlen == sizeof(char))
+			thistype = get_char(cur_block, &char_type);
+		    else if (scnlen == sizeof(short))
+			thistype = get_short(cur_block, &short_type);
+		    else if (scnlen == sizeof(int))
 			thistype = get_int(cur_block, &int_type);
 		    else
 			thistype = get_long(cur_block, &long_type);
@@ -711,7 +753,11 @@ int load(char *path, long text_base, long data_base)
 		}
 	    } else {
 		suffix = 0;
-		if (scnlen == sizeof(int))
+		if (scnlen == sizeof(char))
+		    thistype = get_char(cur_block, &char_type);
+		else if (scnlen == sizeof(short))
+		    thistype = get_short(cur_block, &short_type);
+		else if (scnlen == sizeof(int))
 		    thistype = get_int(cur_block, &int_type);
 		else
 		    thistype = get_long(cur_block, &long_type);
@@ -746,6 +792,7 @@ int load(char *path, long text_base, long data_base)
 
 	    case C_HIDEXT:
 	    case C_EXT:
+	    case C_WEAKEXT:
 		if (s->n_scnum == ohdr->o_sntext)
 		    offset = (void *)(text_base + s->n_value);
 		else if (s->n_scnum == ohdr->o_sndata ||
@@ -1027,7 +1074,7 @@ int load(char *path, long text_base, long data_base)
 		    break;
 		}
 		if (s->n_sclass == C_FUN) {
-		    offset = (void *)((int)last_code_csect->s_offset +
+		    offset = (void *)((unsigned long)last_code_csect->s_offset +
 				      s->n_value);
 		    dbx_sptr->s_global = 1;
 		} else if (s->n_sclass == C_STSYM) {
@@ -1050,7 +1097,7 @@ int load(char *path, long text_base, long data_base)
 
 			offset = (void *)s->n_value;
 		    } else {
-			offset = (void *)((int)static_offset + s->n_value);
+			offset = (void *)((unsigned long)static_offset + s->n_value);
 		    }
 		    dbx_sptr->s_global = 1;
 		} else { /* C_LSYM or C_PSYM */
@@ -1063,12 +1110,20 @@ int load(char *path, long text_base, long data_base)
 		 * is off for C_LSYM and C_PSYM and set for the other
 		 * guys.
 		 */
-		if (dbx_sptr->s_defined && dbx_sptr->s_offset != offset)
-		    fprintf(stderr,
-			    "Duplicate global symbol %s at %d %x != %x\n",
-			    dbx_sptr->s_name, sym_index, dbx_sptr->s_offset,
-			    offset);
-		else {
+		if (dbx_sptr->s_defined && dbx_sptr->s_offset != offset) {
+			fprintf(stderr,
+				"Duplicate global symbol %s at %d %lx != %lx\n",
+				dbx_sptr->s_name, sym_index, dbx_sptr->s_offset,
+				offset);
+		
+			fprintf(stderr,
+				"...n_sclass = %d csect_index = %d csect->offset = %lx s->n_value = %lx\n",
+				s->n_sclass,
+				last_code_csect_index,
+				last_code_csect->s_offset,
+				s->n_value
+				);
+		} else {
 		    dbx_sptr->s_offset = offset;
 		    dbx_sptr->s_defined = 1;
 		}
@@ -1089,6 +1144,10 @@ int load(char *path, long text_base, long data_base)
 #undef Set_cur_block
     }
     (void) close(fd);
+    if (debug_mask & MMAP_BIT)
+	printf("munmap: s=%s l=%s e=%s\n", P(m),
+	       P(sbuf.st_size),
+	       P(m + sbuf.st_size));
     (void) munmap(m, sbuf.st_size);
     if (have_stab_buf)
 	fprintf(stderr, "Load finished with %s still in stab_buf\n",
