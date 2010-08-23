@@ -1,5 +1,5 @@
 
-/* @(#)binary_expr.h	1.4 */
+/* @(#)binary_expr.h	1.5 */
 
 #ifndef __BINARY_EXPR_H
 #define __BINARY_EXPR_H
@@ -268,7 +268,7 @@ double d_andand(expr *n);
 double d_oror(expr *n);
 double d_qc(expr *n);
 
-st st_comma(expr *n);
-st st_qc(expr *n);
+st_t st_comma(expr *n);
+st_t st_qc(expr *n);
 
 #endif /* __BINARY_EXPR_H */
