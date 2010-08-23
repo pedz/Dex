@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)gram.y	1.10";
+static char sccs_id[] = "@(#)gram.y	1.11";
 /*
  * The yacc grammer for the user interface language.  This should grow
  * into about 90% of C in time.
@@ -114,7 +114,7 @@ static char *save_as_string(int i);
 %token <ival> BREAK
 %token <ival> CASE CHAR CONTINUE
 %token <ival> DEFAULT DO DOUBLE
-%token <ival> ELSE ENTRY EXTERN
+%token <ival> ELSE /* ENTRY */ EXTERN
 %token <ival> ENUM
 %token <ival> FLOAT FOR
 %token <ival> GOTO
@@ -1553,6 +1553,14 @@ name
 		YYERROR;
 		
 	}
+    /* kludge / hack since the scanner returns a typedef name if it
+       finds it.  But that can be a legal field name it turns out. */
+    | name '.' TYPEDEFNAME
+	{
+	    if (mk_dot(&$$, &$1, $3->t_name))
+		YYERROR;
+		
+	}
     | name '(' opt_expression_list ')' PTROP IDENTIFIER
 	{
 	    cnode ctemp;
@@ -1574,6 +1582,30 @@ name
     | '(' expression ')' PTROP IDENTIFIER
 	{
 	    if (mk_ptr(&$$, &$2, $5))
+		YYERROR;
+	}
+    /* ditto of above */
+    | name '(' opt_expression_list ')' PTROP TYPEDEFNAME
+	{
+	    cnode ctemp;
+
+	    if ($1.c_type->t_type != PROC_TYPE) {
+		yyerror("function name expected");
+		YYERROR;
+	    }
+	    mk_fcall(&ctemp, &$1, $3);
+
+	    if (mk_ptr(&$$, &ctemp, $6->t_name))
+		YYERROR;
+	}
+    | name PTROP TYPEDEFNAME
+	{
+	    if (mk_ptr(&$$, &$1, $3->t_name))
+		YYERROR;
+	}
+    | '(' expression ')' PTROP TYPEDEFNAME
+	{
+	    if (mk_ptr(&$$, &$2, $5->t_name))
 		YYERROR;
 	}
     | name '[' expression ']'
