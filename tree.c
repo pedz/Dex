@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)tree.c	1.10";
+static char sccs_id[] = "@(#)tree.c	1.11";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +45,7 @@ static char *op_2_string[OP_MAX];
 static union all_func op_table[LAST_TYPE + 1][OP_MAX];
 static union all_func cast_table[LAST_TYPE + 1][LAST_TYPE + 1];
 static union all_func null_func[LAST_TYPE + 1];
+static int base_size_table[LAST_TYPE + 1];
 
 char *type_2_string[LAST_TYPE + 1];
 
@@ -89,7 +90,7 @@ void mk_l2p(cnode *result, cnode *c)
 	eptr->e_func = op_table[c->c_base][tok_2_op['.']];
 	eptr->e_left = c->c_expr;
 	eptr->e_size = c->c_expr->e_size;
-	DEBUG_PRINTF(("mk_l2p %d %s\n", eptr->e_size, P(eptr)));
+	DEBUG_PRINTF(("mk_l2p %d %d %s\n", eptr->e_size, c->c_bitfield, P(eptr)));
 	if (c->c_bitfield) {
 	    eptr->e_bsize = c->c_size;
 	    eptr->e_boffset = c->c_offset;
@@ -167,9 +168,19 @@ int mk_dot(cnode *result, cnode *c, char *s)
      * we simply set the cnode properly and continue.  This will
      * eventually get changed into either a pvalue or used as an
      * lvalue and we will deal with the problem at that time.
+     *
+     * Bug fix: If we have a bit field, the traditional type is
+     * unsigned int but if the bit field is a multiple of 8 bits yet
+     * smaller than the size denoted by c_base, we still need to use
+     * the get_field operations otherwise, we end up picking up the
+     * entire int instead of just the bytes we are suppose to pick
+     * up.  We added base_size_table and the second or test in the if
+     * below to catch this.
      */
     result->c_type = f->f_typeptr;
     result->c_base = base_type(result->c_type);
+    DEBUG_PRINTF(("mk_dot: numbits: %d, type: %d, true size: %d \n",
+		  f->f_numbits, result->c_base, base_size_table[result->c_base]));
 
     /*
      * The bit field routines are designed to work with an address
@@ -183,7 +194,8 @@ int mk_dot(cnode *result, cnode *c, char *s)
      * a multiple of sizeof(int).
      */
     byte_offset = f->f_offset / 8;
-    if ((f->f_offset | f->f_numbits) & 7) {
+    if (((f->f_offset | f->f_numbits) & 7) ||
+	(base_size_table[result->c_base] * 8 != f->f_numbits)) {
 	byte_offset &= ~(sizeof(int) - 1); /* make it word aligned */
 	bit_offset = f->f_offset - (byte_offset * 8);
 	byte_size = sizeof(int);
@@ -856,6 +868,22 @@ void tree_init(void)
     null_func[float_type].f = f_null;
     null_func[double_type].d = d_null;
     null_func[struct_type].st = st_null;
+
+    base_size_table[schar_type]	     = sizeof(signed char);
+    base_size_table[uchar_type]	     = sizeof(unsigned char);
+    base_size_table[int_type]	     = sizeof(int);
+    base_size_table[uint_type]	     = sizeof(unsigned int);
+    base_size_table[short_type]	     = sizeof(short);
+    base_size_table[ushort_type]     = sizeof(unsigned short);
+    base_size_table[long_type]	     = sizeof(long);
+    base_size_table[ulong_type]	     = sizeof(unsigned long);
+    base_size_table[long_long_type]  = sizeof(long long);
+    base_size_table[ulong_long_type] = sizeof(unsigned long long);
+    base_size_table[float_type]	     = sizeof(float);
+    base_size_table[double_type]     = sizeof(double);
+    base_size_table[struct_type]     = -1;
+    base_size_table[void_type]	     = -1;
+    base_size_table[bad_type]	     = -1;
 }
 
 enum expr_type base_type(typeptr t)
