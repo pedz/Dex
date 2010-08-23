@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)pre-asgn_expr.c	1.6";
+static char sccs_id[] = "@(#)pre-asgn_expr.c	1.7";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,14 +55,14 @@ asgn_op(double, d, suffix, op)
 
 all_op(asgn, =)
 
-st st_asgn(expr *n)
+st_t st_asgn(expr *n)
 {
-    st r = v2f_type(st, st_val(n->e_right));
-    st *l = v2f_type(st *, st_addr(n->e_left));
+    st_t r = v2f_type(st_t, st_val(n->e_right));
+    st_t *l = v2f_type(st_t *, st_addr(n->e_left));
     int size = n->e_size;
 
     bcopy((void *)r, (void *)l, size);
-    return (st)l;
+    return (st_t)l;
 }
 
 all_op(plusasgn, +=)
