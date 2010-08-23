@@ -1,5 +1,5 @@
 
-/* @(#)dex.h	1.6 */
+/* @(#)dex.h	1.7 */
 
 #ifndef __DEX_H
 #define __DEX_H
@@ -53,10 +53,11 @@ enum debug_bits {
     TREE_C_BIT          = 0x00020000,
     TREE_DUMP_C_BIT     = 0x00040000,
     UNARY_EXPR_C_BIT    = 0x00080000,
-    QUICK_RMAP_BIT      = 0x00100000
+    QUICK_RMAP_BIT      = 0x00100000,
+    MMAP_BIT            = 0x00200000
 };
 
-char *print_field(int size, ...);
+extern char *print_field(int size, ...);
 
 #define P(f) print_field(sizeof(f), (f))
 #define DEBUG_PRINTF(b) ((debug_mask & DEBUG_BIT) && printf b)
