@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)disasm.c	1.5";
+static char sccs_id[] = "@(#)disasm.c	1.6";
 
 #include <sys/types.h>
 #include "map.h"
@@ -136,7 +136,7 @@ union inst {
 	uint _ds : 14;
 	uint _eo : 2;
     } _ds_form;
-    int32_t _l;
+    int32_t _i;
 };
 
 enum form { D, B, I, SC, SVC, X, XL, XFX, XFL, XO, A, M, MD, MDS, DS };
@@ -151,6 +151,7 @@ struct instr {
     char *i_arg;
     int i_notes;
 } table[] = {
+/*        name   PPC name    op     eo form                    arg notes */
     {        0,     "tdi", 0x02,     0,   D,         "%to,%ra,%si",   0},
     {        0,  "rldicl", 0x1e,     0,  MD,     "%ra,%rs,%sh,%mb",   1},
     {        0,  "rldicr", 0x1e,     1,  MD,     "%ra,%rs,%sh,%me",   1},
@@ -161,6 +162,7 @@ struct instr {
     {        0,      "ld", 0x3a,     0,  DS,        "%rt,%ds(%ra)",   0},
     {        0,     "ldu", 0x3a,     1,  DS,        "%rt,%ds(%ra)",   0},
     {        0,     "lwa", 0x3a,     2,  DS,        "%rt,%ds(%ra)",   0},
+    {        0,   "stdcx", 0x31, 0x214,  XO,         "%rs,%ra,%rb",   0},
     {        0,     "std", 0x3e,     0,  DS,        "%rs,%ds(%ra)",   0},
     {        0,    "stdu", 0x3e,     1,  DS,        "%rs,%ds(%ra)",   0},
     {      "a",     "add", 0x1f, 0x00a,  XO,         "%rt,%ra,%rb",   2},
@@ -189,6 +191,7 @@ struct instr {
     {   "cmpl",    "cmpl", 0x1f, 0x020,   X,         "%bf,%ra,%rb",   0},
     {  "cmpli",   "cmpli", 0x0a,     0,   D,         "%bf,%ra,%ui",   0},
     {  "cntlz",  "cntlzw", 0x1f, 0x01a,   X,             "%ra,%rs",   1},
+    {        0,  "cntlzd", 0x1f, 0x03a,   X,             "%ra,%rs",   1},
     {  "crand",   "crand", 0x13, 0x101,  XL,         "%bt,%ba,%bb",   0},
     { "crandc",  "crandc", 0x13, 0x081,  XL,         "%bt,%ba,%bb",   0},
     {  "creqv",   "creqv", 0x13, 0x121,  XL,         "%bt,%ba,%bb",   0},
@@ -492,7 +495,7 @@ static struct instr *find_instr(union inst i)
 	    if (!(diff = t->i_eo - i._x_form._eo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("x   %03x %03x %08x\n", t->i_eo, i._x_form._eo, i._l);
+	    printf("x   %03x %03x %08x\n", t->i_eo, i._x_form._eo, i._i);
 #endif
 	    break;
 
@@ -501,7 +504,7 @@ static struct instr *find_instr(union inst i)
 		return t;
 #ifdef FIND_DEBUG
 	    printf("xl  %03x %03x %08x\n", t->i_eo, i._xl_form._eo,
-		   i._l);
+		   i._i);
 #endif
 	    break;
 
@@ -509,7 +512,7 @@ static struct instr *find_instr(union inst i)
 	    if (!(diff = t->i_eo - i._xfx_form._eo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("xfx %03x %03x %08x\n", t->i_eo, i._xfx_form._eo, i._l);
+	    printf("xfx %03x %03x %08x\n", t->i_eo, i._xfx_form._eo, i._i);
 #endif
 	    break;
 
@@ -517,21 +520,21 @@ static struct instr *find_instr(union inst i)
 	    if (!(diff = t->i_eo - i._xfl_form._eo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("xfl %03x %03x %08x\n", t->i_eo, i._xfl_form._eo, i._l);
+	    printf("xfl %03x %03x %08x\n", t->i_eo, i._xfl_form._eo, i._i);
 #endif
 	    break;
 	case XO:
 	    if (!(diff = t->i_eo - i._xo_form._eo1))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("xo  %03x %03x %08x\n", t->i_eo, i._xo_form._eo1, i._l);
+	    printf("xo  %03x %03x %08x\n", t->i_eo, i._xo_form._eo1, i._i);
 #endif
 	    break;
 	case A:
 	    if (!(diff = t->i_eo - i._a_form._xo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("a   %03x %03x %08x\n", t->i_eo, i._a_form._xo, i._l);
+	    printf("a   %03x %03x %08x\n", t->i_eo, i._a_form._xo, i._i);
 #endif
 	    break;
 
@@ -539,7 +542,7 @@ static struct instr *find_instr(union inst i)
 	    if (!(diff = t->i_eo - i._md_form._eo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("md  %03x %03x %08x\n", t->i_eo, i._md_form._eo, i._l);
+	    printf("md  %03x %03x %08x\n", t->i_eo, i._md_form._eo, i._i);
 #endif
 	    break;
 
@@ -547,7 +550,7 @@ static struct instr *find_instr(union inst i)
 	    if (!(diff = t->i_eo - i._mds_form._eo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("mds %03x %03x %08x\n", t->i_eo, i._mds_form._eo, i._l);
+	    printf("mds %03x %03x %08x\n", t->i_eo, i._mds_form._eo, i._i);
 #endif
 	    break;
 
@@ -555,7 +558,7 @@ static struct instr *find_instr(union inst i)
 	    if (!(diff = t->i_eo - i._ds_form._eo))
 		return t;
 #ifdef FIND_DEBUG
-	    printf("ds  %03x %03x %08x\n", t->i_eo, i._ds_form._eo, i._l);
+	    printf("ds  %03x %03x %08x\n", t->i_eo, i._ds_form._eo, i._i);
 #endif
 	    break;
 	}
@@ -567,7 +570,7 @@ static struct instr *find_instr(union inst i)
 	 (!s[sizeof(p)-1] || \
 	  s[sizeof(p)-1] < 'a' || s[sizeof(p)-1] > 'z'))
 
-char *instr(long *addr)
+char *instr(int *addr)
 {
     static char buf[64];
     char ibuf[64];
@@ -576,15 +579,13 @@ char *instr(long *addr)
     char *s, c;
     struct instr *t;
 
-    i._l = *v2f_type(long *, addr);
+    i._i = *v2f_type(int *, addr);
     if (!(t = find_instr(i)))
 	return " illegal instruction ";
     if (t->i_name)
 	strcpy(ibuf, t->i_name);
-    else {
-	strcpy(ibuf, "{");
+    else
 	strcat(ibuf, t->i_pname);
-    }
     if (t->i_notes) {
 	int ntemp;
 
@@ -654,8 +655,6 @@ char *instr(long *addr)
 	    }
 	}
     }
-    if (!t->i_name)
-	strcat(ibuf, "}");
     bufp = buf + sprintf(buf, "%7s   ", ibuf);
     for (s = t->i_arg; s && (c = *s++); ) {
 	if (c != '%') {
@@ -1049,7 +1048,7 @@ char *instr(long *addr)
     return buf;
 }
 
-void dis(long *addr, int count)
+void dis(int *addr, int count)
 {
     for ( ; --count >= 0; ++addr)
 	printf("%s%s\n", P(addr), instr(addr));
@@ -1066,7 +1065,7 @@ int regs_instr(long *addr, int count)
     int ret = 0;
 
     while (--count >= 0) {
-	i._l = *v2f_type(long *, addr++);
+	i._i = *v2f_type(int *, addr++);
 	if ((t = find_instr(i)) && !strncmp(t->i_arg, "%rt", 3))
 	    switch (t->i_form) {
 	    case D:
