@@ -1,4 +1,8 @@
-static char sccs_id[] = "@(#)builtins.c	1.12";
+static char sccs_id[] = "@(#)builtins.c	1.13";
+
+#ifdef __64BIT__
+#define __XCOFF64__
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -166,6 +170,56 @@ long int_f2v(expr *n)
     return (long)f2v((void *)(f[1]));
 }
 
+long int_name2userdef(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+    char *name = (char *)f[1];
+    return name2userdef_all(name);
+}
+
+/*
+ * called as: find_name(char *name, long offset, char **file_name_p,
+ *                      int *lineno_p);
+ */
+ 
+int int_find_name(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+    char *name = (char *)f[1];
+    long offset = (long)f[2];
+    char **file_name_p = v2f_type(char **, f[3]);
+    int *lineno_p = v2f_type(int *, f[4]);
+    symptr s = name2userdef_all(name);
+    ns *nspace;
+    long target_addr;
+    
+    if (!s)
+	return 0;
+
+    target_addr = s->s_offset + offset;
+    for (nspace = s->s_ns->ns_lower; nspace; nspace = nspace->ns_next)
+	if (!strcmp(s->s_name, nspace->ns_name))
+	    break;
+
+    /*
+     * It may be that we get back more than one symbol and we need to
+     * loop through them.  We'll deal with that when we get there.
+     */
+    if (nspace) {
+	struct lineno *lines;
+
+	if (nspace->ns_parent && file_name_p)
+	    *file_name_p = f2v_type(char *, nspace->ns_parent->ns_name);
+	if (lineno_p && (lines = nspace->ns_lines)) {
+	    for (++lines; lines->l_lnno; ++lines)
+		if (lines->l_addr.l_paddr > target_addr)
+		    break;
+	    *lineno_p = nspace->ns_lineoffset + lines[-1].l_lnno - 1;
+	}
+    }
+    return 1;
+}
+
 /*
  * called as: find(void *addr, char **func_name_p, void **start_p,
  *                 char **file_name_p, int *lineno_p);
@@ -233,18 +287,19 @@ static void do_int_funcs(void)
 	int (*st_func)(expr *n);
     };
     struct table tab[] = {
-	{ "dis",     int_dis },
-	{ "find",    int_find },
-	{ "load",    int_load },
-	{ "printf",  int_printf },
-	{ "purge_all_pages", int_purge_all_pages },
+	{ "dis",              int_dis },
+	{ "find",             int_find },
+	{ "find_name",        int_find_name },
+	{ "load",             int_load },
+	{ "printf",           int_printf },
+	{ "purge_all_pages",  int_purge_all_pages },
 	{ "purge_user_pages", int_purge_user_pages },
-	{ "regs_instr", int_regs_instr },
-	{ "return_range", int_return_range },
-	{ "sprintf", int_sprintf },
-	{ "strcmp",  int_strcmp },
-	{ "strlen",  int_strlen },
-	{ "strncmp", int_strncmp },
+	{ "regs_instr",       int_regs_instr },
+	{ "return_range",     int_return_range },
+	{ "sprintf",          int_sprintf },
+	{ "strcmp",           int_strcmp },
+	{ "strlen",           int_strlen },
+	{ "strncmp",          int_strncmp },
     };
     struct table *tp, *tp_end;
     typeptr t = newtype(ns_inter, PROC_TYPE);
@@ -296,7 +351,8 @@ static void do_long_funcs(void)
 	{ "addr2seg",     int_addr2seg },
 	{ "addr2segtest", int_addr2segtest },
 	{ "f2v",          int_f2v },
-	{ "v2f",          int_v2f }
+	{ "v2f",          int_v2f },
+	{ "name2userdef", int_name2userdef }
     };
     struct table *tp, *tp_end;
     typeptr t = newtype(ns_inter, PROC_TYPE);
