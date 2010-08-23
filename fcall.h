@@ -1,5 +1,5 @@
 
-/* @(#)fcall.h	1.4 */
+/* @(#)fcall.h	1.5 */
 
 #ifndef __FCALL_H
 #define __FCALL_H
@@ -21,6 +21,6 @@ long long ll_fcall(expr *n);
 unsigned long long ull_fcall(expr *n);
 float f_fcall(expr *n);
 double d_fcall(expr *n);
-st st_fcall(expr *n);
+st_t st_fcall(expr *n);
 
 #endif /* __FCALL_H */
