@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)binary_expr.c	1.3";
+static char sccs_id[] = "@(#)binary_expr.c	1.4";
 
 #include <stdio.h>
 #include "map.h"
@@ -340,8 +340,8 @@ double d_qc(expr *n)
 	    d_val(n->e_right->e_right);
 }
 
-st st_comma(expr *n)  { return st_val(n->e_left) ,  st_val(n->e_right); }
-st st_qc(expr *n)
+st_t st_comma(expr *n)  { return st_val(n->e_left) ,  st_val(n->e_right); }
+st_t st_qc(expr *n)
 {
     return i_val(n->e_left) ?
 	st_val(n->e_right->e_left) :
