@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)fcall.c	1.8";
+static char sccs_id[] = "@(#)fcall.c	1.9";
 
 #include <stdio.h>
 #include <setjmp.h>
@@ -320,4 +320,4 @@ MK_FCALL(long long, ll);
 MK_FCALL(unsigned long long, ull);
 MK_FCALL(float, f);
 MK_FCALL(double, d);
-MK_FCALL(st, st);
+MK_FCALL(st_t, st);
