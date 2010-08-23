@@ -1,5 +1,5 @@
 
-/* @(#)asgn_expr.h	1.5 */
+/* @(#)asgn_expr.h	1.6 */
 
 #ifndef __ASGN_EXPR_H
 #define __ASGN_EXPR_H
@@ -16,7 +16,7 @@ long long ll_asgn(expr *n);
 unsigned long long ull_asgn(expr *n);
 float f_asgn(expr *n);
 double d_asgn(expr *n);
-st st_asgn(expr *n);
+st_t st_asgn(expr *n);
 
 signed char sc_plusasgn(expr *n);
 unsigned char uc_plusasgn(expr *n);
