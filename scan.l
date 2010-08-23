@@ -1,5 +1,5 @@
 %{
-static char sccs_id[] = "@(#)scan.l	1.8";
+static char sccs_id[] = "@(#)scan.l	1.9";
 
 #define yylval GRAMlval
 
@@ -38,7 +38,7 @@ struct keywords {
     { "double", DOUBLE },
     { "dump", DUMP },			/* Extension */
     { "else", ELSE },
-    { "entry", ENTRY },
+    /* { "entry", ENTRY }, */
     { "enum", ENUM },
     { "extern", EXTERN },
     { "float", FLOAT },
