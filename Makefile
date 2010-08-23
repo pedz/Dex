@@ -1,4 +1,4 @@
-# @(#)Makefile	1.12
+# @(#)Makefile	1.13
 #
 # COMPONENT_NAME:
 #
@@ -21,14 +21,21 @@
 X=${MAKETOP}../obj/power/bos/usr/ccs/lib/libxcurses
 VPATH		= ${TARGET_MACHINE}:${X}
 
-# SUBDIRS		= lib
+SUBDIRS		= lib
+
+PROGRAMS++	= \
+	dex \
+	dex64 \
+	view-dump \
+	view-dump64
+
 PROGRAMS	= \
 	base \
-	dex \
-	view-dump \
-	xcoff-view
+	base64 \
+	xcoff-view \
+	xcoff-view64
 
-ILIST		= ${PROGRAMS}
+ILIST		= ${PROGRAMS} ${PROGRAMS++}
 IDIR		= /usr/sbin/
 
 dex_OFILES	= \
@@ -56,10 +63,12 @@ base_OFILES = base.o
 view-dump_OFILES = view-dump.o
 xcoff-view_OFILES = xcoff-view.o
 
-PROGRAMS_LDT	= \
-	base \
+PROGRAMS++_LDT	= \
 	dex64 \
-	view-dump64 \
+	view-dump64
+
+PROGRAMS_LDT	= \
+	base64 \
 	xcoff-view64
 
 base64_BUILD64		= TRUE
@@ -78,8 +87,8 @@ CFLAGS		= \
 		  -qinfo=pro \
 		  -D_AIX41
 LIBFLAGS	= -L${X}
-# LIBS		= lib/readline.a -ll -lxcurses
-LIBS		= -ll -lxcurses
+LIBS		= lib/readline.a -ll -lxcurses
+# LIBS		= -ll -lxcurses
 
 #
 # New system: we no longer try and find ourselves.  Rather we compile
@@ -92,7 +101,7 @@ base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
 base.o_INCFLAGS = -I${MAKETOP}/../export/power/kernel/include
 base.64o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
 base.64o_INCFLAGS = -I${MAKETOP}/../export/power/kernel/include
-#scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE
+scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE
 #
 # xcurses for 64 bit seems broken today.
 #
