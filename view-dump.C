@@ -2,7 +2,7 @@
  * These routines manage a system dump file.
  */
 
-static char sccsid[] = "@(#)view-dump.C	1.3";
+static char sccsid[] = "@(#)view-dump.C	1.4";
 
 #include <stdio.h>
 #include <sys/dump.h>
@@ -94,23 +94,24 @@ int open_dump(char *path)
 
 	case DMP_MAGIC_UD32:
 	case DMP_MAGIC_UD64:
-	    fprintf(stderr, "Out of sync with magic equal to %08x\n",
-		    ((struct cdt *)cur_pos)->cdt_magic);
+	    fprintf(stderr, "Out of sync with magic equal to %0*lx\n",
+		    sizeof(long)*2, ((struct cdt *)cur_pos)->cdt_magic);
 	    goto loop_end;
 	case DMP_MAGIC_END:
 	    goto loop_end;
 
 	default:
-	    fprintf(stderr, "Exiting with magic equal to %08x\n",
-		    ((struct cdt *)cur_pos)->cdt_magic);
+	    fprintf(stderr, "Exiting with magic equal to %0*lx\n",
+		    sizeof(long)*2, ((struct cdt *)cur_pos)->cdt_magic);
 	    {
 		int *ip = (int *)cur_pos;
 
-		printf("cur_pos = %08x %08x\n", cur_pos, cur_pos - dump_file);
+		printf("cur_pos = %0*lx %0*lx\n",
+		       sizeof(long)*2, cur_pos, sizeof(long)*2, (cur_pos - dump_file));
 		for (int i = -8*4; i < 8*4; i += 4) {
 		    for (int j = 0; j < 4; ++j)
-			printf("%c%08x", i == 0 && j == 0 ? '*' : ' ',
-			       ip[i+j]);
+			printf("%c%0*lx", i == 0 && j == 0 ? '*' : ' ',
+			       sizeof(long)*2, ip[i+j]);
 		    printf("    ");
 		    for (int j = 0; j < 4; ++j) {
 			unsigned int v = ip[i+j];
