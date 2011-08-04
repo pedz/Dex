@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.13";
+static char sccs_id[] = "@(#)map.c	1.14";
 
 #include <sys/param.h>
 #include <sys/signal.h>
@@ -1620,15 +1620,30 @@ static int setup_final(struct final_stage *s,
 		      P(d->de_virt+d->de_len),
 		      P(d->de_segval)));
 
+	/*
+	 * starting_d finds a place to start searching through the
+	 * dump_entry and we stop when the minimum address in the
+	 * entry is above the last address we are looking for (top).
+	 */
 	for ( ; d < d_end && d->de_min < top; ++d) {
 	    if (d->de_isreal ||
 		(d->de_virt > top) ||
 		(d->de_end <= addr))
 		continue;
 
+	    /*
+	     * first_d is our first hit and it will get refined to our
+	     * preferred hit if we are forced to pick a "non-obvious"
+	     * match, i.e. a wildcard segment register or a partial
+	     * page.
+	     */
 	    if (!one_hit)
 		first_d = d;
 
+	    /*
+	     * We've had at least one hit so we can map something
+	     * somehow
+	     */
 	    one_hit = 1;
 
 	    /* If this is an obvious match, then take it and go */
@@ -1638,6 +1653,9 @@ static int setup_final(struct final_stage *s,
 		(d->de_virt + d->de_len) >= top) {
 		s->pte[i] = (long)d->de_dump +
 			(addr - d->de_virt);
+		DEBUG_PRINTF(("%s: xxx de_segval=%s virt=%s len=%s top=%s\n",
+			      routine, P(d->de_segval), P(d->de_virt),
+			      P(d->de_len), P(top)));
 		DEBUG_PRINTF(("%s: %s[%d]=%s match\n",
 			      routine, P(s), i, P(s->pte[i])));
 		goto cont_loop;
@@ -1646,18 +1664,47 @@ static int setup_final(struct final_stage *s,
 	    if (first_d) {
 		DEBUG_PRINTF(("%s: first_d: true\n", routine));
 
-		if (invalid_segval_p(first_d->de_segval,
-				     addr)) {
+		/*
+		 * If first_d is a wildcard segment register than the
+		 * current d is at leat as valid.  We know neither are
+		 * a parfect match.
+		 */
+		if (invalid_segval_p(first_d->de_segval, addr)) {
 		    first_d = d;
 		    DEBUG_PRINTF(("%s: first_d: set first_d to d\n", routine));
 		}
 
+		/*
+		 * Since I don't fully understand all the gunk below,
+		 * I'm going to add in a very specific case that I need.
+		 * If d's segval is now a wildcard and its a full page,
+		 * it must be better than first_d.
+		 */
+		if (invalid_segval_p(d->de_segval, addr) &&
+		    d->de_virt <= addr &&
+		    (d->de_virt + d->de_len) >= top) {
+		    first_d = d;
+		    DEBUG_PRINTF(("%s: Setting first_d to d special case\n"));
+		    continue;
+		}
+
+		/*
+		 * I don't get this.  This is saying that if the
+		 * current d is a wildcard and we had a match on the
+		 * segment register before, then this can't possibly
+		 * be as good.  But thats not true.  The match before
+		 * could be a partial page.
+		 */
 		if (invalid_segval_p(d->de_segval, addr) ||
 		    (first_d->de_segval == d->de_segval)) {
-		    DEBUG_PRINTF(("%s: first_d continue\n", routine));
+		    DEBUG_PRINTF(("%s: first_d continue de_segval=%s\n",
+				  routine, P(d->de_segval)));
 		    continue;
 		}
 		    
+		/*
+		 * I don't remember what segval == -thread implies.
+		 */
 		if (segval == -thread ||
 		    (segval_addr / SEGSIZE) != (addr / SEGSIZE)) {
 		    segval_addr = addr & ~(SEGSIZE - 1);
@@ -1666,6 +1713,16 @@ static int setup_final(struct final_stage *s,
 				  routine, P(addr), P(segval)));
 		}
 
+		/*
+		 * If (I guess) the new segval now matches first_d's
+		 * segment val, we set d back to where we started and
+		 * repeat our search.  I guess, if we come in with
+		 * segval equal to -thread, we eventually call
+		 * addr2seg to get the segment value we are really
+		 * looking for.  All this seems to make a LOT of
+		 * assumptions in that the first_d->de_segval is not a
+		 * wildcard, etc.
+		 */
 		if (first_d->de_segval == segval) {
 		    d = first_d;
 		    DEBUG_PRINTF(("%s: first_d: set d to first_d\n", routine));
@@ -1682,6 +1739,7 @@ static int setup_final(struct final_stage *s,
 				  routine, P(s), i, P(s->pte[i])));
 		    goto cont_loop;
 		}
+		DEBUG_PRINTF(("setting partial_hit\n"));
 		partial_hit = 1;
 	    }
 	}
