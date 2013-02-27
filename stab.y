@@ -1,6 +1,11 @@
 %{
 
-static char sccs_id[] = "@(#)stab.y	1.10";
+/*
+ * The stab grammar is defined here:
+ * http://publib.boulder.ibm.com/infocenter/pseries/v5r3/topic/com.ibm.aix.files/doc/aixfiles/XCOFF.htm#jtsci131jbau
+ */
+
+static char sccs_id[] = "@(#)stab.y	1.11";
 
 #include <strings.h>
 #include <stdlib.h>
@@ -84,7 +89,7 @@ int yyparse(void);
 %type <val> INTEGER HEXINTEGER typeid numparams passby typenum
 %type <val> ordvalue numelements numbits numbytes bitpattern bitoffset
 %type <val> variable parameter proc procedure
-    
+
 %%
 stab_def
     : /* empty */
@@ -253,7 +258,7 @@ proc
 
 typeid
     : INTEGER
-    | typenum typedef 
+    | typenum typedef
 	{
 	    if ($2) {
 		$2->t_attrs = 0;
@@ -392,6 +397,12 @@ typedef
 	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus(__LINE__);
 	}
+    | 'D' INTEGER ';' typeid		/* Decimal floating point */
+	{
+	    $$ = newtype(cur_ns, DECIMAL_FLOAT_TYPE);
+	    $$->t_val.val_g.g_typeptr = find_type(cur_ns, $2);
+	    $$->t_val.val_g.g_size = $4;
+	}
     | 'K' cobolfiledesc			/* cobol file descriptor */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
@@ -477,11 +488,6 @@ array
 	    $$->t_val.val_a.a_typedef = 0;
 	    $$->t_val.val_a.a_typeptr = find_type(cur_ns, $2);
 	}
-    | 'D' INTEGER ';' typeid		/* n-dimen. dynamic array */
-	{
-	    $$ = newtype(cur_ns, RANGE_TYPE);
-	    bogus(__LINE__);
-	}
     | 'E' INTEGER ';' typeid		/* n-dimen. subarray  */
 	{
 	    $$ = newtype(cur_ns, RANGE_TYPE);
@@ -524,7 +530,7 @@ boundtype
     ;
 
 proceduretype
-    : 'f' typeid ';'		/* func returning type typeid */
+    : 'f' typeid opt_semi		/* func returning type typeid */
 	{
 	    $$ = newtype(cur_ns, PROC_TYPE);
 	    $$->t_val.val_f.f_typeptr = find_type(cur_ns, $2);
@@ -622,17 +628,16 @@ record
 	    $$ = newtype(cur_ns, RANGE_TYPE);
 	    bogus(__LINE__);
 	}
-    | 'Y' numbytes classkey OptPBV OptBaseSpecList '(' ExtendedFieldList
-	  OptNameResolutionList ';'
+    | 'Y' numbytes classkey OptPBV OptBaseSpecList '(' ExtendedFieldList OptNameResolutionList ';'
 	{
 	    $$ = 0;
 	}
     ;
 
 classkey
-    : 's'
-    | 'u'
-    | 'c'
+    : 's'			/* struct */
+    | 'u'			/* union */
+    | 'c'			/* class */
     ;
 
 /*
@@ -640,6 +645,7 @@ classkey
  */
 OptPBV
     : /* Empty */
+    | 'V'			/* pass by value */
     ;
 
 OptBaseSpecList
@@ -648,7 +654,112 @@ OptBaseSpecList
 
 ExtendedFieldList
     : /* Empty */
+    | ExtendedField ExtendedFieldList
     ;
+
+ExtendedField
+    : GenSpec AccessSpec AnonSpec DataMember
+    | GenSpec VirtualSpec AccessSpec OptVirtualFuncIndex MemberFunction
+    | AccessSpec AnonSpec NestedClass
+    | AnonSpec FriendClass
+    | AnonSpec FriendFunction
+    ;
+
+OptVirtualFuncIndex
+    : /* Empty */
+    | INTEGER
+    ;
+
+MemberFunction
+    : '[' FuncType MemberFuncAttrs ':' NAME ':' typeid ';'
+    ;
+
+MemberFuncAttrs
+    : IsStatic IsInline IsConst IsVolatile
+    ;
+
+IsInline
+    : /* Empty */
+    | 'i'			/* inline function */
+    ;
+
+IsConst
+    : /* Empty */
+    | 'k'			/* const member function */
+    ;        
+
+IsVolatile
+    : /* Empty */
+    | 'V'			/* Volatile member function */
+    ;
+
+NestedClass
+    : 'N' typeid ';' /* #  */
+    ;
+
+FriendClass
+    : '(' typeid ';' /* # */
+    ;
+
+FriendFunction
+    : ']' NAME ':' typeid ';' /* # */
+    ;
+
+FuncType
+    : 'f'			/* Member function */
+    | 'c'			/* Constructor */
+    | 'd'			/* Destructor */
+    ;
+
+GenSpec
+    : /* Empty */
+    | 'c'			/* Compiler Generated */
+    ;
+
+AccessSpec
+    : 'i'			/* Private  */
+    | 'o'			/* Protected */
+    | 'u' 			/* Public */
+    ;
+
+AnonSpec
+    : /* Empty */
+    | 'a'			/* Anonymous union member */
+    ;
+
+VirtualSpec
+    : /* Empty */
+    | 'v' 'p' 			/* Pure Virtual */
+    | 'v'			/* Virtual */
+    ;
+
+DataMember
+    : MemberAttrs ':' field
+    ;
+
+MemberAttrs
+    : IsStatic IsVtblPtr IsVBasePtr
+    ;
+
+IsStatic
+    : /* Empty */
+    | 's'			/* Member is static */
+    ;
+
+/* Some of the shift / reduce errors come from here.  The optional
+   IsVBasePtr comes after NAME so its not clear what to do with
+   trailing 'b and 'r' */
+IsVtblPtr
+    : /* Empty */
+    | 'p' INTEGER NAME 		/* Member is vtbl pointer; NAME is the external name of v-table. */
+    ;
+
+IsVBasePtr
+    : /* Empty */
+    | 'b'			/* Member is vbase pointer. */
+    | 'r'			/* Member is vbase self-pointer. */
+    ;
+
 
 OptNameResolutionList
     : /* Empty */
