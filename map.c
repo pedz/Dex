@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)map.c	1.14";
+static char sccs_id[] = "@(#)map.c	1.15";
 
 #include <sys/param.h>
 #include <sys/signal.h>
@@ -830,7 +830,7 @@ int map_init(void)
      * Make reverse lookup for the program's data space.  There is an
      * assumption here that USER_START will be less than map_top.  If
      * it is not, then rmap_find will fail and we will need to regroup
-     * and rething a few things.
+     * and rethink a few things.
      */
     rmap_fill(USER_START,
 	      USER_END - USER_START,
@@ -937,11 +937,9 @@ static int rmap_hash(struct rmap *r)
 	temp >>= rmap_shift;
     }
 
-#if 1
     DEBUG_PRINTF(("rmap_hash: %s s=%s a=%s max=%d returning %d\n",
 		  s_strings[r->r_stage], P(r->r_seg), P(r->r_virt),
 		  rmap_max, index));
-#endif
     return index;
 }
 
@@ -1953,7 +1951,7 @@ static int init_dump(void)
     if ((sizeof(long) == 4) && stat_buf.st_size > 2LL * 1024 * 1024 * 1024)
 	stat_buf.st_size = 2LL * 1024 * 1024 * 1024 - 1;
     dump_file = (char *)mmap((void *)map_top, stat_buf.st_size, PROT_READ,
-			     MAP_FIXED|MAP_FILE, dump_fd, 0);
+			     MAP_SHARED|MAP_FIXED|MAP_FILE, dump_fd, 0);
 
     if ((long)dump_file == -1L) {
 	fprintf(stderr, "st_size is %d st_size is %lld\n", sizeof(stat_buf.st_size),
@@ -2424,14 +2422,17 @@ static int init_dump(void)
     for (i = 0; i < cnt; ++i) {
 	DEBUG_PRINTF(("%s ", P(dump_entries[i].de_dump)));
 	if (dump_entries[i].de_isreal)
-	    DEBUG_PRINTF(("r=%s", P(dump_entries[i].de_real)));
-	else
+	    DEBUG_PRINTF(("r=%s len=%s\n",
+			  P(dump_entries[i].de_real),
+			  P(dump_entries[i].de_len)));
+	else {
 	    DEBUG_PRINTF(("v=%s s=%s",
 			  P(dump_entries[i].de_virt),
 			  P(dump_entries[i].de_segval)));
-	DEBUG_PRINTF((" min=%s e=%s\n",
-		      P(dump_entries[i].de_min),
-		      P(dump_entries[i].de_end)));
+	    DEBUG_PRINTF((" min=%s e=%s\n",
+			  P(dump_entries[i].de_min),
+			  P(dump_entries[i].de_end)));
+	}
     }
     quick_dump = 0;
 
@@ -2590,14 +2591,15 @@ static void rmap_dump(void)
     struct rmap *r_end = r + rmap_used;
 
     DEBUG_PRINTF(("rmap dump\n"));
-    DEBUG_PRINTF(("number %*s %*s %*s thread  stage mfiptx\n",
+    DEBUG_PRINTF(("number %*s %*s %*s %*s thread    stage mfiptx\n",
 		  sizeof(long)*2, "phys",
 		  sizeof(long)*2, "size",
+		  sizeof(long)*2, " seg",
 		  sizeof(long)*2, "virt"));
     for ( ; r < r_end; ++r, ++i)
-	DEBUG_PRINTF(("%6d %s %s %s %6d %6s %d%d%d%d%d%d\n",
-		      i, P(r->r_phys), P(r->r_psize), P(r->r_virt),
-		      r->r_thread, s_strings[r->r_stage],
+	DEBUG_PRINTF(("%6d %s %s %s %s %6d %8s %d%d%d%d%d%d\n",
+		      i, P(r->r_phys), P(r->r_psize), P(r->r_seg),
+		      P(r->r_virt), r->r_thread, s_strings[r->r_stage],
 		      r->r_mapped, r->r_freed, r->r_initialized,
 		      r->r_phys_set, r->r_true_segval, r->r_in_addr2seg));
 }
