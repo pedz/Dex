@@ -1,5 +1,5 @@
 
-/* @(#)base.c	1.2 */
+/* @(#)base.c	1.3 */
 
 #include "sym.h"
 #include <sys/debug.h>
@@ -53,6 +53,7 @@ extern system_configuration_t _system_configuration;
 #include <net/if.h>
 #include <sys/domain.h>
 #include <net/route.h>
+#include <net/netisr.h>
 #include <sys/mbuf.h>
 #include <termios.h>
 #include <netinet/ip_var.h>
@@ -72,6 +73,10 @@ extern system_configuration_t _system_configuration;
 #include <vmm/vmdefs.h>
 #include <sys/vmker.h>
 #include <lfs/lfs_numa.h>
+#include <net/netopt.h>
+#include <ras/ras_priv.h>
+#include <net/net_malloc.h>
+#include <sctp_var.h>
 
 typedef unsigned char   uint8;
 typedef unsigned short  uint16;
