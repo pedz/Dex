@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)disasm.c	1.8";
+static char sccs_id[] = "@(#)disasm.c	1.9";
 
 #include <sys/types.h>
 #include "map.h"
@@ -707,7 +707,7 @@ char *instr(int *addr)
 		if (i._b_form._aa)
 		    bufp += sprintf(bufp, "0x%x", d << 2);
 		else
-		    bufp += sprintf(bufp, "0x%x", addr + d);
+		    bufp += sprintf(bufp, "0x%lx", addr + d);
 	    } else
 		bufp += err(bufp, __LINE__);
 	    s += 2;
@@ -857,7 +857,7 @@ char *instr(int *addr)
 		if (i._i_form._aa)
 		    bufp += sprintf(bufp, "0x%x", d << 2);
 		else
-		    bufp += sprintf(bufp, "0x%x", addr + d);
+		    bufp += sprintf(bufp, "0x%lx", addr + d);
 	    } else
 		bufp += err(bufp, __LINE__);
 	    s += 2;
