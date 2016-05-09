@@ -4,8 +4,13 @@
 #include "sym.h"
 #include <sys/debug.h>
 
+#ifndef _KERNEL
 #define _KERNEL
+#endif
+
+#ifndef KERNEL
 #define KERNEL
+#endif
 
 /*
  * The _system_configuration structure has no name and is declared as
@@ -63,18 +68,26 @@ extern system_configuration_t _system_configuration;
 #include <netinet/if_ether.h>
 #include <netinet/if_ether6.h>
 #include <sys/unpcb.h>
+#ifndef _KERNSYS
 #define _KERNSYS
+#endif
 #include <sys/lockname.h>
 #ifdef PS_ID_LOCK
 #include <sys/pollset.h>
 #endif
 #include <sys/selpoll.h>
 
+#ifndef PEDZ_EXTRA
 #include <vmm/vmdefs.h>
-#include <sys/vmker.h>
 #include <lfs/lfs_numa.h>
-#include <net/netopt.h>
 #include <ras/ras_priv.h>
+ppftfl_t v1;
+pnft_t v2;
+ppltfl_t v3;
+pnlt_t v4;
+#endif /* MINE */
+#include <sys/vmker.h>
+#include <net/netopt.h>
 #include <net/net_malloc.h>
 #include <sctp_var.h>
 

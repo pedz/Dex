@@ -1,4 +1,4 @@
-static char sccs_id[] = "@(#)builtins.c	1.13";
+static char sccs_id[] = "@(#)builtins.c	1.14";
 
 #ifdef __64BIT__
 #define __XCOFF64__
@@ -331,6 +331,7 @@ static void do_int_funcs(void)
 
 long int_addr2seg(expr *n)
 {
+    printf("internal addr2seg called\n");
     return 0;
 }
 
