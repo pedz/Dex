@@ -174,7 +174,7 @@ long int_name2userdef(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
     char *name = (char *)f[1];
-    return name2userdef_all(name);
+    return (long)name2userdef_all(name);
 }
 
 /*
@@ -196,7 +196,7 @@ int int_find_name(expr *n)
     if (!s)
 	return 0;
 
-    target_addr = s->s_offset + offset;
+    target_addr = (long)s->s_offset + offset;
     for (nspace = s->s_ns->ns_lower; nspace; nspace = nspace->ns_next)
 	if (!strcmp(s->s_name, nspace->ns_name))
 	    break;
@@ -329,6 +329,13 @@ static void do_int_funcs(void)
     }
 }
 
+long esidfun(long v);
+long int_esidfun(expr *n)
+{
+    long *f = v2f_type(long *, frame_ptr);
+    return esidfun(f[1]);
+}
+
 long int_addr2seg(expr *n)
 {
     printf("internal addr2seg called\n");
@@ -351,9 +358,10 @@ static void do_long_funcs(void)
     struct table tab[] = {
 	{ "addr2seg",     int_addr2seg },
 	{ "addr2segtest", int_addr2segtest },
+	{ "esidfun",      int_esidfun },
 	{ "f2v",          int_f2v },
-	{ "v2f",          int_v2f },
-	{ "name2userdef", int_name2userdef }
+	{ "name2userdef", int_name2userdef },
+	{ "v2f",          int_v2f }
     };
     struct table *tp, *tp_end;
     typeptr t = newtype(ns_inter, PROC_TYPE);

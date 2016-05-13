@@ -1441,5 +1441,642 @@ int main(void)
     printf("_KSP_LOW_SIZE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* _KSP_LOW_SIZE */
 
+#ifdef GALLOC_OFF_F
+    ul = GALLOC_OFF_F;
+    printf("GALLOC_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_1TB_OFF_F
+    ul = GLOBKER_1TB_OFF_F;
+    printf("GLOBKER_1TB_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_4K_OFF_F
+    ul = GLOBKER_4K_OFF_F;
+    printf("GLOBKER_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+    ul = KERNEL_OFF;
+    printf("KERNEL_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+
+#ifdef HI_GLOB_KERN_OFF_F
+    ul = GA_UNUSED1;
+    printf("GA_UNUSED1 = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+
+    ul = HI_GLOB_KERN_OFF_F;
+    printf("HI_GLOB_KERN_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+    ul = GALLOC_4K_OFF_F;
+    printf("GALLOC_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+
+    ul = GALLOC_4K_OFF_L;
+    printf("GALLOC_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+
+#ifdef DIR_GALLOC_4K_OFF_F
+    ul = DIR_GALLOC_4K_OFF_F;
+    printf("DIR_GALLOC_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef KHEAP_4K_OFF_F
+    ul = KHEAP_4K_OFF_F;
+    printf("KHEAP_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef KHEAP_4K_OFF_L
+    ul = KHEAP_4K_OFF_L;
+    printf("KHEAP_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MBUF_4K_OFF_F
+    ul = MBUF_4K_OFF_F;
+    printf("MBUF_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MBUF_4K_OFF_L
+    ul = MBUF_4K_OFF_L;
+    printf("MBUF_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MTRC_4K_OFF_F
+    ul = MTRC_4K_OFF_F;
+    printf("MTRC_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MTRC_4K_OFF_L
+    ul = MTRC_4K_OFF_L;
+    printf("MTRC_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_PTASEGS
+    ul = NUM_PTASEGS;
+    printf("NUM_PTASEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef PTA_OFF_F
+    ul = PTA_OFF_F;
+    printf("PTA_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef PTA_OFF_L
+    ul = PTA_OFF_L;
+    printf("PTA_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_4K
+    ul = LDR_LIB_4K;
+    printf("LDR_LIB_4K = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_OFF_F
+    ul = LDR_LIB_OFF_F;
+    printf("LDR_LIB_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_4K_OFF_F
+    ul = LDR_LIB_4K_OFF_F;
+    printf("LDR_LIB_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB32_4K_OFF_F
+    ul = LDR_SHLIB32_4K_OFF_F;
+    printf("LDR_SHLIB32_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB32_4K_OFF_L
+    ul = LDR_SHLIB32_4K_OFF_L;
+    printf("LDR_SHLIB32_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB64_4K_OFF_F
+    ul = LDR_SHLIB64_4K_OFF_F;
+    printf("LDR_SHLIB64_4K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB64_4K_OFF_L
+    ul = LDR_SHLIB64_4K_OFF_L;
+    printf("LDR_SHLIB64_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_4K_OFF_L
+    ul = LDR_LIB_4K_OFF_L;
+    printf("LDR_LIB_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_OFF_L
+    ul = LDR_LIB_OFF_L;
+    printf("LDR_LIB_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_RMALLOCSIDS
+    ul = NUM_RMALLOCSIDS;
+    printf("NUM_RMALLOCSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef RMALLOC_OFF_F
+    ul = RMALLOC_OFF_F;
+    printf("RMALLOC_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef RMALLOC_OFF_L
+    ul = RMALLOC_OFF_L;
+    printf("RMALLOC_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_DRMGRSEGS
+    ul = NUM_DRMGRSEGS;
+    printf("NUM_DRMGRSEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DRMGR_OFF_F
+    ul = DRMGR_OFF_F;
+    printf("DRMGR_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DRMGR_OFF_L
+    ul = DRMGR_OFF_L;
+    printf("DRMGR_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_ERMGRSEGS
+    ul = NUM_ERMGRSEGS;
+    printf("NUM_ERMGRSEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef ERMGR_OFF_F
+    ul = ERMGR_OFF_F;
+    printf("ERMGR_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef ERMGR_OFF_L
+    ul = ERMGR_OFF_L;
+    printf("ERMGR_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_MSTSPACESEGS
+    ul = NUM_MSTSPACESEGS;
+    printf("NUM_MSTSPACESEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MSTSPACE_OFF_F
+    ul = MSTSPACE_OFF_F;
+    printf("MSTSPACE_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MSTSPACE_OFF_L
+    ul = MSTSPACE_OFF_L;
+    printf("MSTSPACE_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_SPACEOK_4K_OFF
+    ul = VMM_SPACEOK_4K_OFF;
+    printf("VMM_SPACEOK_4K_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_4K_1TB_END
+    ul = VMM_4K_1TB_END;
+    printf("VMM_4K_1TB_END = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DIR_GALLOC_4K_OFF_L
+    ul = DIR_GALLOC_4K_OFF_L;
+    printf("DIR_GALLOC_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_4K_OFF_L
+    ul = GLOBKER_4K_OFF_L;
+    printf("GLOBKER_4K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_64K_PAD
+    ul = VMM_64K_PAD;
+    printf("VMM_64K_PAD = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_64K_1TB_BOUNDARY
+    ul = VMM_64K_1TB_BOUNDARY;
+    printf("VMM_64K_1TB_BOUNDARY = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_64K_OFF_F
+    ul = GLOBKER_64K_OFF_F;
+    printf("GLOBKER_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GALLOC_64K_OFF_F
+    ul = GALLOC_64K_OFF_F;
+    printf("GALLOC_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GALLOC_64K_OFF_L
+    ul = GALLOC_64K_OFF_L;
+    printf("GALLOC_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DIR_GALLOC_64K_OFF_F
+    ul = DIR_GALLOC_64K_OFF_F;
+    printf("DIR_GALLOC_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef KHEAP_64K_OFF_F
+    ul = KHEAP_64K_OFF_F;
+    printf("KHEAP_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef KHEAP_64K_OFF_L
+    ul = KHEAP_64K_OFF_L;
+    printf("KHEAP_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MBUF_64K_OFF_F
+    ul = MBUF_64K_OFF_F;
+    printf("MBUF_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MBUF_64K_OFF_L
+    ul = MBUF_64K_OFF_L;
+    printf("MBUF_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_OFF
+    ul = VMM_OFF;
+    printf("VMM_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_OFF_F
+    ul = VMM_OFF_F;
+    printf("VMM_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_OFF_L
+    ul = VMM_OFF_L;
+    printf("VMM_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_DMAPSIDS
+    ul = NUM_DMAPSIDS;
+    printf("NUM_DMAPSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DMAP_OFF_F
+    ul = DMAP_OFF_F;
+    printf("DMAP_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DMAP_OFF_L
+    ul = DMAP_OFF_L;
+    printf("DMAP_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_AMESEGS
+    ul = NUM_AMESEGS;
+    printf("NUM_AMESEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef AME_OFF_F
+    ul = AME_OFF_F;
+    printf("AME_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef AME_OFF_L
+    ul = AME_OFF_L;
+    printf("AME_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_VMINTSIDS
+    ul = NUM_VMINTSIDS;
+    printf("NUM_VMINTSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMINT_OFF_F
+    ul = VMINT_OFF_F;
+    printf("VMINT_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMINT_OFF_L
+    ul = VMINT_OFF_L;
+    printf("VMINT_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_FFBMSEGS
+    ul = NUM_FFBMSEGS;
+    printf("NUM_FFBMSEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef FF_BITMAP_OFF_F
+    ul = FF_BITMAP_OFF_F;
+    printf("FF_BITMAP_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef FF_BITMAP_OFF_L
+    ul = FF_BITMAP_OFF_L;
+    printf("FF_BITMAP_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_64K
+    ul = LDR_LIB_64K;
+    printf("LDR_LIB_64K = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_64K_OFF_F
+    ul = LDR_LIB_64K_OFF_F;
+    printf("LDR_LIB_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB32_64K_OFF_F
+    ul = LDR_SHLIB32_64K_OFF_F;
+    printf("LDR_SHLIB32_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB32_64K_OFF_L
+    ul = LDR_SHLIB32_64K_OFF_L;
+    printf("LDR_SHLIB32_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB64_64K_OFF_F
+    ul = LDR_SHLIB64_64K_OFF_F;
+    printf("LDR_SHLIB64_64K_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_SHLIB64_64K_OFF_L
+    ul = LDR_SHLIB64_64K_OFF_L;
+    printf("LDR_SHLIB64_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LDR_LIB_64K_OFF_L
+    ul = LDR_LIB_64K_OFF_L;
+    printf("LDR_LIB_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_PROCTTSIDS
+    ul = NUM_PROCTTSIDS;
+    printf("NUM_PROCTTSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef PROCTT_OFF_F
+    ul = PROCTT_OFF_F;
+    printf("PROCTT_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef PROCTT_OFF_L
+    ul = PROCTT_OFF_L;
+    printf("PROCTT_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef XMDBG_RECS_OFF_F
+    ul = XMDBG_RECS_OFF_F;
+    printf("XMDBG_RECS_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef XMDBG_RECS_OFF_L
+    ul = XMDBG_RECS_OFF_L;
+    printf("XMDBG_RECS_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MPDATA_OFF_F
+    ul = MPDATA_OFF_F;
+    printf("MPDATA_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MPDATA_OFF_L
+    ul = MPDATA_OFF_L;
+    printf("MPDATA_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LOCK_INSTR_OFF_F
+    ul = LOCK_INSTR_OFF_F;
+    printf("LOCK_INSTR_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LOCK_INSTR_OFF_L
+    ul = LOCK_INSTR_OFF_L;
+    printf("LOCK_INSTR_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef JFS_SEG_OFF_F
+    ul = JFS_SEG_OFF_F;
+    printf("JFS_SEG_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef JFS_SEG_OFF_L
+    ul = JFS_SEG_OFF_L;
+    printf("JFS_SEG_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LFS_ESID_RANGE
+    ul = LFS_ESID_RANGE;
+    printf("LFS_ESID_RANGE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LFS_SEG_OFF_F
+    ul = LFS_SEG_OFF_F;
+    printf("LFS_SEG_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef LFS_SEG_OFF_L
+    ul = LFS_SEG_OFF_L;
+    printf("LFS_SEG_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_SCBSZ
+    ul = VMM_SCBSZ;
+    printf("VMM_SCBSZ = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_SCBSIDS
+    ul = NUM_SCBSIDS;
+    printf("NUM_SCBSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_1TB_SCBSIDS
+    ul = NUM_1TB_SCBSIDS;
+    printf("NUM_1TB_SCBSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMMSCB_OFF_F
+    ul = VMMSCB_OFF_F;
+    printf("VMMSCB_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMMSCB_1TB_OFF_F
+    ul = VMMSCB_1TB_OFF_F;
+    printf("VMMSCB_1TB_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMMSCB_1TB_OFF_L
+    ul = VMMSCB_1TB_OFF_L;
+    printf("VMMSCB_1TB_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMMSCB_REG_OFF
+    ul = VMMSCB_REG_OFF;
+    printf("VMMSCB_REG_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMMSCB_OFF_L
+    ul = VMMSCB_OFF_L;
+    printf("VMMSCB_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_PVL_OFF
+    ul = VMM_PVL_OFF;
+    printf("VMM_PVL_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_SPACEOK_64K_OFF
+    ul = VMM_SPACEOK_64K_OFF;
+    printf("VMM_SPACEOK_64K_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_DLVA_OFF
+    ul = VMM_DLVA_OFF;
+    printf("VMM_DLVA_OFF = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_CMEM_SZ
+    ul = VMM_CMEM_SZ;
+    printf("VMM_CMEM_SZ = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_CMEM_SEGS
+    ul = NUM_CMEM_SEGS;
+    printf("NUM_CMEM_SEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_CMEM_OFF_F
+    ul = VMM_CMEM_OFF_F;
+    printf("VMM_CMEM_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_CMEM_OFF_L
+    ul = VMM_CMEM_OFF_L;
+    printf("VMM_CMEM_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_CBLKS_SZ
+    ul = VMM_CBLKS_SZ;
+    printf("VMM_CBLKS_SZ = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NUM_CBLKS_SEGS
+    ul = NUM_CBLKS_SEGS;
+    printf("NUM_CBLKS_SEGS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_CBLKS_OFF_F
+    ul = VMM_CBLKS_OFF_F;
+    printf("VMM_CBLKS_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_CBLKS_OFF_L
+    ul = VMM_CBLKS_OFF_L;
+    printf("VMM_CBLKS_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_64K_1TB_END
+    ul = VMM_64K_1TB_END;
+    printf("VMM_64K_1TB_END = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DIR_GALLOC_64K_OFF_L
+    ul = DIR_GALLOC_64K_OFF_L;
+    printf("DIR_GALLOC_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_64K_OFF_L
+    ul = GLOBKER_64K_OFF_L;
+    printf("GLOBKER_64K_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_16M_PAD
+    ul = VMM_16M_PAD;
+    printf("VMM_16M_PAD = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef VMM_16M_1TB_BOUNDARY
+    ul = VMM_16M_1TB_BOUNDARY;
+    printf("VMM_16M_1TB_BOUNDARY = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_16M_OFF_F
+    ul = GLOBKER_16M_OFF_F;
+    printf("GLOBKER_16M_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GALLOC_16M_OFF_F
+    ul = GALLOC_16M_OFF_F;
+    printf("GALLOC_16M_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GALLOC_16M_OFF_L
+    ul = GALLOC_16M_OFF_L;
+    printf("GALLOC_16M_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DIR_GALLOC_16M_OFF_F
+    ul = DIR_GALLOC_16M_OFF_F;
+    printf("DIR_GALLOC_16M_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef KHEAP_16M_OFF_F
+    ul = KHEAP_16M_OFF_F;
+    printf("KHEAP_16M_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef KHEAP_16M_OFF_L
+    ul = KHEAP_16M_OFF_L;
+    printf("KHEAP_16M_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MBUF_16M_OFF_F
+    ul = MBUF_16M_OFF_F;
+    printf("MBUF_16M_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef MBUF_16M_OFF_L
+    ul = MBUF_16M_OFF_L;
+    printf("MBUF_16M_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef DIR_GALLOC_16M_OFF_L
+    ul = DIR_GALLOC_16M_OFF_L;
+    printf("DIR_GALLOC_16M_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_16M_OFF_L
+    ul = GLOBKER_16M_OFF_L;
+    printf("GLOBKER_16M_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GLOBKER_1TB_OFF_L
+    ul = GLOBKER_1TB_OFF_L;
+    printf("GLOBKER_1TB_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef GALLOC_OFF_L
+    ul = GALLOC_OFF_L;
+    printf("GALLOC_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NONGK_1TB_OFF_F
+    ul = NONGK_1TB_OFF_F;
+    printf("NONGK_1TB_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef NONGK_1TB_OFF_L
+    ul = NONGK_1TB_OFF_L;
+    printf("NONGK_1TB_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef SCBREG_OFF_F
+    ul = SCBREG_OFF_F;
+    printf("SCBREG_OFF_F = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
+#ifdef SCBREG_OFF_L
+    ul = SCBREG_OFF_L;
+    printf("SCBREG_OFF_L = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif
+
     return 0;
 }
