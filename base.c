@@ -145,6 +145,7 @@ typedef struct {
 int main(void)
 {
     unsigned long ul;
+    int multi_1tb_ksp_segs;
 
 #ifdef AMESIDX_F
     ul = AMESIDX_F;
@@ -451,6 +452,30 @@ int main(void)
     printf("KPRIV_ESID_BASE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
 #endif /* KPRIV_ESID_BASE */
 
+    multi_1tb_ksp_segs = 0;
+    printf("multi_1tb_ksp_segs = 0\n");
+#ifdef KSP_ARCH_ESID_BASE
+    ul = KSP_ARCH_ESID_BASE;
+    printf("KSP_ARCH_ESID_BASE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif /* KSP_ARCH_ESID_BASE */
+
+#ifdef KSP_ARCH_ESID_END
+    ul = KSP_ARCH_ESID_END;
+    printf("KSP_ARCH_ESID_END = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif /* KSP_ARCH_ESID_END */
+
+#ifdef KSP_ARCH_NUMSIDS
+    ul = KSP_ARCH_NUMSIDS;
+    printf("KSP_ARCH_NUMSIDS = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif /* KSP_ARCH_NUMSIDS */
+
+#ifdef KSP_ESID_BASE
+    ul = KSP_ESID_BASE;
+    printf("KSP_ESID_BASE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
+#endif /* KSP_ESID_BASE */
+
+    multi_1tb_ksp_segs = -1;
+    printf("multi_1tb_ksp_segs = -1\n");
 #ifdef KSP_ARCH_ESID_BASE
     ul = KSP_ARCH_ESID_BASE;
     printf("KSP_ARCH_ESID_BASE = %ld(%0*lx)\n", ul, sizeof(ul)*2, ul);
