@@ -573,7 +573,7 @@ public:
 	printf("first_group %s returning %08x\n", header_type_string(),
 	       first + 1);
 #endif
-	return (char *)(first + 1);
+	return (char *)(more_groups() ? (first + 1) : first);
     }
 
     int more_groups(void)
@@ -707,7 +707,275 @@ public:
 	printf("first_group %s returning %08x\n", header_type_string(),
 	       first + 1);
 #endif
-	return (char *)(first + 1);
+	return (char *)(more_groups() ? (first + 1) : first);
+    }
+
+    int more_groups(void)
+    {
+	return first->du_magic == DMP_MAGIC_UD64;
+    }
+
+    char *next_group(char *v)
+    {
+	first = (struct cdt_entry_u *)v;
+#ifdef CDT_DEBUG
+	printf("next_group %s returning %08x\n", header_type_string(),
+	       first + 1);
+#endif
+	return more_groups() ? (char *)(first + 1) : v;
+    }
+
+    char *first_entry(char *v)
+    {
+	entry = first;
+	in_first_entry = 1;
+	return v;
+    }
+
+    int more_entrys(void)
+    {
+	return in_first_entry;
+    }
+
+    char *next_entry(char *v)
+    {
+	in_first_entry = 0;
+	return v;
+    }
+};
+
+
+class CDT_ras : public CDT {
+private:
+    struct cdt_head_ras *head;
+    struct cdt_entry64 *first;
+    struct cdt_entry64 *entry;
+    struct cdt_entry64 *last;
+    int in_first_group;
+    int num_entries;
+
+public:
+    void header_setup(void *p)
+    {
+#ifdef CDT_DEBUG
+	printf("ras setup %d\n", sizeof(*first));
+#endif
+	head = (struct cdt_head_ras *)p;
+	first = (struct cdt_entry64 *)(((char *)p) + sizeof(struct cdt_head_ras_h) + head->cdtr_pathlen);
+	last = (struct cdt_entry64 *)((char *)p + head->cdtr_len);
+	printf("NUM_ENTRIES_RAS(cp) = %d\n", NUM_ENTRIES_RAS(p));
+	num_entries = last - first;
+    }					       
+
+    int header_magic(void)
+    {
+	return head->cdtr_magic;
+    }
+
+    char *header_name(void)
+    {
+	return head->cdtr_pathname;
+    }
+	
+    int header_name_size(void)
+    {
+	return head->cdtr_pathlen;
+    }
+
+    char *header_type_string(void)
+    {
+	return "ras";
+    }
+
+    int header_num_entries(void)
+    {
+	return num_entries;
+    }
+
+    char *entry_name(void)
+    {
+	return entry->d_name;
+    }
+
+    int entry_name_size(void)
+    {
+	return sizeof(entry->d_name);
+    }
+
+    unsigned long long entry_len(void)
+    {
+	return entry->d_len;
+    }
+
+    __ptr64 entry_addr(void)
+    {
+	return (__ptr64) entry->d_ptr;
+    }
+
+    int entry_addr_size(void)
+    {
+	return sizeof(entry->d_ptr);
+    }
+
+    unsigned long long entry_segval(void)
+    {
+	return entry->__d_segval;
+    }
+
+    int entry_segval_size(void)
+    {
+	return sizeof(entry->__d_segval);
+    }
+
+    int entry_isreal(void)
+    {
+	return entry->__d_segval == DUMP_REAL_SEGVAL64;
+    }
+
+    virtual int entry_npages(u_longlong_t addr, size_t len)
+    {
+	return NPAGES64(addr, len);
+    }
+
+    char *first_group(char *v)
+    {
+	in_first_group = 1;
+#ifdef CDT_DEBUG
+	printf("first_group %s returning %08x\n", header_type_string(), last);
+#endif
+	return (char *)last;
+    }
+
+    int more_groups(void)
+    {
+	return in_first_group;
+    }
+
+    char *next_group(char *v)
+    {
+	in_first_group = 0;
+#ifdef CDT_DEBUG
+	printf("next_group %s returning %08x\n", header_type_string(), v);
+#endif
+	return v;
+    }
+
+    char *first_entry(char *v)
+    {
+	entry = first;
+	return v;
+    }
+
+    int more_entrys(void)
+    {
+	return entry < last;
+    }
+
+    char *next_entry(char *v)
+    {
+	++entry;
+	return v;
+    }
+};
+
+class CDT_uras : public CDT {
+private:
+    struct cdt_head_ras_u *head;
+    struct cdt_entry_u *first;
+    struct cdt_entry_u *entry;
+    struct cdt_entry_u *last;
+    int in_first_entry;
+    int num_entries;
+
+public:
+    void header_setup(void *p)
+    {
+#ifdef CDT_DEBUG
+	printf("uras setup %d\n", sizeof(*first));
+#endif
+	head = (struct cdt_head_ras_u *)p;
+	first = (struct cdt_entry_u *)(((char *)p) + sizeof(struct cdt_head_ras_uh) + head->cdtru_pathlen);
+	num_entries = head->cdtru_nentries;
+	last = first + num_entries;
+    }					       
+
+    int header_magic(void)
+    {
+	return head->cdtru_magic;
+    }
+
+    char *header_name(void)
+    {
+	return head->cdtru_pathname;
+    }
+	
+    int header_name_size(void)
+    {
+	return head->cdtru_pathlen;
+    }
+
+    char *header_type_string(void)
+    {
+	return "uras";
+    }
+
+    int header_num_entries(void)
+    {
+	return num_entries;
+    }
+
+    char *entry_name(void)
+    {
+	return entry->du_name;
+    }
+
+    int entry_name_size(void)
+    {
+	return sizeof(entry->du_name);
+    }
+
+    unsigned long long entry_len(void)
+    {
+	return entry->du_len;
+    }
+
+    __ptr64 entry_addr(void)
+    {
+	return entry->du_ptr;
+    }
+
+    int entry_addr_size(void)
+    {
+	return sizeof(entry->du_ptr);
+    }
+
+    unsigned long long entry_segval(void)
+    {
+	return entry->du_segval;
+    }
+
+    int entry_segval_size(void)
+    {
+	return sizeof(entry->du_segval);
+    }
+
+    int entry_isreal(void)
+    {
+	return entry->du_segval == DUMP_REAL_SEGVAL64;
+    }
+
+    virtual int entry_npages(u_longlong_t addr, size_t len)
+    {
+	return NPAGES64(addr, len);
+    }
+
+    char *first_group(char *v)
+    {
+#ifdef CDT_DEBUG
+	printf("first_group %s returning %08x\n", header_type_string(),
+	       first + 1);
+#endif
+	return (char *)(more_groups() ? (first + 1) : first);
     }
 
     int more_groups(void)
