@@ -198,7 +198,7 @@ int load(char *path, long text_base, long data_base)
      * mapped.
      */
     if (debug_mask & MMAP_BIT)
-	printf("mmap: s=%s l=%s e=%s\n", P(map_top),
+	printf("mmap: 0 s=%s l=%s e=%s\n", P(map_top),
 	       P(sbuf.st_size),
 	       P(map_top + sbuf.st_size));
     m = mmap((void *)map_top, sbuf.st_size, PROT_READ,

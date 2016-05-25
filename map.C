@@ -396,9 +396,6 @@ static int dump_fd;
 static char *dump_file;
 static char *dump_file_end;
 static struct dump_entry *dump_entries;
-#if 0
-static struct dump_entry **dump_entries_end;
-#endif
 static int dump_entry_cnt;
 static long no_page_start;
 static long no_page_end;
@@ -668,7 +665,7 @@ static int map_addr(long l)
     }
 
     if (debug_mask & MMAP_BIT)
-	printf("mmap: s=%s l=%s e=%s\n", P(r->r_phys), P(r->r_psize),
+	printf("mmap: 1 s=%s l=%s e=%s\n", P(r->r_phys), P(r->r_psize),
 	       P(r->r_phys + r->r_psize));
     mmap_ret = mmap((void *)r->r_phys, r->r_psize, PROT_READ|PROT_WRITE,
 		    MAP_FIXED|MAP_ANONYMOUS, -1, 0);
@@ -734,32 +731,6 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
      */
 
     paddr = context->uc_mcontext.jmp_context.except[0];
-
-#if 0
-    fprintf(stderr, "si_addr=%s except=%s\n", P(info->si_addr),
-	    P(context->uc_mcontext.jmp_context.except[0]));
-    fprintf(stderr, "thread slot = %d\n", thread_slot);
-#endif
-
-#if 0
-    {
-	long *l;
-	int i;
-
-	l = (long *)info;
-	DEBUG_PRINTF(("map_catch: info=0x%s context=0x%s\n",
-		      P(info), P(context)));
-	for (i = sizeof(siginfo_t)/sizeof(long); --i >= 0; ++l)
-	    DEBUG_PRINTF(("map_catch: 0x%s: 0x%s\n",
-			  P((long)l - (long)info), P(*l)));
-	l = (long *)context;
-	for (i = sizeof(ucontext_t)/sizeof(long); --i>= 0; ++l)
-	    DEBUG_PRINTF(("map_catch: 0x%s: 0x%s\n",
-			  P((long)l - (long)context), P(*l)));
-	DEBUG_PRINTF(("map_catch: iar=0x%s\n",
-		      P(context->uc_mcontext.jmp_context.iar)));
-    }
-#endif
 
 #else
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
@@ -846,7 +817,7 @@ int map_init(void)
      * since init_dump uses map_top.
      */
     if (debug_mask & MMAP_BIT)
-	printf("mmap: s=%s l=%s e=%s\n", P(0), P(sizeof(initial_stage_t)),
+	printf("mmap: 2 s=%s l=%s e=%s\n", P(0), P(sizeof(initial_stage_t)),
 	       P(sizeof(initial_stage_t)));
     map_top = (long) mmap((void *)0,
 			  sizeof(initial_stage_t),
@@ -1140,13 +1111,6 @@ static struct dump_entry *starting_d(unsigned long addr)
     while (low <= high) {
 	int mid = (low + high) / 2;
 	struct dump_entry *de = dump_entries + mid;
-
-#if 0
-	DEBUG_PRINTF(("starting_d: %6d %6d %6d %s %s\n",
-		      low, mid, high, P(de->de_virt),
-		      P(de->de_virt + de->de_len)));
-
-#endif
 
 	if (!de->de_isreal && addr > de->de_end)
 	    low = mid + 1;
@@ -1945,7 +1909,7 @@ static int init_dump(void)
 	return 1;
     }
     if (debug_mask & MMAP_BIT)
-	printf("mmap: s=%s l=%s e=%s\n", P(map_top),
+	printf("mmap: 3 s=%s l=%s e=%s\n", P(map_top),
 	       P(stat_buf.st_size),
 	       P(map_top + stat_buf.st_size));
     if ((sizeof(long) == 4) && stat_buf.st_size > 2LL * 1024 * 1024 * 1024)
@@ -1969,7 +1933,6 @@ static int init_dump(void)
 	if (!VALID_DMP_MAGIC(((struct cdt *)cur_pos)->cdt_magic))
 	    cur_pos += 512;
 	while (cur_pos < dump_file_end) {
-#if 1
 	    class CDT *cdt;
 	    class CDT_32 cdt_32;
 	    class CDT_64 cdt_64;
@@ -2016,29 +1979,6 @@ static int init_dump(void)
 	    default:
 		fprintf(stderr, "Exiting with magic equal to %08x\n",
 			((struct cdt *)cur_pos)->cdt_magic);
-#if 0
-		{
-		    int *ip = (int *)cur_pos;
-
-		    printf("cur_pos = %08x %08x\n", cur_pos, cur_pos - dump_file);
-		    for (int i = -8*4; i < 8*4; i += 4) {
-			for (int j = 0; j < 4; ++j)
-			    printf("%c%08x", i == 0 && j == 0 ? '*' : ' ',
-				   ip[i+j]);
-			printf("    ");
-			for (int j = 0; j < 4; ++j) {
-			    unsigned int v = ip[i+j];
-			    for (int k = 4; --k >= 0; v <<= 8) {
-				unsigned char c = ((v >> 24) & 0xff);
-				if ((c & 0x80) || (c < ' ') || (c == 0x7f))
-				    c = '.';
-				printf("%c", c);
-			    }
-			}
-			printf("\n");
-		    }
-		}
-#endif
 		goto loop_end;
 	    }
 	    header_name = cdt->header_name();
@@ -2144,236 +2084,6 @@ static int init_dump(void)
 				     start_pos);
 		}
 	    }
-	    
-#else
-	    int num_entries = NUM_ENTRIES((struct cdt *)cur_pos);
-	    int index;
-
-	    if (num_entries == 0) {
-		int xa, xb;
-
-		for (xa = 0; xa < 8; ++xa) {
-		    for (xb = 0; xb < 32; ++xb) {
-			int c = cur_pos[xa * 32 + xb];
-			printf(" %02x", c);
-		    }
-		    printf("\n");
-		}
-		exit(1);
-	    }
-#ifndef __64BIT__
-	    if (ISDMPVR((struct cdt*)cur_pos)) {
-		struct cdt_vr *cdt = (struct cdt_vr *)cur_pos;
-
-		if ((cur_pos += cdt->cdt_len) > dump_file_end)
-		    break;
-
-		for (index = 0;
-		     (cur_pos < dump_file_end) && (index < num_entries);
-		     ++index) {
-		    struct cdt_entry_vr *e = cdt->cdt_entry + index;
-		    int inmap = 0;
-		    unsigned long total_size = 0;
-		    unsigned long long start_addr;
-		    char *start_pos;
-
-		    if (ISADDRREAL(e)) {
-			unsigned long long addr = (unsigned long)e->d_realaddr;
-			size_t len = e->d_len;
-			unsigned long bit_entries = BITMAPSIZE(addr, len);
-			unsigned long pages = NPAGES(addr, len);
-			bitmap_t *bitmap = (bitmap_t *)cur_pos;
-			int bit;
-
-			cur_pos += (bit_entries * sizeof(bitmap_t));
-			if (cur_pos > dump_file_end) {
-			    if (i == 0)
-				fprintf(stderr, "%s is empty for short dump\n",
-					cdt->cdt_name);
-			    break;
-			}
-
-			for (bit = 0; bit < pages; ++bit) {
-			    int size = PAGESIZE - (addr % PAGESIZE);
-
-			    if (size > len)
-				size = len;
-
-			    /*
-			     * Page is in the dump
-			     */
-			    if (ISBITMAP(bitmap, bit)) {
-				if (!inmap) {
-				    start_addr = addr;
-				    start_pos = cur_pos;
-				    total_size = 0;
-				    inmap = 1;
-				}
-				total_size += size;
-				if ((cur_pos += size) > dump_file_end) {
-				    if (i == 0)
-					fprintf(stderr, "%s is not complete 1\n",
-						cdt->cdt_name);
-				    break;
-				}
-			    } else {
-				setup_dump_entry(&inmap, &cnt, i, 1,
-						 total_size, start_addr,
-						 0, 0, start_pos);
-			    }
-			    addr += size;
-			    len -= size;
-			}
-			setup_dump_entry(&inmap, &cnt, i, 1, total_size,
-					 start_addr, 0, 0, start_pos);
-		    } else {
-			unsigned long addr = (unsigned long)e->d_ptr_v;
-			size_t len = e->d_len;
-			unsigned long bit_entries = BITMAPSIZE(addr, len);
-			unsigned long pages = NPAGES(addr, len);
-			bitmap_t *bitmap = (bitmap_t *)cur_pos;
-			int bit;
-
-			cur_pos += (bit_entries * sizeof(bitmap_t));
-			if (cur_pos > dump_file_end) {
-			    if (i == 0)
-				fprintf(stderr, "%s is empty for short dump\n",
-					cdt->cdt_name);
-			    break;
-			}
-
-			for (bit = 0; bit < pages; ++bit) {
-			    int size = PAGESIZE - (addr % PAGESIZE);
-
-			    if (size > len)
-				size = len;
-
-			    /*
-			     * Page is in the dump
-			     */
-			    if (ISBITMAP(bitmap, bit)) {
-				if (!inmap) {
-				    start_addr = addr;
-				    start_pos = cur_pos;
-				    total_size = 0;
-				    inmap = 1;
-				}
-				total_size += size;
-				if ((cur_pos += size) > dump_file_end) {
-				    if (i == 0)
-					fprintf(stderr, "%s is not complete 2\n",
-						cdt->cdt_name);
-				    break;
-				}
-			    } else {
-				setup_dump_entry(&inmap, &cnt, i, 0,
-						 total_size, 0, start_addr,
-						 e->d_segval_v, start_pos);
-			    }
-			    addr += size;
-			    len -= size;
-			}
-			setup_dump_entry(&inmap, &cnt, i, 0, total_size, 0,
-					 start_addr, e->d_segval_v,
-					 start_pos);
-		    }
-		}
-	    } else
-#endif
-	    {
-		struct cdt *cdt = (struct cdt *)cur_pos;
-
-		if ((cur_pos += cdt->cdt_len) > dump_file_end)
-		    break;
-
-		for (index = 0; index < num_entries; ++index) {
-		    struct cdt_entry *e = cdt->cdt_entry + index;
-		    unsigned long addr = (unsigned long)e->d_ptr;
-		    size_t len = e->d_len;
-		    unsigned long bit_entries = BITMAPSIZE(addr, len);
-		    unsigned long pages = NPAGES(addr, len);
-		    bitmap_t *bitmap = (bitmap_t *)cur_pos;
-		    int bit;
-		    int t_slot;
-		    char namebuf[32];
-		    int inmap;
-		    unsigned long total_size;
-		    unsigned long long start_addr;
-		    char *start_pos;
-
-		    cur_pos += (bit_entries * sizeof(bitmap_t));
-		    if (cur_pos > dump_file_end) {
-			if (i == 0)
-			    fprintf(stderr, "%s is empty due to short dump\n",
-				    cdt->cdt_name);
-			break;
-		    }
-
-		    if (!strcmp(cdt->cdt_name, "bos") &&
-			!strcmp(e->d_name, "kernel")) {
-			bos_segval = e->d_segval;
-			bos_addr_start = (long)e->d_ptr;
-			bos_addr_end = bos_addr_start + e->d_len;
-			DEBUG_PRINTF(("init_dump: bos_segval=%s"
-				      " bos_addr_start=%s"
-				      " bos_addr_end=%s\n",
-				      P(bos_segval),
-				      P(bos_addr_start),
-				      P(bos_addr_end)));
-		    }
-
-		    if (!strcmp(cdt->cdt_name, "thrd")) {
-			int idx;
-			char buf[8];
-
-			sscanf(e->d_name, "%d%s", &idx, buf);
-			if (i == 0) {
-			    if (thread_max < idx)
-				thread_max = idx;
-			} else {
-			    t_map[idx] = 1;
-			}
-		    }
-
-		    inmap = 0;
-		    total_size = 0;
-
-		    for (bit = 0; bit < pages; ++bit) {
-			int size = PAGESIZE - (addr % PAGESIZE);
-
-			if (size > len)
-			    size = len;
-
-			/*
-			 * Page is in the dump
-			 */
-			if (ISBITMAP(bitmap, bit)) {
-			    if (!inmap) {
-				start_addr = addr;
-				start_pos = cur_pos;
-				total_size = 0;
-				inmap = 1;
-			    }
-			    total_size += size;
-			    if ((cur_pos += size) > dump_file_end) {
-				if (i == 0)
-				    fprintf(stderr, "%s is not complete 3\n",
-					    cdt->cdt_name);
-				break;
-			    }
-			} else {
-			    setup_dump_entry(&inmap, &cnt, i, 0,
-					     total_size, 0, start_addr,
-					     e->d_segval, start_pos);
-			}
-			addr += size;
-			len -= size;
-		    }
-		    setup_dump_entry(&inmap, &cnt, i, 0, total_size, 0,
-				     start_addr, e->d_segval, start_pos);
-		}
-	    }
-#endif /* else 1 */
 	}
     loop_end:
 	if (!cnt) {
@@ -2386,7 +2096,7 @@ static int init_dump(void)
 	 */
 	if (i == 0 && cnt) {
 	    if (debug_mask & MMAP_BIT)
-		printf("mmap: s=%s l=%s e=%s\n", P(map_top),
+		printf("mmap: 4 s=%s l=%s e=%s\n", P(map_top),
 		       P(cnt * sizeof(struct dump_entry)),
 		       P(map_top + cnt * sizeof(struct dump_entry)));
 	    dump_entries = (struct dump_entry *)
