@@ -36,11 +36,13 @@ int open_dump(char *path)
     struct stat64 stat_buf;
     int dump_fd;
     class CDT *cdt;
-    class CDT_32 cdt_32;
-    class CDT_64 cdt_64;
-    class CDT_vr cdt_vr;
-    class CDT_u32 cdt_u32;
-    class CDT_u64 cdt_u64;
+    class CDT_32   cdt_32;
+    class CDT_64   cdt_64;
+    class CDT_vr   cdt_vr;
+    class CDT_u32  cdt_u32;
+    class CDT_u64  cdt_u64;
+    class CDT_ras  cdt_ras;
+    class CDT_uras cdt_uras;
     char *cur_pos;
     char *dump_file;
     char *dump_file_end;
@@ -92,6 +94,16 @@ int open_dump(char *path)
 	    cdt = & cdt_u64;
 	    break;
 
+	case DMP_MAGIC_RAS:
+	    cdt_ras.header_setup(cur_pos);
+	    cdt = & cdt_ras;
+	    break;
+	    
+	case DMP_MAGIC_RAS_U:
+	    cdt_uras.header_setup(cur_pos);
+	    cdt = & cdt_uras;
+	    break;
+
 	case DMP_MAGIC_UD32:
 	case DMP_MAGIC_UD64:
 	    fprintf(stderr, "Out of sync with magic equal to %0*lx\n",
@@ -101,8 +113,8 @@ int open_dump(char *path)
 	    goto loop_end;
 
 	default:
-	    fprintf(stderr, "Exiting with magic equal to %0*lx\n",
-		    sizeof(long)*2, ((struct cdt *)cur_pos)->cdt_magic);
+	    fprintf(stderr, "Exiting with magic equal to %0*x\n",
+		    sizeof(int)*2, ((struct cdt *)cur_pos)->cdt_magic);
 	    {
 		int *ip = (int *)cur_pos;
 
@@ -110,8 +122,8 @@ int open_dump(char *path)
 		       sizeof(long)*2, cur_pos, sizeof(long)*2, (cur_pos - dump_file));
 		for (int i = -8*4; i < 8*4; i += 4) {
 		    for (int j = 0; j < 4; ++j)
-			printf("%c%0*lx", i == 0 && j == 0 ? '*' : ' ',
-			       sizeof(long)*2, ip[i+j]);
+			printf("%c%0*x", i == 0 && j == 0 ? '*' : ' ',
+			       sizeof(int)*2, ip[i+j]);
 		    printf("    ");
 		    for (int j = 0; j < 4; ++j) {
 			unsigned int v = ip[i+j];
