@@ -406,6 +406,11 @@ static unsigned long bos_addr_end;
 static char *s_strings[] = {
     "stage0", "stage1", "stage2", "final", "partial", "real"
 };
+/*
+ * real_mode is true if the dump contains no entries with a segment
+ * value other than DUMP_REAL_SEGVAL and DUMP_NONMEM_SEGVAL.
+ */
+static real_mode = 1;
 
 int thread_slot = -1;
 size_t thread_max;			/* last thread in dump */
@@ -1783,6 +1788,22 @@ static int de_compare_end(const void *a, const void *b)
 
     if (da->de_isreal != db->de_isreal)
 	return (da->de_isreal) ? 1 : -1;
+
+    if (da->de_isreal) {
+	unsigned long long da_end = da->de_real + da->de_len;
+	unsigned long long db_end = db->de_real + db->de_len;
+
+	return ((db_end == da_end) ?
+		((db->de_real == da->de_real) ?
+		 0 :
+		 (da->de_real > db->de_real) ?
+		 1 :
+		 -1) :
+		(da_end > db_end) ?
+		1 :
+		-1);
+    }
+
     return ((db->de_end == da->de_end) ?
 	    ((db->de_virt == da->de_virt) ?
 	     0 :
@@ -1824,6 +1845,10 @@ static void setup_dump_entry(int *inmap,
 	    }
 	    ++cnt;
 	} else {
+
+	    if (segval != DUMP_NONMEM_SEGVAL)
+		real_mode = 0;
+
 	    /* Partial page at front of range */
 	    if (virt & (PAGESIZE - 1)) {
 		if (i == 1) {
@@ -2086,6 +2111,7 @@ static int init_dump(void)
 	    }
 	}
     loop_end:
+	printf("i = %d; real_mode = %d\n", i, real_mode);
 	if (!cnt) {
 	    fprintf(stderr, "%s: Invalid dump\n", progname);
 	    return 1;
