@@ -98,25 +98,25 @@ typedef unsigned int    uint32;
 typedef struct nlchash {
 	struct nlcbuf	*nlc_forw;	/* head buffer in hashlist */
 	struct nlcbuf	*nlc_back;	/* tail buffer in hashlist */
-	Simple_lock	 nlc_lock;   	/* lock per hash anchor    */
+	Simple_lock	 nlc_lock;	/* lock per hash anchor    */
 } nlchash_t;
 
 typedef struct nlcbuf {
-	struct nlcbuf	*nlc_forw;  	/* head buffer in hash		    */
-	struct nlcbuf	*nlc_back;  	/* tail buffer in hash		    */
-	struct vfs	*nlc_vfsp;  	/* vfs pointer of node	    	    */
+	struct nlcbuf	*nlc_forw;	/* head buffer in hash		    */
+	struct nlcbuf	*nlc_back;	/* tail buffer in hash		    */
+	struct vfs	*nlc_vfsp;	/* vfs pointer of node		    */
 
-	void		*nlc_dp;   	/* ptr to parent node of entry      */
-	uint32		nlc_did;    	/* parent filenode cap id ptr       */
+	void		*nlc_dp;	/* ptr to parent node of entry      */
+	uint32		nlc_did;	/* parent filenode cap id ptr       */
 
-	void		*nlc_np;    	/* node ptr of cached entry	    */
-	uint32		*nlc_nidp;    	/* node capability id ptr           */
-	uint32		nlc_nid;    	/* node cap. id -- value at time
+	void		*nlc_np;	/* node ptr of cached entry	    */
+	uint32		*nlc_nidp;	/* node capability id ptr           */
+	uint32		nlc_nid;	/* node cap. id -- value at time
 					   of entry */
 
 	uint32		nlc_namelen;	/* name length			    */
-	union {				
-		char 	_namea[32];
+	union {
+		char	_namea[32];
 					/* static fast name <=NLC_STATICLEN */
 		char	*_namep;	/* alloc'd slow name >NLC_STATICLEN */
 	} _name;			/* component name		    */

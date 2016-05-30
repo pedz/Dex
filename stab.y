@@ -686,7 +686,7 @@ IsInline
 IsConst
     : /* Empty */
     | 'k'			/* const member function */
-    ;        
+    ;
 
 IsVolatile
     : /* Empty */
@@ -719,7 +719,7 @@ GenSpec
 AccessSpec
     : 'i'			/* Private  */
     | 'o'			/* Protected */
-    | 'u' 			/* Public */
+    | 'u'			/* Public */
     ;
 
 AnonSpec
@@ -729,7 +729,7 @@ AnonSpec
 
 VirtualSpec
     : /* Empty */
-    | 'v' 'p' 			/* Pure Virtual */
+    | 'v' 'p'			/* Pure Virtual */
     | 'v'			/* Virtual */
     ;
 
@@ -751,7 +751,7 @@ IsStatic
    trailing 'b and 'r' */
 IsVtblPtr
     : /* Empty */
-    | 'p' INTEGER NAME 		/* Member is vtbl pointer; NAME is the external name of v-table. */
+    | 'p' INTEGER NAME		/* Member is vtbl pointer; NAME is the external name of v-table. */
     ;
 
 IsVBasePtr

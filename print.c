@@ -48,7 +48,7 @@ static char *attr_name(enum attr_type a_type)
     const int max = A_SIZE(attr_type_names);
     return attr_type_names[(a_type >= max || a_type < 0) ? (max-1) : a_type];
 }
-    
+
 void print_name(char *name, typeptr tptr)
 {
     char buf[32];
@@ -135,7 +135,7 @@ void print_name(char *name, typeptr tptr)
  * size of the object, indent is the indent level for printouts, name
  * is the name of the field or variable, sname is the possible name of
  * the structure (e.g. struct toad { ...)
- * 
+ *
  * In the print routines, we assume that an array range can easily fit
  * within a large_t.
  */
@@ -169,7 +169,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	printf("%*s", indent, "");
 	print_name("", tptr);
 	printf("{\n");
-	
+
 	for (f = tptr->t_val.val_s.s_fields; f; f = f->f_next)
 	    print_out(f->f_typeptr, addr, offset + f->f_offset,
 		      f->f_numbits, indent + 2, f->f_name);
@@ -328,7 +328,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	    d = *(float *)addr;
 	else
 	    d = *(double *)addr;
-	
+
 	printf("%*s", indent, "");
 	print_name(name, tptr);
 	printf(" = %f\n", d);

@@ -460,7 +460,7 @@ int main_64(caddr_t m)
 		my_printf("stoff:%s", PH(lhdr->l_stoff));
 		my_printf("symoff:%s", PH(lhdr->l_symoff));
 		my_printf("rldoff:%s", PH(lhdr->l_rldoff));
-		
+
 		my_printf("\n\nLoader Import File Table\n");
 		for (i = 0; i < lhdr->l_nimpid; ++i) {
 		    my_printf("[%s]Path: %s", PD(i), ftable);
@@ -508,7 +508,7 @@ int main_64(caddr_t m)
     }
 
     /* TODO except section */
-    
+
     /* Relocation information */
     if (fhdr->f_nscns) {
 	struct scnhdr_64 *shdr =
@@ -519,12 +519,12 @@ int main_64(caddr_t m)
 	    if (shdr->s_relptr) {
 		int j;
 		caddr_t base = m + shdr->s_relptr;
-		
+
 		my_printf("\n\nRelocation entries for %.8s section\n",
 			  shdr->s_name);
 		for (j = 0; j < shdr->s_nreloc; ++j, base += RELSZ_64) {
 		    struct reloc_64 *r = (struct reloc_64 *)base;
-		    
+
 		    my_printf("vaddr:%s", PH(r->r_vaddr));
 		    my_printf("symndx:%s", PD(r->r_symndx));
 		    my_printf("sign:%s", PD(RELOC_RSIGN(*r) ? 1 : 0));
@@ -535,7 +535,7 @@ int main_64(caddr_t m)
 	    }
 	}
     }
-    
+
     /* Line number information */
     if (fhdr->f_nscns) {
 	struct scnhdr_64 *shdr =
@@ -546,12 +546,12 @@ int main_64(caddr_t m)
 	    if (shdr->s_lnnoptr) {
 		int j;
 		caddr_t base = m + shdr->s_lnnoptr;
-		
+
 		my_printf("\n\nLine number entries for %.8s section\n",
 			  shdr->s_name);
 		for (j = 0; j < shdr->s_nlnno; ++j, base += LINESZ_64) {
 		    struct lineno_64 *l = (struct lineno_64 *)base;
-		    
+
 		    if (l->l_lnno)
 			my_printf("paddr:%s lnno:%s\n", PH(l->l_addr.l_paddr),
 				  PD(l->l_lnno));
@@ -561,7 +561,7 @@ int main_64(caddr_t m)
 	    }
 	}
     }
-    
+
     /* Symbol table */
     if (fhdr->f_symptr) {
 	caddr_t base = m + fhdr->f_symptr;
@@ -594,7 +594,7 @@ int main_64(caddr_t m)
 	    ++i;
 	    for (j = 1; j <= s->n_numaux; ++j) {
 		union auxent_64 *a = (union auxent_64 *)base;
-		
+
 		my_printf("{%*s}", width, PD(i));
 		switch (s->n_sclass) {
 		case C_BLOCK:
@@ -683,7 +683,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "Usage: %s <filename>\n", prog);
 	return 1;
     }
-    
+
     if ((fd = open(argv[1], O_RDONLY)) < 0) {
 	fprintf(stderr, "%s: ", prog);
 	perror(argv[1]);
@@ -802,7 +802,7 @@ int main(int argc, char *argv[])
 		my_printf("impoff:%s", PH(lhdr->l_impoff));
 		my_printf("stlen:%s", PD(lhdr->l_stlen));
 		my_printf("stoff:%s", PH(lhdr->l_stoff));
-		
+
 		my_printf("\n\nLoader Import File Table\n");
 		for (i = 0; i < lhdr->l_nimpid; ++i) {
 		    my_printf("[%s]Path: %s", PD(i), ftable);
@@ -854,7 +854,7 @@ int main(int argc, char *argv[])
     }
 
     /* TODO except section */
-    
+
     /* Relocation information */
     if (fhdr->f_nscns) {
 	struct scnhdr *shdr =
@@ -865,12 +865,12 @@ int main(int argc, char *argv[])
 	    if (shdr->s_relptr) {
 		int j;
 		caddr_t base = m + shdr->s_relptr;
-		
+
 		my_printf("\n\nRelocation entries for %.8s section\n",
 			  shdr->s_name);
 		for (j = 0; j < shdr->s_nreloc; ++j, base += RELSZ) {
 		    struct reloc *r = (struct reloc *)base;
-		    
+
 		    my_printf("vaddr:%s", PH(r->r_vaddr));
 		    my_printf("symndx:%s", PD(r->r_symndx));
 		    my_printf("sign:%s", PD(RELOC_RSIGN(*r) ? 1 : 0));
@@ -881,7 +881,7 @@ int main(int argc, char *argv[])
 	    }
 	}
     }
-    
+
     /* Line number information */
     if (fhdr->f_nscns) {
 	struct scnhdr *shdr =
@@ -892,12 +892,12 @@ int main(int argc, char *argv[])
 	    if (shdr->s_lnnoptr) {
 		int j;
 		caddr_t base = m + shdr->s_lnnoptr;
-		
+
 		my_printf("\n\nLine number entries for %.8s section\n",
 			  shdr->s_name);
 		for (j = 0; j < shdr->s_nlnno; ++j, base += LINESZ) {
 		    struct lineno *l = (struct lineno *)base;
-		    
+
 		    if (l->l_lnno)
 			my_printf("paddr:%s lnno:%s\n", PH(l->l_addr.l_paddr),
 				  PD(l->l_lnno));
@@ -907,7 +907,7 @@ int main(int argc, char *argv[])
 	    }
 	}
     }
-    
+
     /* Symbol table */
     if (fhdr->f_symptr) {
 	caddr_t base = m + fhdr->f_symptr;
@@ -942,7 +942,7 @@ int main(int argc, char *argv[])
 	    ++i;
 	    for (j = 1; j <= s->n_numaux; ++j) {
 		union auxent *a = (union auxent *)base;
-		
+
 		my_printf("{%*s}", width, PD(i));
 		switch (s->n_sclass) {
 		case C_BLOCK:

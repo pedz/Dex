@@ -228,7 +228,7 @@ int mk_dot(cnode *result, cnode *c, char *s)
 	 * this field -- except if it is an array in which case the
 	 * size is the size of an address.
 	 */
-	result->c_expr->e_size = 
+	result->c_expr->e_size =
 	    (f->f_typeptr->t_type == ARRAY_TYPE) ?
 	    sizeof(char *) :
 	    f->f_numbits / 8;
@@ -371,7 +371,7 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
     enum expr_type htype;
     typeptr totype;
     expr *eptr;
-    int ptr_is_ok = !(opcode == ',' || opcode == '>' || opcode == '<' || 
+    int ptr_is_ok = !(opcode == ',' || opcode == '>' || opcode == '<' ||
 		      opcode == GTOREQUAL || opcode == LTOREQUAL ||
 		      opcode == EQUALITY || opcode == NOTEQUAL ||
 		      opcode == ANDAND || opcode == OROR);
@@ -422,7 +422,7 @@ int mk_binary(cnode *result, cnode *lvalue, int opcode, cnode *rvalue)
 	size->e_func.l = l_leaf;
 	size->e_l = get_size(ltype) / 8;
 	size->e_size = sizeof(long);
-	
+
 	/* Create subtraction node of two pointers */
 	newr = new_expr();
 	newr->e_func = op_table[long_type][tok_2_op['-']];
@@ -932,7 +932,7 @@ enum expr_type base_type(typeptr t)
 		return ulong_type;
 	    return ulong_long_type;
 	}
-	
+
     case FLOAT_TYPE:
 	return (t->t_val.val_g.g_size == sizeof(float)) ?
 	    float_type : double_type;

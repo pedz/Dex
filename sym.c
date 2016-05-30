@@ -53,7 +53,7 @@ typeptr name2typedef_all(char *name)
 {
     ns *nspace;
     typeptr ret;
-    
+
     if (name)
 	for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	    if (ret = name2typedef(nspace, name))
@@ -98,7 +98,7 @@ typeptr name2namedef_all(char *name)
     ns *nspace;
     typeptr ret;
     typeptr struct_temp = 0;
-    
+
     for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	if (ret = name2namedef(nspace, name))
 	    if (ret->t_type == STRUCT_TYPE && ret->t_val.val_s.s_size == 0)
@@ -223,7 +223,7 @@ int allocate_fields(fieldptr f)
 	else {
 	    /* No size specified so move to proper boundry */
 	    int bytes = (f->f_numbits + 7) / 8;
-	    
+
 	    if (bytes > 4)
 		bytes = 4;
 	    pos += (bytes * 8 - 1);
@@ -298,7 +298,7 @@ void add_namedef(typeptr t, char *name)
     ns *nspace;
     typetabptr ttp;
     int hash_val = hash(name);
-	
+
     if (!t) {
 	fprintf(stderr, "Null namedef pointer %s:%d\n", __FILE__, __LINE__);
 	return;
@@ -378,7 +378,7 @@ struct copy_rec *record_list;
 void copy_type_and_record(typeptr newp, typeptr oldp)
 {
     struct copy_rec *cr = new(struct copy_rec);
-    
+
     cr->cr_new = newp;
     cr->cr_old = oldp;
     cr->cr_next = record_list;
@@ -611,7 +611,7 @@ symptr name2userdef_all(char *name)
     ns *nspace;
     symptr ret;
     symptr ret_not_typed = 0;
-    
+
     for (nspace = ns_head; nspace; nspace = nspace->ns_next)
 	if (ret = name2userdef(nspace, name))
 	    if (ret->s_typed)
@@ -648,7 +648,7 @@ symptr addr2userdef(ns *nspace, void *addr)
 
     if (!(sytp = nspace->ns_syms))
 	return 0;
-    
+
     for (end = (sym = sytp->sy_hash) + HASH_SIZE; sym < end; ++sym)
 	for (temp = *sym; temp; temp = temp->s_hash)
 	    if (temp->s_global && (temp->s_offset <= addr) &&
@@ -702,10 +702,10 @@ symptr enter_sym(ns *nspace, char *name, int force)
     int hash_val = hash(name);
     symtabptr sytp;
     symptr ret;
-    
+
     if (!(sytp = nspace->ns_syms))
 	sytp = nspace->ns_syms = new(struct sym_table);
-    
+
     /*
      * In theory, we can just compare the name pointers because of the
      * string table.

@@ -35,7 +35,7 @@ int int_return_range(expr *n)
     char *d_name = (char *)f[2];
     void **startp = (void *)f[3];
     int *lenp = (void *)f[4];
-    
+
     return return_range(t_name, d_name, startp, lenp);
 }
 
@@ -181,7 +181,7 @@ long int_name2userdef(expr *n)
  * called as: find_name(char *name, long offset, char **file_name_p,
  *                      int *lineno_p);
  */
- 
+
 int int_find_name(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
@@ -192,7 +192,7 @@ int int_find_name(expr *n)
     symptr s = name2userdef_all(name);
     ns *nspace;
     long target_addr;
-    
+
     if (!s)
 	return 0;
 
@@ -237,7 +237,7 @@ int int_find(expr *n)
 
     if (!s)
 	return 0;
-    
+
     nspace = s->s_ns;
     for (nspace = nspace->ns_lower; nspace; nspace = nspace->ns_next)
 	if (!strcmp(s->s_name, nspace->ns_name))
@@ -311,7 +311,7 @@ static void do_int_funcs(void)
 	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
 	symptr s = enter_sym(ns_inter, name, 0);
 	expr *e = new_expr();
-    
+
 	/*
 	 * We just blindly assume that this is not a duplicate entry.
 	 */
@@ -376,7 +376,7 @@ static void do_long_funcs(void)
 	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
 	symptr s = enter_sym(ns_inter, name, 0);
 	expr *e = new_expr();
-    
+
 	/*
 	 * We just blindly assume that this is not a duplicate entry.
 	 */
@@ -423,7 +423,7 @@ static void do_char_ptr_funcs(void)
 	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
 	symptr s = enter_sym(ns_inter, name, 0);
 	expr *e = new_expr();
-    
+
 	/*
 	 * We just blindly assume that this is not a duplicate entry.
 	 */
@@ -458,7 +458,7 @@ static void do_int_vars(void)
     for (tp_end = (tp = tab) + A_SIZE(tab); tp < tp_end; ++tp) {
 	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
 	symptr s = enter_sym(ns_inter, name, 0);
-    
+
 	/*
 	 * We just blindly assume that this is not a duplicate entry.
 	 */
@@ -494,7 +494,7 @@ static void do_ulong_vars(void)
     for (tp_end = (tp = tab) + A_SIZE(tab); tp < tp_end; ++tp) {
 	char *name = store_string(ns_inter, tp->st_name, 0, (char *)0);
 	symptr s = enter_sym(ns_inter, name, 0);
-    
+
 	/*
 	 * We just blindly assume that this is not a duplicate entry.
 	 */

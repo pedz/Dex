@@ -129,7 +129,7 @@ void trace_mappings(void);
 #define EXIT_PROTECT(thunk) \
 	map_jmp_ptr = old; \
 	thunk;
-	
+
 #define END_PROTECT() \
     } \
     DEBUG_PRINTF(("end_protect  : %s=>%s\n", \

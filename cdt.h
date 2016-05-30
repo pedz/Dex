@@ -90,7 +90,7 @@ public:
 	first = &head->cdt_entry[0];
 	last = (struct cdt_entry32 *)((char *)p + head->cdt_len);
 	num_entries = last - first;
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -101,7 +101,7 @@ public:
     {
 	return head->cdt_name;
     }
-	
+
     int header_name_size(void)
     {
 	return sizeof(head->cdt_name);
@@ -165,7 +165,7 @@ public:
     char *first_group(char *v)
     {
 	in_first_group = 1;
-#ifdef CDT_DEBUG	
+#ifdef CDT_DEBUG
 	printf("first_group %s returning %08x\n", header_type_string(), last);
 #endif
 	return (char *)last;
@@ -227,7 +227,7 @@ public:
 	first = &head->cdt_entry[0];
 	last = (struct cdt_entry64 *)((char *)p + head->cdt_len);
 	num_entries = last - first;
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -238,7 +238,7 @@ public:
     {
 	return head->cdt_name;
     }
-	
+
     int header_name_size(void)
     {
 	return sizeof(head->cdt_name);
@@ -359,7 +359,7 @@ public:
 	first = &head->cdt_entry[0];
 	last = (struct cdt_entry_vr *)((char *)p + head->cdt_len);
 	num_entries = last - first;
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -370,7 +370,7 @@ public:
     {
 	return head->cdt_name;
     }
-	
+
     int header_name_size(void)
     {
 	return sizeof(head->cdt_name);
@@ -495,7 +495,7 @@ public:
 	first = &head->cdtu_entry[0];
 	num_entries = head->cdtu_head.cdtu_nentries;
 	last = &head->cdtu_entry[num_entries];
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -506,7 +506,7 @@ public:
     {
 	return head->cdtu_head.cdtu_name;
     }
-	
+
     int header_name_size(void)
     {
 	return sizeof(head->cdtu_head.cdtu_name);
@@ -629,7 +629,7 @@ public:
 	first = &head->cdtu_entry[0];
 	num_entries = head->cdtu_head.cdtu_nentries;
 	last = &head->cdtu_entry[num_entries];
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -640,7 +640,7 @@ public:
     {
 	return head->cdtu_head.cdtu_name;
     }
-	
+
     int header_name_size(void)
     {
 	return sizeof(head->cdtu_head.cdtu_name);
@@ -764,7 +764,7 @@ public:
 	first = (struct cdt_entry64 *)(((char *)p) + sizeof(struct cdt_head_ras_h) + head->cdtr_pathlen);
 	last = (struct cdt_entry64 *)((char *)p + head->cdtr_len);
 	num_entries = last - first;
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -775,7 +775,7 @@ public:
     {
 	return head->cdtr_pathname;
     }
-	
+
     int header_name_size(void)
     {
 	return head->cdtr_pathlen;
@@ -896,7 +896,7 @@ public:
 	first = (struct cdt_entry_u *)(((char *)p) + sizeof(struct cdt_head_ras_uh) + head->cdtru_pathlen);
 	num_entries = head->cdtru_nentries;
 	last = first + num_entries;
-    }					       
+    }
 
     int header_magic(void)
     {
@@ -907,7 +907,7 @@ public:
     {
 	return head->cdtru_pathname;
     }
-	
+
     int header_name_size(void)
     {
 	return head->cdtru_pathlen;

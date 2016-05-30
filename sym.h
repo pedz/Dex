@@ -11,7 +11,7 @@ enum stab_type {
     PROC_TYPE, FLOAT_TYPE, ENUM_TYPE, STRINGPTR_TYPE, COMPLEX_TYPE,
     ELLIPSES, VOLATILE, CONSTANT_TYPE, DECIMAL_FLOAT_TYPE
 };
-    
+
 struct type {
     struct type *t_hash;		/* hash list */
     char *t_name;			/* name of type */
@@ -151,7 +151,7 @@ typedef struct anode {
     unsigned int a_valid_class : 1;
     unsigned int a_valid_name : 1;
 } anode;
-    
+
 typedef unsigned long stmt_index;
 #define NO_STMT ((stmt_index)0)
 
@@ -178,7 +178,7 @@ struct sym {
     unsigned int s_internal : 1;	/* internal function */
 };
 typedef struct sym *symptr;
-    
+
 struct sym_table {
     unsigned int sy_addr_sorted : 1;	/* true sy_addr2sym is valid */
     symptr sy_hash[HASH_SIZE];

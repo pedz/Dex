@@ -33,7 +33,7 @@ static void push(v_ptr a, int size)
     if ((stack_ptr -= size) < global_index) {
 	fprintf(stderr, "push: Out of pseudo variable space\n");
 	exit(1);
-    }	
+    }
     bcopy(a, (void *)stack_ptr, size);
     if (debug_mask & DEBUG_BIT) {
 	int i;

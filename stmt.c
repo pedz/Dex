@@ -50,7 +50,7 @@ struct goto_def {			/* used for "dog: i++;" */
     char *gd_id;
 };
 struct goto_def *goto_defs;
-    
+
 struct stmt *statements;
 static stmt_index current_stmt = 1;
 static stmt_index current_max;
@@ -293,7 +293,7 @@ stmt_index mk_print_stmt(cnode *c)
 void push_breaks(stmt_index s)
 {
     struct nesting *n = new_nesting();
-    
+
     n->n_next = breaks;
     n->n_stmt = s;
     breaks = n;
@@ -302,7 +302,7 @@ void push_breaks(stmt_index s)
 void push_conts(stmt_index s)
 {
     struct nesting *n = new_nesting();
-    
+
     n->n_next = conts;
     n->n_stmt = s;
     conts = n;
@@ -321,7 +321,7 @@ stmt_index link_breaks(void)
 	free(l);
 	l = lt;
     }
-    
+
     breaks = t->n_next;
     free(t);
     return ret;
@@ -340,7 +340,7 @@ stmt_index link_conts(void)
 	free(l);
 	l = lt;
     }
-    
+
     conts = t->n_next;
     free(t);
     return ret;

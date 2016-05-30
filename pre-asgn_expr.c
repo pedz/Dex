@@ -18,7 +18,7 @@ static char sccs_id[] = "@(#)pre-asgn_expr.c	1.7";
 
 /*
  * Define a single assigned TYPE function name "PREFIX"_"SUFFIX" which
- * uses OP. 
+ * uses OP.
  */
 #define asgn_op(type, prefix, suffix, op) \
 type prefix ## _ ## suffix (expr *n) \
@@ -131,7 +131,7 @@ shift_op(rsasgn, >>=)
 
 /*
  * Define a single assigned TYPE function name "PREFIX"_"SUFFIX" which
- * uses OP. 
+ * uses OP.
  */
 #define post_asgn_op(type, prefix, suffix, op) \
 type prefix ## _ ## suffix (expr *n) \

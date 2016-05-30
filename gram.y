@@ -228,7 +228,7 @@ command
 	{
 	    add_source($2);
 	}
-    | data_def 
+    | data_def
 	{
 	    volatile long had_fault;
 
@@ -239,7 +239,7 @@ command
 	    if (had_fault)
 		printf("hit a page fault at %s\n", P(had_fault));
 	}
-    | statement 
+    | statement
 	{
 	    volatile long had_fault;
 
@@ -285,7 +285,7 @@ data_def			/* a single global definition */
     ;
 
 function_heading
-    : function_declarator arg_declaration_list 
+    : function_declarator arg_declaration_list
 	{
 	    symptr f;
 
@@ -1551,7 +1551,7 @@ name
 	{
 	    if (mk_dot(&$$, &$1, $3))
 		YYERROR;
-		
+
 	}
     /* kludge / hack since the scanner returns a typedef name if it
        finds it.  But that can be a legal field name it turns out. */
@@ -1559,7 +1559,7 @@ name
 	{
 	    if (mk_dot(&$$, &$1, $3->t_name))
 		YYERROR;
-		
+
 	}
     | name '(' opt_expression_list ')' PTROP IDENTIFIER
 	{
@@ -1742,7 +1742,7 @@ non_empty_decl
 	{
 	    typeptr t1 = newtype($3.a_type->t_ns, PTR_TYPE);
 	    typeptr t2 = newtype($3.a_type->t_ns, PROC_TYPE);
-	    
+
 	    t1->t_val.val_p = $3.a_type;
 	    t2->t_val.val_f.f_typeptr = t1;
 	    t2->t_val.val_f.f_params = -1;
@@ -1753,7 +1753,7 @@ non_empty_decl
     | '*' null_decl
 	{
 	    typeptr t1 = newtype($2.a_type->t_ns, PTR_TYPE);
-	    
+
 	    $$ = $2;
 	    t1->t_val.val_p = $2.a_type;
 	    $$.a_type = t1;
@@ -1849,7 +1849,7 @@ static symptr gram_enter_sym(anode *attr, int line, cnode_list *init)
 	}
     } else {
 	int size = ret->s_size = get_size(ret->s_type) / 8;
-	
+
 	if (attr->a_class == param_class) {
 	    if (size < sizeof(long))
 		ret->s_offset = (v_ptr)(param_index + (sizeof(long) - size));

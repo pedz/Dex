@@ -23,12 +23,12 @@ static char sccs_id[] = "@(#)map.c	1.15";
 #define DEBUG_BIT MAP_C_BIT
 /*
  * This is the third and hopefully final attempt at this.
- * 
+ *
  * Lets say that you want to look at the contents of 0x5080 which is
  * the ppda structure.  The description below assumes we are working
  * with a dump.  I am not sure how I will modify this to work on a
  * running system and it may not even be possible.
- * 
+ *
  * The 0x5080 address is called a virtual address.  It is not part of
  * dex's address space.  The task is to map this address into
  * something that is in dex's address space which is called the
@@ -48,7 +48,7 @@ static char sccs_id[] = "@(#)map.c	1.15";
  * bytes per entry since it will use 64 bit pointers to the next stage
  * which will result in 64K for each stage.  Hopefully most of the
  * 2'nd, 3'rd, and 4'th level stages will not be needed.
- * 
+ *
  * The first level stages are pointed to by the "page_table" which is
  * indexed by thread_slot.  page_table is set up to have an entry for
  * slot -1 and entries up to the largest thread found in the dump.
@@ -761,7 +761,7 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     sigaddset(&t, SIGSEGV);
     if (sigprocmask(SIG_UNBLOCK, &t, (sigset_t *)0) < 0)
 	perror("sigprocmask");
-    
+
     if (!map_addr(paddr)) {
 	--count;
 	DEBUG_PRINTF(("map_catch: %s return happy\n", P(paddr)));
@@ -786,7 +786,7 @@ int map_init(void)
     long first_map;
     int i;
     struct rmap *r;
-    
+
 
     s.sa_handler = (void (*)(int))map_catch;
     sigemptyset(&s.sa_mask);
@@ -853,6 +853,12 @@ int map_init(void)
     if (init_dump())
 	return 1;
 
+    if (real_mode) {
+      thread_max = 524288;
+      bos_addr_start = 0;
+      bos_addr_end = 256 * 1024 * 1024; // 256M
+    }
+
     DEBUG_PRINTF(("thread_max=%d\n", thread_max));
     page_table = (initial_stage_t **)smalloc((size_t)(thread_max + 1) * sizeof(page_table[0]));
     ++page_table;			/* allow for -1 entry */
@@ -904,7 +910,7 @@ static int rmap_hash(struct rmap *r)
     unsigned long temp;
     int index;
     int bits;
-    
+
     temp = (unsigned long)r->r_stage ^ (unsigned long)r->r_seg ^
 	(unsigned long)r->r_virt;
     index = 0;
@@ -970,7 +976,7 @@ static struct rmap *rmap_alloc(int size)
 		    r->r_hashed = 0;
 		    add_to_hash(r, __LINE__);
 		}
-	    
+
 	    DEBUG_PRINTF(("rmap's increased to %d\n", rmap_max));
 	}
     }
@@ -1265,7 +1271,7 @@ static int mult_seg_setup(struct stage0 *s,
 	    if (invalid_segval_p(d->de_segval, addr) ||
 		first_d->de_segval == d->de_segval)
 		continue;
-		    
+
 	    s->pte[i] = (struct stage1 *)allocate_map(thread,
 					     stage,
 					     skip,
@@ -1379,7 +1385,7 @@ static int span_seg_setup(struct stage0 *s,
 		    if (invalid_segval_p(d->de_segval, addr) ||
 			(first_d->de_segval == d->de_segval))
 			continue;
-		    
+
 		    /*
 		     * In the first pass at this point, we know that
 		     * this pte is not going to be a simple case of a
@@ -1668,7 +1674,7 @@ static int setup_final(struct final_stage *s,
 				  routine, P(d->de_segval)));
 		    continue;
 		}
-		    
+
 		/*
 		 * I don't remember what segval == -thread implies.
 		 */
@@ -1998,7 +2004,7 @@ static int init_dump(void)
 		cdt_ras.header_setup(cur_pos);
 		cdt = & cdt_ras;
 		break;
-	    
+
 	    case DMP_MAGIC_RAS_U:
 		cdt_uras.header_setup(cur_pos);
 		cdt = & cdt_uras;

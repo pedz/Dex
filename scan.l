@@ -448,7 +448,7 @@ static char *do_fgets(FILE *in)
 	if (last && *last) {
 	    int rc;
 	    char *expand;
-	    
+
 	    using_history();
 	    rc = history_expand(last, &expand);
 	    free(last);

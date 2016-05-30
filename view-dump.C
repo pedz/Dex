@@ -98,7 +98,7 @@ int open_dump(char *path)
 	    cdt_ras.header_setup(cur_pos);
 	    cdt = & cdt_ras;
 	    break;
-	    
+
 	case DMP_MAGIC_RAS_U:
 	    cdt_uras.header_setup(cur_pos);
 	    cdt = & cdt_uras;
@@ -139,7 +139,7 @@ int open_dump(char *path)
 	    }
 	    goto loop_end;
 	}
-	
+
 	printf("%.*s %s %d\n", cdt->header_name_size(), cdt->header_name(),
 	       cdt->header_type_string(), cdt->header_num_entries());
 
@@ -261,7 +261,7 @@ int open_dump(char *path)
 		if (in_mapped)
 		    ++page_entries;
 		putc('\n', stdout);
-		
+
 	    }
 	}
 

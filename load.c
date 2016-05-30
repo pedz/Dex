@@ -95,7 +95,7 @@ static typeptr get_func_int(ns *nspace,
     ret->t_val.val_f.f_paramlist = 0;
     return ret;
 }
-    
+
 static typeptr get_ptr_func_int(ns *nspace,
 				typeptr *int_type_p,
 				typeptr *func_int_type_p,
@@ -142,7 +142,7 @@ static void resolv_dup(symptr *sym_p, char **name_p, ns *ns, void *offset)
     if ((sym = *sym_p)->s_defined && sym->s_offset != offset) {
 	char *name = *name_p;
 	char buf[16];
-	
+
 	sprintf(buf, "$dup%d", ns->ns_lastdup++);
 	name = store_string(ns, name, 0, buf);
 	sym = enter_sym(ns, name, 0);
@@ -340,7 +340,7 @@ int load(char *path, long text_base, long data_base)
 						    &func_int_type,
 						    &ptr_func_int_type);
 			break;
-		    
+
 		    case MAP(XMC_XO, XTY_ER): /* function */
 			suffix = 0;
 			thistype = get_func_int(load_ns,
@@ -456,7 +456,7 @@ int load(char *path, long text_base, long data_base)
 
     /* Nothing to do with the type check section */
     /* Nothing to do with the except section */
-    
+
     /* Relocation information */
     if (text_base != -1 && fhdr->f_nscns) {
 	struct scnhdr *shdr =
@@ -468,15 +468,15 @@ int load(char *path, long text_base, long data_base)
 	    if (shdr->s_relptr) {
 		int j;
 		caddr_t base = m + shdr->s_relptr;
-		
+
 		for (j = 0; j < shdr->s_nreloc; ++j, base += RELSZ) {
 		    struct reloc *r = (struct reloc *)base;
-		    
+
 		}
 	    }
 	}
     }
-    
+
     /* Symbol table */
     if (fhdr->f_symptr) {
 	caddr_t base = m + fhdr->f_symptr;
@@ -598,17 +598,17 @@ int load(char *path, long text_base, long data_base)
 		     * entries define labels or entry points within
 		     * that csect. scnlen of the LD entry is actually
 		     * the symbol index for the SD entry.
-		     * 
+		     *
 		     * PR SD's are not really functions but csects.
 		     * PR LD's are assumed to be functions even if the
 		     * type doesn't say so.
-		     * 
+		     *
 		     * RW SD's and RW LD's work the same and are
 		     * assume to be data.
-		     * 
+		     *
 		     * RO SD's and RO LD's work the same and are
 		     * assume to be data.
-		     * 
+		     *
 		     * GL SD's and GL LD's are glink (12 byte) entries.
 		     */
 		case MAP(XMC_PR, XTY_SD):
@@ -726,7 +726,7 @@ int load(char *path, long text_base, long data_base)
 						&func_int_type,
 						&ptr_func_int_type);
 		    break;
-		    
+
 		case MAP(XMC_BS, XTY_CM):
 		    continue;
 
@@ -888,7 +888,7 @@ int load(char *path, long text_base, long data_base)
 		/*
 		 * If this is a new function that looks interesting,
 		 * we create a name space for it.
-		 * 
+		 *
 		 * We have two choices: either create the name space
 		 * here or wait until we hit the .bf entry to create
 		 * the name space.  I hope this works because it puts
@@ -1035,7 +1035,7 @@ int load(char *path, long text_base, long data_base)
 		 * So... in the case of a C_FUN, we pass cur_file to
 		 * parse_stab instead of cur_block.  In pascal, this
 		 * is going to break but... hahahahahahahaha.
-		 * 
+		 *
 		 * Whisper quietly over the sound of jack hammers and
 		 * chain saws... The stab string syntax says that if
 		 * the string ends in a ? then it continues in the
@@ -1115,7 +1115,7 @@ int load(char *path, long text_base, long data_base)
 				"Duplicate global symbol %s at %d %lx != %lx\n",
 				dbx_sptr->s_name, sym_index, dbx_sptr->s_offset,
 				offset);
-		
+
 			fprintf(stderr,
 				"...n_sclass = %d csect_index = %d csect->offset = %lx s->n_value = %lx\n",
 				s->n_sclass,
