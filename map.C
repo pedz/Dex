@@ -1251,7 +1251,7 @@ static int mult_seg_setup(struct stage0 *s,
 	for ( ; d < d_end && d->de_min < top; ++d) {
 	    if (d->de_isreal ||
 		(d->de_virt > top) ||
-		(d->de_end <= addr))
+		(d->de_end < addr))
 		continue;
 
 	    if (!one_hit)
@@ -1369,7 +1369,7 @@ static int span_seg_setup(struct stage0 *s,
 	    for ( ; d < d_end && d->de_min < top; ++d) {
 		if (d->de_isreal ||
 		    (d->de_virt > top) ||
-		    (d->de_end <= addr))
+		    (d->de_end < addr))
 		    continue;
 
 		if (!one_hit)
@@ -1601,7 +1601,7 @@ static int setup_final(struct final_stage *s,
 	for ( ; d < d_end && d->de_min < top; ++d) {
 	    if (d->de_isreal ||
 		(d->de_virt > top) ||
-		(d->de_end <= addr))
+		(d->de_end < addr))
 		continue;
 
 	    /*
@@ -1760,7 +1760,7 @@ static int setup_partial_page(unsigned long s,
     for ( ; d < d_end && d->de_min < top; ++d) {
 	if (d->de_isreal ||
 	    (d->de_virt > top) ||
-	    (d->de_end <= addr))
+	    (d->de_end < addr))
 	    continue;
 
 	if (d->de_segval == segval) {
@@ -1796,8 +1796,8 @@ static int de_compare_end(const void *a, const void *b)
 	return (da->de_isreal) ? 1 : -1;
 
     if (da->de_isreal) {
-	unsigned long long da_end = da->de_real + da->de_len;
-	unsigned long long db_end = db->de_real + db->de_len;
+	unsigned long long da_end = da->de_real + da->de_len - 1;
+	unsigned long long db_end = db->de_real + db->de_len - 1;
 
 	return ((db_end == da_end) ?
 		((db->de_real == da->de_real) ?
@@ -1867,7 +1867,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_dump = pos;
 		    dump_entries[cnt].de_virt = virt;
 		    dump_entries[cnt].de_segval = segval;
-		    dump_entries[cnt].de_end = virt + part_size;
+		    dump_entries[cnt].de_end = virt + part_size - 1;
 
 		    total_size -= part_size;
 		    pos += part_size;
@@ -1886,7 +1886,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_dump = pos;
 		    dump_entries[cnt].de_virt = virt;
 		    dump_entries[cnt].de_segval = segval;
-		    dump_entries[cnt].de_end = virt + part_size;
+		    dump_entries[cnt].de_end = virt + part_size - 1;
 
 
 		    rmap_fill((unsigned long)pos, part_size, REAL_STAGE,
@@ -1907,7 +1907,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_dump = pos;
 		    dump_entries[cnt].de_virt = virt;
 		    dump_entries[cnt].de_segval = segval;
-		    dump_entries[cnt].de_end = virt + total_size;
+		    dump_entries[cnt].de_end = virt + total_size - 1;
 
 		    total_size -= total_size;
 		    pos += total_size;
