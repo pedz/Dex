@@ -410,7 +410,7 @@ static char *s_strings[] = {
  * real_mode is true if the dump contains no entries with a segment
  * value other than DUMP_REAL_SEGVAL and DUMP_NONMEM_SEGVAL.
  */
-static real_mode = 1;
+int real_mode = 1;
 
 int thread_slot = -1;
 size_t thread_max;			/* last thread in dump */
@@ -1964,6 +1964,8 @@ static int init_dump(void)
 	    class CDT_vr cdt_vr;
 	    class CDT_u32 cdt_u32;
 	    class CDT_u64 cdt_u64;
+	    class CDT_ras  cdt_ras;
+	    class CDT_uras cdt_uras;
 	    char *header_name;
 
 	    switch (((struct cdt *)cur_pos)->cdt_magic) {
@@ -1990,6 +1992,16 @@ static int init_dump(void)
 	    case DMP_MAGIC_U64:
 		cdt_u64.header_setup(cur_pos);
 		cdt = & cdt_u64;
+		break;
+
+	    case DMP_MAGIC_RAS:
+		cdt_ras.header_setup(cur_pos);
+		cdt = & cdt_ras;
+		break;
+	    
+	    case DMP_MAGIC_RAS_U:
+		cdt_uras.header_setup(cur_pos);
+		cdt = & cdt_uras;
 		break;
 
 	    case DMP_MAGIC_UD32:

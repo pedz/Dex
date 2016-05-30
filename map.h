@@ -91,6 +91,7 @@ extern int thread_slot;
 extern size_t thread_max;
 extern long map_top;
 extern int fromdump;
+extern int real_mode;
 
 #define v2f_type(type, vaddr) ((type)V2F((p_ptr)vaddr))
 #define f2v_type(type, vaddr) ((type)F2V((v_ptr)vaddr))

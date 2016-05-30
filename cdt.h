@@ -763,7 +763,6 @@ public:
 	head = (struct cdt_head_ras *)p;
 	first = (struct cdt_entry64 *)(((char *)p) + sizeof(struct cdt_head_ras_h) + head->cdtr_pathlen);
 	last = (struct cdt_entry64 *)((char *)p + head->cdtr_len);
-	printf("NUM_ENTRIES_RAS(cp) = %d\n", NUM_ENTRIES_RAS(p));
 	num_entries = last - first;
     }					       
 

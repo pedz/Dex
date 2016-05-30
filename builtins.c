@@ -448,8 +448,9 @@ static void do_int_vars(void)
 	int *st_func;
     };
     struct table tab[] = {
-	{ "thread_slot",  &thread_slot },
 	{ "fromdump",     &fromdump },
+	{ "real_mode",    &real_mode },
+	{ "thread_slot",  &thread_slot },
     };
     struct table *tp, *tp_end;
     typeptr t = find_type(ns_inter, TP_INT);
