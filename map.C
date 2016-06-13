@@ -413,7 +413,7 @@ static char *s_strings[] = {
 int real_mode = 1;
 
 int thread_slot = -1;
-size_t thread_max;			/* last thread in dump */
+size_t thread_max = -1;			/* last thread in dump */
 char *t_map;
 long map_top;				/* last allocated virtual address */
 int fromdump = 1;			/* always from a dump for now */
@@ -852,12 +852,6 @@ int map_init(void)
      */
     if (init_dump())
 	return 1;
-
-    if (real_mode) {
-      thread_max = 524288;
-      bos_addr_start = 0;
-      bos_addr_end = 256 * 1024 * 1024; // 256M
-    }
 
     DEBUG_PRINTF(("thread_max=%d\n", thread_max));
     page_table = (initial_stage_t **)smalloc((size_t)(thread_max + 1) * sizeof(page_table[0]));
@@ -2062,7 +2056,8 @@ static int init_dump(void)
 		    }
 
 		    if (!strcmp(header_name, "bos") &&
-			!strcmp(name, "kernel")) {
+			!strcmp(name, "kernel") &&
+			(i == 0)) {
 			bos_segval = segval;
 			bos_addr_start = (long)addr;
 			bos_addr_end = bos_addr_start + len;
@@ -2154,8 +2149,13 @@ static int init_dump(void)
 
 	    map_top += ((cnt * sizeof(struct dump_entry) + PAGESIZE - 1L) &
 			~(PAGESIZE - 1L));
-	    ++thread_max;
-	    t_map = (char *)smalloc(thread_max);
+	    if (real_mode) {
+		bos_addr_start = 0;
+		bos_addr_end = 256 * 1024 * 1024; // 256M
+	    } else {
+		++thread_max;
+		t_map = (char *)smalloc(thread_max);
+	    }
 	}
     }
 
