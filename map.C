@@ -413,14 +413,14 @@ static char *s_strings[] = {
 int real_mode = 1;
 
 int thread_slot = -1;
-size_t thread_max = -1;			/* last thread in dump */
+size_t thread_max;			/* last thread in dump */
 char *t_map;
 long map_top;				/* last allocated virtual address */
 int fromdump = 1;			/* always from a dump for now */
-void * volatile last_v;
-void * volatile last_f;
+void * volatile last_v = (void *)-1;
+void * volatile last_f = (void *)-1;
 
-#define FAST_MAP
+// #define FAST_MAP
 
 #ifdef FAST_MAP
 p_ptr v2f(v_ptr v)
@@ -445,19 +445,30 @@ p_ptr v2f(v_ptr v)
     volatile unsigned long I3;
     volatile unsigned long I4;
 
+    DEBUG_PRINTF(("v2f for %s ", P(v)));
     last_v = v;
     last_f = (void *)-1;
 
     S0 = page_table[THREAD_SLOT];
+    DEBUG_PRINTF(("1"));
     I0 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*3)) & STAGE_MASK;
+    DEBUG_PRINTF(("2"));
     I1 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*2)) & STAGE_MASK;
+    DEBUG_PRINTF(("3"));
     I2 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*1)) & STAGE_MASK;
+    DEBUG_PRINTF(("4"));
     I3 = (((unsigned long)(v)) >> PGSHIFT+(STAGE_BITS*0)) & STAGE_MASK;
+    DEBUG_PRINTF(("5"));
     I4 = (((unsigned long)(v)) & (PAGESIZE - 1));
+    DEBUG_PRINTF(("6"));
     S1 = S0->pte[I0];
+    DEBUG_PRINTF(("7"));
     S2 = S1->pte[I1];
+    DEBUG_PRINTF(("8"));
     FS = S2->pte[I2];
+    DEBUG_PRINTF(("9"));
     FN = FS->pte[I3];
+    DEBUG_PRINTF((" FN=%s I4=%s FN+I4=%s\n", P(FN), P(I4), P(FN+I4)));
     return (p_ptr)(FN + I4);
 }
 
@@ -553,6 +564,8 @@ static struct rmap *rmap_find(long l)
     if (debug_mask & DEBUG_BIT) {
 	int temp = high;
 	for (width = 1; temp > 10; ++width, temp /= 10);
+	if (width < strlen("high"))
+	    width = strlen("high");
 	DEBUG_PRINTF(("%*s %*s %*s\n",
 		      width, "low", width, "mid", width, "high"));
     }
@@ -741,7 +754,7 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
 #endif
 
-    DEBUG_PRINTF(("map_catch: last_v:0x%s thread:%d paddr:0x%s\n",
+    DEBUG_PRINTF(("\nmap_catch: last_v:0x%s thread:%d paddr:0x%s\n",
 		  P(last_v), thread_slot, P(paddr)));
     if (stmt_stack[cur_stmt_index]) {
 	struct stmt *s = statements + stmt_stack[cur_stmt_index];
@@ -942,6 +955,7 @@ static struct rmap *rmap_alloc(int size)
 		    exit(1);
 		}
 		r->r_freed = 0;
+		DEBUG_PRINTF(("rmap_alloc: reused %d (%d)\n", r - rmap, size));
 		return r;
 	    }
 
@@ -983,6 +997,7 @@ static struct rmap *rmap_alloc(int size)
 	map_top += size;
 	r->r_phys_set = 1;
     }
+    DEBUG_PRINTF(("rmap_alloc: allocated %d (%d)\n", r - rmap, size));
     return r;
 }
 
@@ -1142,13 +1157,12 @@ static int setup_thread(int thread)
     unsigned long addr = 0;
     unsigned long skip = (((unsigned long)-1) >> STAGE_BITS) + 1;
     enum stages stage = INITIAL_STAGE_P1;
-    char *routine = "setup_thread";
     int mult_segs = skip > SEGSIZE;
 
     DEBUG_PRINTF(("%s: %s p=%s t=%d\n",
-		  routine, s_strings[stage], P(s), thread));
+		  __func__, s_strings[stage], P(s), thread));
     DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
-		  routine, P(segval), P(addr), P(skip)));
+		  __func__, P(segval), P(addr), P(skip)));
 
     if (mult_segs)
 	return mult_seg_setup((struct stage0 *)s, thread, segval,
@@ -1157,7 +1171,7 @@ static int setup_thread(int thread)
 	return span_seg_setup((struct stage0 *)s, thread, segval,
 			      addr, skip, stage);
     fflush(stdout);
-    fprintf(stderr, "%s: confused\n", routine);
+    fprintf(stderr, "%s: confused\n", __func__);
     return 0;
 }
 
@@ -1168,13 +1182,12 @@ static int setup_stage(struct stage0 *s,
 		       unsigned long skip,
 		       enum stages stage)
 {
-    char *routine = "setup_stage";
     int mult_segs = skip > SEGSIZE;
 
     DEBUG_PRINTF(("%s: %s p=%s t=%d\n",
-		  routine, s_strings[stage], P(s), thread));
+		  __func__, s_strings[stage], P(s), thread));
     DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
-		  routine, P(segval), P(addr), P(skip)));
+		  __func__, P(segval), P(addr), P(skip)));
 
     if (mult_segs)
 	return mult_seg_setup((struct stage0 *)s, thread, segval,
@@ -1183,8 +1196,16 @@ static int setup_stage(struct stage0 *s,
 	return span_seg_setup((struct stage0 *)s, thread, segval,
 			      addr, skip, stage);
     fflush(stdout);
-    fprintf(stderr, "%s: confused\n", routine);
+    fprintf(stderr, "%s: confused\n", __func__);
     return 0;
+}
+
+static int invalid_d(struct dump_entry *d, unsigned long addr, unsigned long top)
+{
+    return (d->de_isreal ||
+	    (d->de_virt > top) ||
+	    (d->de_end < addr));
+
 }
 
 /*
@@ -1197,10 +1218,14 @@ static int mult_seg_setup(struct stage0 *s,
 			  unsigned long skip,
 			  enum stages stage)
 {
-    char *routine = "mult_seg_setup";
     struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     unsigned long top;
     int i;
+
+    DEBUG_PRINTF(("%s: %s p=%s t=%d\n",
+		  __func__, s_strings[stage], P(s), thread));
+    DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
+		  __func__, P(segval), P(addr), P(skip)));
 
     for (i = 0; i < STAGE_SIZE; ++i)
 	s->pte[i] = (struct stage1 *)no_page_start;
@@ -1214,24 +1239,24 @@ static int mult_seg_setup(struct stage0 *s,
 	if (IN_USER_RANGE(addr, top)) {
 	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, 0, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
-			  routine, P(s), i, P(s->pte[i])));
+			  __func__, P(s), i, P(s->pte[i])));
 	    continue;
 	}
 
 	if (IN_BOS_RANGE(addr, top)) {
 	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip,
-					     bos_segval, addr);
+						      bos_segval, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s bos\n",
-			  routine, P(s), i, P(s->pte[i])));
+			  __func__, P(s), i, P(s->pte[i])));
 	    continue;
 	}
 
 	d = starting_d(addr);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
-		      routine, P(addr), P(top), P(segval)));
+		      __func__, P(addr), P(top), P(segval)));
 	DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
-		      strlen(routine), "found",
+		      strlen(__func__), "starting_d",
 		      P(d->de_virt),
 		      P(d->de_virt+d->de_len),
 		      P(d->de_segval)));
@@ -1243,9 +1268,7 @@ static int mult_seg_setup(struct stage0 *s,
 	 * probably to make the vmm people happy.
 	 */
 	for ( ; d < d_end && d->de_min < top; ++d) {
-	    if (d->de_isreal ||
-		(d->de_virt > top) ||
-		(d->de_end < addr))
+	    if (invalid_d(d, addr, top))
 		continue;
 
 	    if (!one_hit)
@@ -1267,12 +1290,12 @@ static int mult_seg_setup(struct stage0 *s,
 		continue;
 
 	    s->pte[i] = (struct stage1 *)allocate_map(thread,
-					     stage,
-					     skip,
-					     segval,
-					     addr);
+						      stage,
+						      skip,
+						      segval,
+						      addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s multi\n",
-			  routine, P(s), i, P(s->pte[i])));
+			  __func__, P(s), i, P(s->pte[i])));
 	    goto cont_loop;
 	}
 
@@ -1283,19 +1306,19 @@ static int mult_seg_setup(struct stage0 *s,
 	 */
 	if (one_hit) {
 	    s->pte[i] =  (struct stage1 *)allocate_map(thread,
-					      stage,
-					      skip,
-					      first_d->de_segval,
-					      addr);
+						       stage,
+						       skip,
+						       first_d->de_segval,
+						       addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
-			  routine, P(s), i, P(s->pte[i])));
+			  __func__, P(s), i, P(s->pte[i])));
 	    continue;
 	}
 
     cont_loop: ;
 
     }
-    DEBUG_PRINTF(("%s: return 0\n", routine));
+    DEBUG_PRINTF(("%s: return 0\n", __func__));
     return 0;
 }
 
@@ -1310,7 +1333,6 @@ static int span_seg_setup(struct stage0 *s,
 			  unsigned long skip,
 			  enum stages stage)
 {
-    char *routine = "span_seg_setup";
     struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     unsigned long addr_save = addr;
     unsigned long segval_addr = addr & ~(SEGSIZE - 1);
@@ -1335,7 +1357,7 @@ static int span_seg_setup(struct stage0 *s,
 						     skip, 0,
 						     addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
-				  routine, P(s), i, P(s->pte[i])));
+				  __func__, P(s), i, P(s->pte[i])));
 		}
 		continue;
 	    }
@@ -1345,7 +1367,7 @@ static int span_seg_setup(struct stage0 *s,
 		    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip,
 						     bos_segval, addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s bos\n",
-				  routine, P(s), i, P(s->pte[i])));
+				  __func__, P(s), i, P(s->pte[i])));
 		}
 		continue;
 	    }
@@ -1353,17 +1375,15 @@ static int span_seg_setup(struct stage0 *s,
 	    d = starting_d(addr);
 
 	    DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
-			  routine, P(addr), P(top), P(segval)));
+			  __func__, P(addr), P(top), P(segval)));
 	    DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
-			  strlen(routine), "found",
+			  strlen(__func__), "starting_d",
 			  P(d->de_virt),
 			  P(d->de_virt+d->de_len),
 			  P(d->de_segval)));
 
 	    for ( ; d < d_end && d->de_min < top; ++d) {
-		if (d->de_isreal ||
-		    (d->de_virt > top) ||
-		    (d->de_end < addr))
+		if (invalid_d(d, addr, top))
 		    continue;
 
 		if (!one_hit)
@@ -1396,7 +1416,7 @@ static int span_seg_setup(struct stage0 *s,
 
 			s->pte[i] = (struct stage1 *)r->r_phys;
 			DEBUG_PRINTF(("%s: %s[%d]=%s\n",
-				      routine, P(s), i, P(s->pte[i])));
+				      __func__, P(s), i, P(s->pte[i])));
 			goto cont_loop;
 		    }
 
@@ -1428,7 +1448,7 @@ static int span_seg_setup(struct stage0 *s,
 				fflush(stdout);
 				fprintf(stderr, "%s: rmap_find(1) failed "
 					"for %s[%d]=%s\n",
-					routine, P(s), j, P(s->pte[j]));
+					__func__, P(s), j, P(s->pte[j]));
 				exit(1);
 			    }
 			    if (r->r_true_segval) {
@@ -1437,7 +1457,7 @@ static int span_seg_setup(struct stage0 *s,
 				found = 1;
 				DEBUG_PRINTF(("%s: true segval "
 					      "found: %s\n",
-					      routine, P(segval)));
+					      __func__, P(segval)));
 				break;
 			    }
 			}
@@ -1446,7 +1466,7 @@ static int span_seg_setup(struct stage0 *s,
 			    segval_addr = addr & ~(SEGSIZE - 1);
 			    segval = get_addr2seg(segval_addr);
 			    DEBUG_PRINTF(("%s: addr2seg(%s) "
-					  "returned %s\n", routine,
+					  "returned %s\n", __func__,
 					  P(addr), P(segval)));
 			}
 		    }
@@ -1465,7 +1485,7 @@ static int span_seg_setup(struct stage0 *s,
 			fflush(stdout);
 			fprintf(stderr, "%s: rmap_find(2) failed "
 				"for %s[%d]=%s\n",
-				routine, P(s), i, P(s->pte[i]));
+				__func__, P(s), i, P(s->pte[i]));
 			exit(1);
 		    }
 		    if (r->r_hashed) {
@@ -1483,13 +1503,13 @@ static int span_seg_setup(struct stage0 *s,
 			add_to_hash(r, __LINE__);
 		    }
 		    DEBUG_PRINTF(("%s: %s segval changed to %s\n",
-				  routine, P(s->pte[i]), P(segval)));
+				  __func__, P(s->pte[i]), P(segval)));
 		    goto cont_loop;
 		}
 	    }
 
 	    DEBUG_PRINTF(("%s: pass:%d one_hit:%d first_d:%d\n",
-			  routine, pass, one_hit, first_d != 0));
+			  __func__, pass, one_hit, first_d != 0));
 
 	    /*
 	     * Only one real segval in this range
@@ -1501,7 +1521,7 @@ static int span_seg_setup(struct stage0 *s,
 						  first_d->de_segval,
 						  addr);
 		DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
-			      routine, P(s), i, P(s->pte[i])));
+			      __func__, P(s), i, P(s->pte[i])));
 		continue;
 	    }
 
@@ -1512,14 +1532,14 @@ static int span_seg_setup(struct stage0 *s,
 		if (pass == 0)
 		    s->pte[i] = (struct stage1 *)no_page_start;
 		DEBUG_PRINTF(("%s: %s[%d] set to no_page_start\n",
-			      routine, P(s), i));
+			      __func__, P(s), i));
 		continue;
 	    }
 
 	    if (!(r = rmap_find((long)s->pte[i]))) {
 		fflush(stdout);
 		fprintf(stderr, "%s: rmap_find(3) failed for %s[%d]=%s\n",
-			routine, P(s), i, P(s->pte[i]));
+			__func__, P(s), i, P(s->pte[i]));
 		exit(1);
 	    }
 
@@ -1527,7 +1547,7 @@ static int span_seg_setup(struct stage0 *s,
 		s->pte[i] = (struct stage1 *)no_page_start;
 		rmap_free(r);
 		DEBUG_PRINTF(("%s: %s[%d] reset to no_page_start\n",
-			      routine, P(s), i));
+			      __func__, P(s), i));
 	    }
 
 	cont_loop: ;
@@ -1535,12 +1555,12 @@ static int span_seg_setup(struct stage0 *s,
 	}
     }
 
-    DEBUG_PRINTF(("%s: return 0\n", routine));
+    DEBUG_PRINTF(("%s: return 0\n", __func__));
     return 0;
 }
 
 /*
- * In this routine, we have to watch out for partial pages in the dump
+ * In this __func__, we have to watch out for partial pages in the dump
  * because skip will be PAGESIZE.
  */
 static int setup_final(struct final_stage *s,
@@ -1550,16 +1570,15 @@ static int setup_final(struct final_stage *s,
 		       unsigned long skip,
 		       enum stages stage)
 {
-    char *routine = "setup_final";
     struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     unsigned long top;
     unsigned long segval_addr = addr & ~(SEGSIZE - 1);
     int i;
 
     DEBUG_PRINTF(("%s: %s p=%s t=%d\n",
-		  routine, s_strings[stage], P(s), thread));
+		  __func__, s_strings[stage], P(s), thread));
     DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
-		  routine, P(segval), P(addr), P(skip)));
+		  __func__, P(segval), P(addr), P(skip)));
 
     for (i = 0; i < STAGE_SIZE; ++i)
 	s->pte[i] = no_page_start;
@@ -1574,16 +1593,16 @@ static int setup_final(struct final_stage *s,
 	if (IN_USER_RANGE(addr, top)) {
 	    s->pte[i] = addr;
 	    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
-			  routine, P(s), i, P(s->pte[i])));
+			  __func__, P(s), i, P(s->pte[i])));
 	    continue;
 	}
 
 	d = starting_d(addr);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
-		      routine, P(addr), P(top), P(segval)));
+		      __func__, P(addr), P(top), P(segval)));
 	DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
-		      strlen(routine), "found", P(d->de_virt),
+		      strlen(__func__), "starting_d", P(d->de_virt),
 		      P(d->de_virt+d->de_len),
 		      P(d->de_segval)));
 
@@ -1593,9 +1612,7 @@ static int setup_final(struct final_stage *s,
 	 * entry is above the last address we are looking for (top).
 	 */
 	for ( ; d < d_end && d->de_min < top; ++d) {
-	    if (d->de_isreal ||
-		(d->de_virt > top) ||
-		(d->de_end < addr))
+	    if (invalid_d(d, addr, top))
 		continue;
 
 	    /*
@@ -1621,15 +1638,15 @@ static int setup_final(struct final_stage *s,
 		s->pte[i] = (long)d->de_dump +
 			(addr - d->de_virt);
 		DEBUG_PRINTF(("%s: xxx de_segval=%s virt=%s len=%s top=%s\n",
-			      routine, P(d->de_segval), P(d->de_virt),
+			      __func__, P(d->de_segval), P(d->de_virt),
 			      P(d->de_len), P(top)));
 		DEBUG_PRINTF(("%s: %s[%d]=%s match\n",
-			      routine, P(s), i, P(s->pte[i])));
+			      __func__, P(s), i, P(s->pte[i])));
 		goto cont_loop;
 	    }
 
 	    if (first_d) {
-		DEBUG_PRINTF(("%s: first_d: true\n", routine));
+		DEBUG_PRINTF(("%s: first_d: true\n", __func__));
 
 		/*
 		 * If first_d is a wildcard segment register than the
@@ -1638,7 +1655,7 @@ static int setup_final(struct final_stage *s,
 		 */
 		if (invalid_segval_p(first_d->de_segval, addr)) {
 		    first_d = d;
-		    DEBUG_PRINTF(("%s: first_d: set first_d to d\n", routine));
+		    DEBUG_PRINTF(("%s: first_d: set first_d to d\n", __func__));
 		}
 
 		/*
@@ -1665,7 +1682,7 @@ static int setup_final(struct final_stage *s,
 		if (invalid_segval_p(d->de_segval, addr) ||
 		    (first_d->de_segval == d->de_segval)) {
 		    DEBUG_PRINTF(("%s: first_d continue de_segval=%s\n",
-				  routine, P(d->de_segval)));
+				  __func__, P(d->de_segval)));
 		    continue;
 		}
 
@@ -1677,7 +1694,7 @@ static int setup_final(struct final_stage *s,
 		    segval_addr = addr & ~(SEGSIZE - 1);
 		    segval = get_addr2seg(segval_addr);
 		    DEBUG_PRINTF(("%s: first_d: addr2seg(%s) returned %s\n",
-				  routine, P(addr), P(segval)));
+				  __func__, P(addr), P(segval)));
 		}
 
 		/*
@@ -1692,18 +1709,18 @@ static int setup_final(struct final_stage *s,
 		 */
 		if (first_d->de_segval == segval) {
 		    d = first_d;
-		    DEBUG_PRINTF(("%s: first_d: set d to first_d\n", routine));
+		    DEBUG_PRINTF(("%s: first_d: set d to first_d\n", __func__));
 		}
 
 		first_d = 0;
-		DEBUG_PRINTF(("%s: first_d: set to 0\n", routine));
+		DEBUG_PRINTF(("%s: first_d: set to 0\n", __func__));
 	    }
 
 	    if (d->de_segval == segval) {
 		if (d->de_len >= skip) {
 		    s->pte[i] = (long)d->de_dump + (addr - d->de_virt);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s frog\n",
-				  routine, P(s), i, P(s->pte[i])));
+				  __func__, P(s), i, P(s->pte[i])));
 		    goto cont_loop;
 		}
 		DEBUG_PRINTF(("setting partial_hit\n"));
@@ -1716,12 +1733,12 @@ static int setup_final(struct final_stage *s,
 		s->pte[i] = (long)first_d->de_dump +
 		    (addr - first_d->de_virt);
 		DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
-			      routine, P(s), i, P(s->pte[i])));
+			      __func__, P(s), i, P(s->pte[i])));
 	    } else {
 		s->pte[i] = allocate_map(thread, PARTIAL_PAGE, PAGESIZE,
 					 segval, addr);
 		DEBUG_PRINTF(("%s: %s[%d]=%s partial\n",
-			      routine, P(s), i, P(s->pte[i])));
+			      __func__, P(s), i, P(s->pte[i])));
 
 	    }
 	    continue;
@@ -1730,7 +1747,7 @@ static int setup_final(struct final_stage *s,
     cont_loop: ;
 
     }
-    DEBUG_PRINTF(("%s: return\n", routine));
+    DEBUG_PRINTF(("%s: return\n", __func__));
     return 0;
 }
 
@@ -1752,9 +1769,7 @@ static int setup_partial_page(unsigned long s,
 		  P(s), thread, P(segval), P(addr)));
 
     for ( ; d < d_end && d->de_min < top; ++d) {
-	if (d->de_isreal ||
-	    (d->de_virt > top) ||
-	    (d->de_end < addr))
+	if (invalid_d(d, addr, top))
 	    continue;
 
 	if (d->de_segval == segval) {
@@ -1846,8 +1861,10 @@ static void setup_dump_entry(int *inmap,
 	    ++cnt;
 	} else {
 
-	    if (segval != DUMP_NONMEM_SEGVAL)
-		real_mode = 0;
+	    if (segval == DUMP_NONMEM_SEGVAL)
+		return;
+
+	    real_mode = 0;
 
 	    /* Partial page at front of range */
 	    if (virt & (PAGESIZE - 1)) {
@@ -1883,6 +1900,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_end = virt + part_size - 1;
 
 
+		    
 		    rmap_fill((unsigned long)pos, part_size, REAL_STAGE,
 			      0, segval, virt);
 

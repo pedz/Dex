@@ -60,6 +60,6 @@ enum debug_bits {
 extern char *print_field(int size, ...);
 
 #define P(f) print_field(sizeof(f), (f))
-#define DEBUG_PRINTF(b) ((debug_mask & DEBUG_BIT) && printf b)
+#define DEBUG_PRINTF(b) ((debug_mask & DEBUG_BIT) && ((printf b), fflush(stdout)))
 
 #endif /* __DEX_H */
