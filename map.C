@@ -351,7 +351,7 @@ static long allocate_map(int thread,
 			 unsigned long size,
 			 unsigned long seg,
 			 unsigned long virt);
-static struct dump_entry *starting_d(unsigned long addr);
+static struct dump_entry *starting_d(unsigned long addr, unsigned long real_addr);
 static int setup_thread(int thread);
 static int setup_stage(struct stage0 *s,
 		       int thread,
@@ -383,6 +383,7 @@ static int setup_partial_page(unsigned long s,
 			      unsigned long addr);
 static int init_dump(void);
 long get_addr2seg(long addr);
+static long get_eaddr2real(long addr);
 static void rmap_dump(void);
 
 /* Locals */
@@ -1122,21 +1123,36 @@ static long allocate_map(int thread,
     return r->r_phys;
 }
 
-static struct dump_entry *starting_d(unsigned long addr)
+static struct dump_entry *starting_d(unsigned long addr, 
+				     unsigned long real_addr)
 {
     int low, high;
+    int mid;
+    struct dump_entry *de;
 
     low = 0;
     high = dump_entry_cnt - 2;
-    while (low <= high) {
-	int mid = (low + high) / 2;
-	struct dump_entry *de = dump_entries + mid;
+    if (real_mode)
+	while (low <= high) {
+	    mid = (low + high) / 2;
+	    de = dump_entries + mid;
 
-	if (!de->de_isreal && addr > de->de_end)
-	    low = mid + 1;
-	else
-	    high = mid - 1;
-    }
+	    if (de->de_isreal && real_addr > (de->de_real + de->de_len))
+		low = mid + 1;
+	    else
+		high = mid - 1;
+	}
+    else
+	while (low <= high) {
+	    mid = (low + high) / 2;
+	    de = dump_entries + mid;
+
+	    if (!de->de_isreal && addr > de->de_end)
+		low = mid + 1;
+	    else
+		high = mid - 1;
+	}
+
     return dump_entries + low;
 }
 
@@ -1251,7 +1267,14 @@ static int mult_seg_setup(struct stage0 *s,
 	    continue;
 	}
 
-	d = starting_d(addr);
+	if (real_mode) {
+	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, 0, addr);
+	    DEBUG_PRINTF(("%s: %s[%d]=%s real\n",
+			  __func__, P(s), i, P(s->pte[i])));
+	    continue;
+	}
+
+	d = starting_d(addr, 0);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 		      __func__, P(addr), P(top), P(segval)));
@@ -1353,9 +1376,11 @@ static int span_seg_setup(struct stage0 *s,
 
 	    if (IN_USER_RANGE(addr, top)) {
 		if (pass == 0) {
-		    s->pte[i] = (struct stage1 *)allocate_map(thread, stage,
-						     skip, 0,
-						     addr);
+		    s->pte[i] = (struct stage1 *)allocate_map(thread,
+							      stage,
+							      skip, 
+							      0,
+							      addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
 				  __func__, P(s), i, P(s->pte[i])));
 		}
@@ -1364,15 +1389,31 @@ static int span_seg_setup(struct stage0 *s,
 
 	    if (IN_BOS_RANGE(addr, top)) {
 		if (pass == 0) {
-		    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip,
-						     bos_segval, addr);
+		    s->pte[i] = (struct stage1 *)allocate_map(thread, 
+							      stage,
+							      skip,
+							      bos_segval, 
+							      addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s bos\n",
 				  __func__, P(s), i, P(s->pte[i])));
 		}
 		continue;
 	    }
 
-	    d = starting_d(addr);
+	    if (real_mode) {
+		if (pass == 0) {
+		    s->pte[i] = (struct stage1 *)allocate_map(thread,
+							      stage,
+							      skip, 
+							      0,
+							      addr);
+		    DEBUG_PRINTF(("%s: %s[%d]=%s real\n",
+				  __func__, P(s), i, P(s->pte[i])));
+		}
+		continue;
+	    }
+
+	    d = starting_d(addr, 0);
 
 	    DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 			  __func__, P(addr), P(top), P(segval)));
@@ -1516,10 +1557,10 @@ static int span_seg_setup(struct stage0 *s,
 	     */
 	    if (pass == 0 && one_hit  && first_d) {
 		s->pte[i] =  (struct stage1 *)allocate_map(thread,
-						  stage,
-						  skip,
-						  first_d->de_segval,
-						  addr);
+							   stage,
+							   skip,
+							   first_d->de_segval,
+							   addr);
 		DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
 			      __func__, P(s), i, P(s->pte[i])));
 		continue;
@@ -1560,8 +1601,13 @@ static int span_seg_setup(struct stage0 *s,
 }
 
 /*
- * In this __func__, we have to watch out for partial pages in the dump
+ * In this routine, we have to watch out for partial pages in the dump
  * because skip will be PAGESIZE.
+ *
+ * firmware assisted dump modifications: if real_mode is 1, we need to
+ * convert addr from an eaddr to a real addr for each iteration.  We
+ * can then search for a real starting d and determine which pages in
+ * the dump to hook up.
  */
 static int setup_final(struct final_stage *s,
 		       int thread,
@@ -1571,6 +1617,7 @@ static int setup_final(struct final_stage *s,
 		       enum stages stage)
 {
     struct dump_entry *d_end = dump_entries + dump_entry_cnt;
+    unsigned long real_addr = 0;
     unsigned long top;
     unsigned long segval_addr = addr & ~(SEGSIZE - 1);
     int i;
@@ -1597,7 +1644,9 @@ static int setup_final(struct final_stage *s,
 	    continue;
 	}
 
-	d = starting_d(addr);
+	if (real_mode)
+	    real_addr = get_eaddr2real(addr);
+	d = starting_d(addr, real_addr);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 		      __func__, P(addr), P(top), P(segval)));
@@ -1605,6 +1654,18 @@ static int setup_final(struct final_stage *s,
 		      strlen(__func__), "starting_d", P(d->de_virt),
 		      P(d->de_virt+d->de_len),
 		      P(d->de_segval)));
+
+	if (real_mode) {
+	    if ((d->de_real <= real_addr) &&
+		((d->de_real + d->de_len - 1) >= (real_addr + skip - 1))) {
+		s->pte[i] = (long)d->de_dump + (real_addr - d->de_real);
+		DEBUG_PRINTF(("%s: de_real=%s de_len=%s\n",
+			      __func__, P(d->de_real), P(d->de_len)));
+		DEBUG_PRINTF(("%s: %s[%d]=%s match\n",
+			      __func__, P(s), i, P(s->pte[i])));
+	    }
+	    continue;
+	}
 
 	/*
 	 * starting_d finds a place to start searching through the
@@ -1631,12 +1692,12 @@ static int setup_final(struct final_stage *s,
 	    one_hit = 1;
 
 	    /* If this is an obvious match, then take it and go */
-	    if (!invalid_segval_p(segval, addr) && segval != -thread &&
+	    if (!invalid_segval_p(segval, addr) &&
+		segval != -thread &&
 		d->de_segval == segval &&
 		d->de_virt <= addr &&
 		(d->de_virt + d->de_len) >= top) {
-		s->pte[i] = (long)d->de_dump +
-			(addr - d->de_virt);
+		s->pte[i] = (long)d->de_dump + (addr - d->de_virt);
 		DEBUG_PRINTF(("%s: xxx de_segval=%s virt=%s len=%s top=%s\n",
 			      __func__, P(d->de_segval), P(d->de_virt),
 			      P(d->de_len), P(top)));
@@ -1761,7 +1822,7 @@ static int setup_partial_page(unsigned long s,
 			      unsigned long segval,
 			      unsigned long addr)
 {
-    struct dump_entry *d = starting_d(addr);
+    struct dump_entry *d = starting_d(addr, 0);
     struct dump_entry *d_end = dump_entries + dump_entry_cnt;
     long top = addr + PAGESIZE;
 
@@ -2142,7 +2203,6 @@ static int init_dump(void)
 	    }
 	}
     loop_end:
-	printf("i = %d; real_mode = %d\n", i, real_mode);
 	if (!cnt) {
 	    fprintf(stderr, "%s: Invalid dump\n", progname);
 	    return 1;
@@ -2353,6 +2413,38 @@ long get_addr2seg(long addr)
     DEBUG_PRINTF(("get_addr2seg: calling with addr=%s\n", P(addr)));
     ret = l_fcall(fcall.c_expr);
     DEBUG_PRINTF(("get_addr2seg: return with addr=%s\n", P(ret)));
+    return ret;
+}
+
+static long get_eaddr2real(long addr)
+{
+    static char *eaddr2real_name = "eaddr2real";
+    static cnode eaddr2real_cnode;
+    static cnode fcall;
+    static cnode_list arg_list;
+    static symptr eaddr2real_sym;
+    symptr stemp = name2userdef_all(eaddr2real_name);
+    long ret;
+    expr *exp;
+
+    if (!stemp) {
+	DEBUG_PRINTF(("get_eaddr2real: not defined returning %s\n", P(addr)));
+	return addr;
+    }
+
+    if (exp = arg_list.cl_cnode.c_expr)
+	exp->e_l = addr;
+    else if (sizeof(long) == 4)
+	mk_const(ns_inter, &arg_list.cl_cnode, addr, TP_LONG);
+    else
+	mk_const(ns_inter, &arg_list.cl_cnode, addr, TP_LONG_64);
+
+    if (stemp != eaddr2real_sym) {
+	(void) mk_ident(&eaddr2real_cnode, eaddr2real_name);
+	mk_fcall(&fcall, &eaddr2real_cnode, &arg_list);
+    }
+    ret = l_fcall(fcall.c_expr);
+    DEBUG_PRINTF(("get_eaddr2real: %s => %s\n", P(addr), P(ret)));
     return ret;
 }
 
