@@ -114,7 +114,17 @@ int yywinput(void);
     return ICON;
 }
 
-<normal>0[0-7]* {
+<normal>[1-9][0-9]*[uU] {
+    sscanf(yytext, "%llu", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.ival = (int)ltemp;
+    return ICON;
+}
+
+<normal>0[0-7]*[uU]? {
     sscanf(yytext, "%llo", &ltemp);
     if (ltemp & 0xffffffff00000000LL) {
 	yylval.llval = ltemp;
@@ -124,7 +134,7 @@ int yywinput(void);
     return ICON;
 }
 
-<normal>"0x"[0-9a-fA-F]+ {
+<normal>"0x"[0-9a-fA-F]+[uU]? {
     sscanf(yytext, "%llx", &ltemp);
     if (ltemp & 0xffffffff00000000LL) {
 	yylval.llval = ltemp;
@@ -144,7 +154,17 @@ int yywinput(void);
     return LCON;
 }
 
-<normal>0[0-7]*[lL] {
+<normal>[1-9][0-9]*[uU][lL] {
+    sscanf(yytext, "%llu", &ltemp);
+    if (ltemp & 0xffffffff00000000LL) {
+	yylval.llval = ltemp;
+	return LLCON;
+    }
+    yylval.lval = (long)ltemp;
+    return LCON;
+}
+
+<normal>0[0-7]*[uU]?[lL] {
     sscanf(yytext, "%llo", &ltemp);
     if (ltemp & 0xffffffff00000000LL) {
 	yylval.llval = ltemp;
@@ -154,7 +174,7 @@ int yywinput(void);
     return LCON;
 }
 
-<normal>"0x"[0-9a-fA-F]+[lL] {
+<normal>"0x"[0-9a-fA-F]+[uU]?[lL] {
     sscanf(yytext, "%llx", &ltemp);
     if (ltemp & 0xffffffff00000000LL) {
 	yylval.llval = ltemp;
@@ -169,12 +189,17 @@ int yywinput(void);
     return LLCON;
 }
 
-<normal>0[0-7]*[lL][lL] {
+<normal>[1-9][0-9]*[uU][lL][lL] {
+    sscanf(yytext, "%llu", &yylval.llval);
+    return LLCON;
+}
+
+<normal>0[0-7]*[uU]?[lL][lL] {
     sscanf(yytext, "%llo", &yylval.llval);
     return LLCON;
 }
 
-<normal>"0x"[0-9a-fA-F]+[lL][lL] {
+<normal>"0x"[0-9a-fA-F]+[uU]?[lL][lL] {
     sscanf(yytext, "%llx", &yylval.llval);
     return LLCON;
 }
