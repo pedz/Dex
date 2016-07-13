@@ -129,7 +129,7 @@ int int_purge_all_pages(expr *n)
 int int_sprintf(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
-    volatile long had_fault;
+    volatile int had_fault;
     int ret = -1;
 
     BEGIN_PROTECT(&had_fault);
@@ -138,21 +138,21 @@ int int_sprintf(expr *n)
 		   (va_list)(f + 3));
     END_PROTECT();
     if (had_fault)
-	printf("sprintf hit a page fault at %s\n", P(had_fault));
+	printf("sprintf hit a page fault at %s\n", P(fault_addr));
     return ret;
 }
 
 int int_printf(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
-    volatile long had_fault;
+    volatile int had_fault;
     int ret = -1;
 
     BEGIN_PROTECT(&had_fault);
     ret = vprintf((const unsigned char *)(f[1]), (va_list)(f + 2));
     END_PROTECT();
     if (had_fault)
-	printf("printf hit a page fault at %s\n", P(had_fault));
+	printf("printf hit a page fault at %s\n", P(fault_addr));
     return ret;
 }
 

@@ -230,25 +230,25 @@ command
 	}
     | data_def
 	{
-	    volatile long had_fault;
+	    volatile int had_fault;
 
 	    (void) mk_return_stmt((expr *)0);
 	    BEGIN_PROTECT(&had_fault);
 	    (void) execute_statement($1);
 	    END_PROTECT();
 	    if (had_fault)
-		printf("hit a page fault at %s\n", P(had_fault));
+		printf("hit a page fault at %s\n", P(fault_addr));
 	}
     | statement
 	{
-	    volatile long had_fault;
+	    volatile int had_fault;
 
 	    (void) mk_return_stmt((expr *)0);
 	    BEGIN_PROTECT(&had_fault);
 	    (void) execute_statement($1);
 	    END_PROTECT();
 	    if (had_fault)
-		printf("hit a page fault at %s\n", P(had_fault));
+		printf("hit a page fault at %s\n", P(fault_addr));
 	}
     ;
 

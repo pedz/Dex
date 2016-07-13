@@ -786,7 +786,8 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 	--count;
 	DEBUG_PRINTF(("map_catch: longjmp with paddr=%s to %s\n",
 		      P(paddr), P(map_jmp_ptr)));
-	longjmp(map_jmp_ptr, paddr);	/* WAS vaddr */
+	fault_addr = paddr;	/* was vaddr */
+	longjmp(map_jmp_ptr, 1);
     }
 
     fflush(stdout);
@@ -2445,6 +2446,16 @@ static long get_eaddr2real(long addr)
     }
     ret = l_fcall(fcall.c_expr);
     DEBUG_PRINTF(("get_eaddr2real: %s => %s\n", P(addr), P(ret)));
+    if (ret == 0xffffffffffffffffL) {
+	printf("eaddr2real for %#lx returned -1\n", addr);
+	if (map_jmp_ptr) {
+	    fault_addr = addr;
+	    longjmp(map_jmp_ptr, 1);
+	} else {
+	    printf("map_jmp_ptr not set\n");
+	}
+    }
+
     return ret;
 }
 

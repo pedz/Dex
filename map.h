@@ -103,6 +103,7 @@ typedef __MTYPE jmp_type;
 typedef int jmp_type;
 #endif
 jmp_type *map_jmp_ptr;
+ulong_t fault_addr;
 int map_init(void);
 
 typedef void *v_ptr;			/* A virtual address */
