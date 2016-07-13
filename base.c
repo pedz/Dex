@@ -150,6 +150,7 @@ ppftfl_t v1;
 pnft_t v2;
 ppltfl_t v3;
 pnlt_t v4;
+struct ppda v5;
 
 int main(int argc, char *argv[])
 {
