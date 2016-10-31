@@ -662,8 +662,8 @@ static int map_addr(long l)
 
     DEBUG_PRINTF(("map_addr: phys=%s size=%s thread=%d\n",
 		  P(r->r_phys), P(r->r_psize), r->r_thread));
-    DEBUG_PRINTF(("seg=%s virt=%s\n",
-		  P(r->r_seg), P(r->r_virt)));
+    DEBUG_PRINTF(("seg=%s virt=%s init=%d\n",
+		  P(r->r_seg), P(r->r_virt), r->r_initialized));
 
     if (!r->r_initialized) {
 	long segval;
@@ -1646,7 +1646,8 @@ static int setup_final(struct final_stage *s,
 	}
 
 	if (real_mode)
-	    real_addr = get_eaddr2real(addr);
+	    if ((real_addr = get_eaddr2real(addr)) == 0xffffffffffffffffL)
+		continue;
 	d = starting_d(addr, real_addr);
 
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
@@ -2397,8 +2398,10 @@ long get_addr2seg(long addr)
     long ret;
     expr *exp;
 
-    if (!stemp)				/* should never happen */
+    if (!stemp) {		/* should never happen */
+	DEBUG_PRINTF(("get_addr2seg: stemp == 0\n"));
 	return 0;
+    }
 
     if (exp = arg_list.cl_cnode.c_expr)
 	exp->e_l = addr;
@@ -2446,6 +2449,7 @@ static long get_eaddr2real(long addr)
     }
     ret = l_fcall(fcall.c_expr);
     DEBUG_PRINTF(("get_eaddr2real: %s => %s\n", P(addr), P(ret)));
+#if 0
     if (ret == 0xffffffffffffffffL) {
 	printf("eaddr2real for %#lx returned -1\n", addr);
 	if (map_jmp_ptr) {
@@ -2455,7 +2459,7 @@ static long get_eaddr2real(long addr)
 	    printf("map_jmp_ptr not set\n");
 	}
     }
-
+#endif
     return ret;
 }
 
