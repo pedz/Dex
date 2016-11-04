@@ -256,6 +256,7 @@ struct rmap {
     struct rmap *r_hash;		/* hash chain */
 
     int r_lineno;			/* line # where added to hash */
+
     uint r_mapped : 1;			/* true if actually mmaped */
     uint r_hashed : 1;			/* true if in hash */
     uint r_freed : 1;			/* true if freed */
@@ -383,6 +384,7 @@ static int setup_partial_page(unsigned long s,
 			      unsigned long addr);
 static int init_dump(void);
 long get_addr2seg(long addr);
+static long get_blah_blah(ulong_t start, ulong_t size);
 static long get_eaddr2real(long addr);
 static void rmap_dump(void);
 
@@ -401,7 +403,7 @@ static int dump_entry_cnt;
 static long no_page_start;
 static long no_page_end;
 static int quick_dump;
-static unsigned long bos_segval;
+static unsigned long bos_segval = -1;
 static unsigned long bos_addr_start;
 static unsigned long bos_addr_end;
 static char *s_strings[] = {
@@ -414,14 +416,14 @@ static char *s_strings[] = {
 int real_mode = 1;
 
 int thread_slot = -1;
-size_t thread_max;			/* last thread in dump */
+ulong_t thread_max;			/* last thread in dump */
 char *t_map;
 long map_top;				/* last allocated virtual address */
 int fromdump = 1;			/* always from a dump for now */
 void * volatile last_v = (void *)-1;
 void * volatile last_f = (void *)-1;
 
-// #define FAST_MAP
+#define FAST_MAP
 
 #ifdef FAST_MAP
 p_ptr v2f(v_ptr v)
@@ -550,8 +552,8 @@ static int invalid_segval_p(unsigned long segval, unsigned long addr)
 {
     return ((segval == (unsigned long)-1) ||
 	    (sizeof(segval) == 4 && segval == 0x007fffff) ||
-	    (segval == 0 &&(bos_segval != 0 ||
-			    (addr < bos_addr_start || addr >= bos_addr_end))));
+	    (segval == 0 && (bos_segval != 0 ||
+			     (addr < bos_addr_start || addr >= bos_addr_end))));
 }
 
 static struct rmap *rmap_find(long l)
@@ -632,16 +634,16 @@ static int map_addr(long l)
 	int offset;
 	int shift;
 
-	DEBUG_PRINTF(("thread slot:%d\n", thread_slot));
-	DEBUG_PRINTF(("last_v:0x%s last_f=0x%s\n", P(last_v), P(last_f)));
+	DEBUG_PRINTF(("thread slot:%d l:%s\n", thread_slot, P(l)));
+	DEBUG_PRINTF(("last_v:%s last_f=%s\n", P(last_v), P(last_f)));
 	p = (struct stage0 *)page_table[THREAD_SLOT];
-	DEBUG_PRINTF(("page_table[%d]=0x%s\n", THREAD_SLOT, P(p)));
+	DEBUG_PRINTF(("page_table[%d]=%s\n", THREAD_SLOT, P(p)));
 	for (shift = MAX_SHIFT_CNT; shift >= 0; --shift) {
 	    if (!p || ((long)p >= no_page_start && (long)p < no_page_end))
 		break;
 	    offset = (temp >> (PGSHIFT+(STAGE_BITS*shift))) & STAGE_MASK;
 	    p = (struct stage0 *)(p->pte[offset]);
-	    DEBUG_PRINTF(("p[%d]=0x%s\n", offset, P(p)));
+	    DEBUG_PRINTF(("p[%d]=%s\n", offset, P(p)));
 	}
 	return 1;
     }
@@ -688,13 +690,20 @@ static int map_addr(long l)
 	       P(r->r_phys + r->r_psize));
     mmap_ret = mmap((void *)r->r_phys, r->r_psize, PROT_READ|PROT_WRITE,
 		    MAP_FIXED|MAP_ANONYMOUS, -1, 0);
-    DEBUG_PRINTF(("mmap_ret = 0x%s\n", P(mmap_ret)));
+    DEBUG_PRINTF(("mmap_ret = %s\n", P(mmap_ret)));
     if (mmap_ret == (void *)-1) {
 	fflush(stdout);
 	fprintf(stderr, "Failed to mmap stage %s for %s\n",
 		s_strings[r->r_stage], P(r->r_phys));
 	fail(1);
     }
+    {
+	ulong_t *p = (ulong_t *)(r->r_phys);
+	ulong_t *e = (ulong_t *)(r->r_phys + r->r_psize);
+	for ( ; p < e; ++p)
+	    *p = (ulong_t)p | 0xf000000000000000ul;
+    }
+
     r->r_mapped = 1;
 
     switch (r->r_stage) {
@@ -755,7 +764,7 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     long paddr = scp->sc_jmpbuf.jmp_context.except[0];
 #endif
 
-    DEBUG_PRINTF(("\nmap_catch: last_v:0x%s thread:%d paddr:0x%s\n",
+    DEBUG_PRINTF(("\nmap_catch: last_v:%s thread:%d paddr:%s\n",
 		  P(last_v), thread_slot, P(paddr)));
     if (stmt_stack[cur_stmt_index]) {
 	struct stmt *s = statements + stmt_stack[cur_stmt_index];
@@ -826,7 +835,7 @@ int map_init(void)
     rmap_fill(USER_START,
 	      USER_END - USER_START,
 	      REAL_STAGE,
-	      0,
+	      -1,
 	      0,
 	      USER_START);
 
@@ -872,12 +881,11 @@ int map_init(void)
     page_table = (initial_stage_t **)smalloc((size_t)(thread_max + 1) * sizeof(page_table[0]));
     ++page_table;			/* allow for -1 entry */
     page_table[-1] = (initial_stage_t *)first_map;
-
     /*
      * Make reverse lookup for initial stage entries.
      */
     for (i = 0; i < thread_max; ++i) {
-	if (t_map[i]) {
+	if (real_mode || t_map[i]) {
 	    page_table[i] = (initial_stage_t *) map_top;
 
 	    rmap_fill(map_top,
@@ -934,6 +942,22 @@ static int rmap_hash(struct rmap *r)
     return index;
 }
 
+static void redo_hash()
+{
+    struct rmap *r = rmap;
+    struct rmap *r_end = r + rmap_used;
+    size_t h_new = rmap_max * sizeof((*rmap_hash_table)[0]);
+
+    free(rmap_hash_table);
+    rmap_hash_table = (struct rmap *(*)[])smalloc(h_new);
+
+    for ( ; r < r_end; ++r)
+	if (r->r_hashed) {
+	    r->r_hashed = 0;
+	    add_to_hash(r, __LINE__);
+	}
+}
+
 /*
  * Because the rmap's can be reallocated, this routine returns an
  * index.  Index's should be used if they are going to be saved for
@@ -973,19 +997,9 @@ static struct rmap *rmap_alloc(int size)
 	} else {
 	    size_t r_old = rmap_max * sizeof(*rmap);
 	    size_t r_new = (rmap_max = (1 << ++rmap_shift)) * sizeof(*rmap);
-	    size_t h_new = rmap_max * sizeof((*rmap_hash_table)[0]);
-	    struct rmap *r, *r_end;
 
-	    r = rmap = (struct rmap *)srealloc(rmap, r_new, r_old);
-	    r_end = r + rmap_used;
-	    free(rmap_hash_table);
-	    rmap_hash_table = (struct rmap *(*)[])smalloc(h_new);
-
-	    for ( ; r < r_end; ++r)
-		if (r->r_hashed) {
-		    r->r_hashed = 0;
-		    add_to_hash(r, __LINE__);
-		}
+	    rmap = (struct rmap *)srealloc(rmap, r_new, r_old);
+	    redo_hash();
 
 	    DEBUG_PRINTF(("rmap's increased to %d\n", rmap_max));
 	}
@@ -1075,6 +1089,11 @@ static void rmap_fill(unsigned long phys,
     add_to_hash(rp, __LINE__);
 }
 
+void xmap_review()
+{
+    
+}
+
 static struct rmap *xmap_find(enum stages stage,
 			      unsigned long seg,
 			      unsigned long virt)
@@ -1103,7 +1122,9 @@ static long allocate_map(int thread,
 			 unsigned long virt)
 {
     long result;
-    struct rmap *r = xmap_find(stage, seg, virt);
+    struct rmap *r;
+    
+    r = xmap_find(stage, seg, virt);
 
     if (r) {
 	DEBUG_PRINTF(("allocate_map: reuse %s %s %s\n",
@@ -1254,7 +1275,29 @@ static int mult_seg_setup(struct stage0 *s,
 	top = addr + skip;
 
 	if (IN_USER_RANGE(addr, top)) {
-	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, 0, addr);
+	    /*
+	     * For stage0 (when the printf above says "stage1" because
+	     * we are filling out a stage0 area with pointers to
+	     * stage1 areas), this will be true for the first pointer
+	     * which is the address range will be
+	     * 0x0000000000000000 - 0x0008000000000000
+	     *
+	     * This implies that all threads will reuse this area.
+	     * That's fine for now but will be an issue if / when we
+	     * ever try to reach up into user space in a dump which is
+	     * theoretically possible with a "full" firmware assisted
+	     * dump.
+	     *
+	     * The same is true for stage1 when creating stage2
+	     * areas.  In this case, the address range will be
+	     * 0x0000000000000000 - 0x0000004000000000
+	     *
+	     * We also use the bos_segval here instead of 0 because
+	     * the addr will be 0 in all cases.
+	     * Really... IN_USER_RANGE is not correctly defined but
+	     * I'm scared to change it and make it more restrictive.
+	     */
+	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, bos_segval, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s user\n",
 			  __func__, P(s), i, P(s->pte[i])));
 	    continue;
@@ -1269,7 +1312,21 @@ static int mult_seg_setup(struct stage0 *s,
 	}
 
 	if (real_mode) {
-	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, 0, addr);
+	    ulong_t seg;
+
+	    /*
+	     * If the USER area has not been mapped yet, then we can't
+	     * call the pseudo code so we just use bos_segval.  This
+	     * implies that the mapping for all threads below USER_END
+	     * will resolve to the same area and not be able to be
+	     * thread specific.
+	     */
+	    if (addr < USER_END)
+		seg = bos_segval;
+	    else {
+		seg = get_blah_blah(addr, skip);
+	    }
+	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, seg, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s real\n",
 			  __func__, P(s), i, P(s->pte[i])));
 	    continue;
@@ -1365,6 +1422,9 @@ static int span_seg_setup(struct stage0 *s,
     int pass;
     int i;
 
+    for (i = 0; i < STAGE_SIZE; ++i)
+	s->pte[i] = (struct stage1 *)no_page_start;
+
     for (pass = 0; pass < 2; ++pass) {
 	addr = addr_save;
 
@@ -1403,10 +1463,18 @@ static int span_seg_setup(struct stage0 *s,
 
 	    if (real_mode) {
 		if (pass == 0) {
+		    ulong_t seg;
+
+		    if (addr < USER_END)
+			seg = bos_segval;
+		    else {
+			DEBUG_PRINTF(("%s: fetching segment for %#018lx\n", __func__, addr));
+			seg = get_addr2seg(addr);
+		    }
 		    s->pte[i] = (struct stage1 *)allocate_map(thread,
 							      stage,
 							      skip, 
-							      0,
+							      seg,
 							      addr);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s real\n",
 				  __func__, P(s), i, P(s->pte[i])));
@@ -2232,6 +2300,7 @@ static int init_dump(void)
 	    if (real_mode) {
 		bos_addr_start = 0;
 		bos_addr_end = 256 * 1024 * 1024; // 256M
+		thread_max = 0x8000ul;		  // NTHREAD
 	    } else {
 		++thread_max;
 		t_map = (char *)smalloc(thread_max);
@@ -2321,9 +2390,9 @@ void trace_mappings(void)
     int index;
 
     fprintf(stderr, "THREAD_SLOT is %d\n", THREAD_SLOT);
-    fprintf(stderr, "last_v is 0x%s\n", P(last_v));
-    fprintf(stderr, "last_f is 0x%s\n", P(last_f));
-    fprintf(stderr, "map_top is 0x%s\n", P(map_top));
+    fprintf(stderr, "last_v is %s\n", P(last_v));
+    fprintf(stderr, "last_f is %s\n", P(last_f));
+    fprintf(stderr, "map_top is %s\n", P(map_top));
 
     if (sizeof(long) == 8) {
 	shift_mult = 3;
@@ -2398,7 +2467,7 @@ long get_addr2seg(long addr)
     long ret;
     expr *exp;
 
-    if (!stemp) {		/* should never happen */
+    if (!stemp) {
 	DEBUG_PRINTF(("get_addr2seg: stemp == 0\n"));
 	return 0;
     }
@@ -2420,6 +2489,54 @@ long get_addr2seg(long addr)
     return ret;
 }
 
+/*
+ * Calls the blah_blah pseudo code routine passing it start and start+size.
+ */
+static long get_blah_blah(ulong_t start, ulong_t size)
+{
+    static char *blah_blah_name = "blah_blah";
+    static cnode blah_blah_cnode;
+    static cnode fcall;
+    static cnode_list arg_list_1st;
+    static cnode_list arg_list_2nd;
+    static symptr blah_blah_sym;
+    symptr stemp = name2userdef_all(blah_blah_name);
+    long ret = 0;
+    expr *exp;
+
+    if (!stemp) {
+	DEBUG_PRINTF(("get_blah_blah: not defined returning %s\n", P(ret)));
+	return ret;
+    }
+
+    if (exp = arg_list_1st.cl_cnode.c_expr)
+	exp->e_l = start;
+    else if (sizeof(long) == 4)
+	mk_const(ns_inter, &arg_list_1st.cl_cnode, start, TP_LONG);
+    else
+	mk_const(ns_inter, &arg_list_1st.cl_cnode, start, TP_LONG_64);
+
+    if (exp = arg_list_2nd.cl_cnode.c_expr)
+	exp->e_l = (start + size - 1);
+    else {
+	if (sizeof(long) == 4)
+	    mk_const(ns_inter, &arg_list_2nd.cl_cnode, (start + size - 1), TP_LONG);
+	else
+	    mk_const(ns_inter, &arg_list_2nd.cl_cnode, (start + size - 1), TP_LONG_64);
+	arg_list_2nd.cl_next = &arg_list_1st;
+    }
+    
+    if (stemp != blah_blah_sym) {
+	(void) mk_ident(&blah_blah_cnode, blah_blah_name);
+	mk_fcall(&fcall, &blah_blah_cnode, &arg_list_2nd);
+    }
+
+    DEBUG_PRINTF(("get_blah_blah: calling with start=%s end=%s\n", P(start), P(start + size - 1)));
+    ret = l_fcall(fcall.c_expr);
+    DEBUG_PRINTF(("get_blah_blah: %s, %s => %s\n", P(start), P(size), P(ret)));
+    return ret;
+}
+
 static long get_eaddr2real(long addr)
 {
     static char *eaddr2real_name = "eaddr2real";
@@ -2427,6 +2544,7 @@ static long get_eaddr2real(long addr)
     static cnode fcall;
     static cnode_list arg_list;
     static symptr eaddr2real_sym;
+    static int first_time = 1;
     symptr stemp = name2userdef_all(eaddr2real_name);
     long ret;
     expr *exp;
@@ -2434,6 +2552,71 @@ static long get_eaddr2real(long addr)
     if (!stemp) {
 	DEBUG_PRINTF(("get_eaddr2real: not defined returning %s\n", P(addr)));
 	return addr;
+    }
+
+    /*
+     * This is a "dangerous" dance.  We run through all of the rmap
+     * structures updating them to have the correct segment value.  We
+     * do this only in real mode and only the first time we discover
+     * that eaddr2real has been loaded.  We actually use addr2seg but,
+     * currently, they both get loaded from the same file.
+     *
+     * We make two passes.  The first pass we touch all the things we
+     * are going to touch but do not do any updates.  Then the second
+     * pass should go without any faults.  In the second pass, we
+     * update r_seg which will affect the hash.  We then redo the
+     * hash.  If we fault during the second pass, we can end up not
+     * being able to find the rmap and we'll blow a gasket.
+     */
+    if (real_mode && first_time) {
+	struct rmap *r;
+	int i;
+
+	first_time = 0;
+	DEBUG_PRINTF(("first_time: pretouch\n"));
+	for (i = 0; i < rmap_used; ++i) {
+	    r = rmap + i;
+	    if (r->r_freed ||
+		(r->r_phys_set == 0) ||
+		IN_USER_RANGE(r->r_virt, r->r_virt + r->r_psize) ||
+		(r->r_thread != -1)) {
+		continue;
+	    }
+	    get_addr2seg(r->r_virt);
+	}
+	    
+	bos_segval = get_addr2seg(0);
+	DEBUG_PRINTF(("first_time: bos_segval = %#018lx\n", bos_segval));
+	for (i = 0; i < rmap_used; ++i) {
+	    r = rmap + i;
+	    DEBUG_PRINTF(("first_time: %6d %s %s %s %s %6d %8s %d%d%d%d%d%d%d\n",
+			  i, P(r->r_phys), P(r->r_psize), P(r->r_seg),
+			  P(r->r_virt), r->r_thread, s_strings[r->r_stage],
+			  r->r_mapped,
+			  r->r_hashed,
+			  r->r_freed,
+			  r->r_initialized,
+			  r->r_phys_set,
+			  r->r_true_segval,
+			  r->r_in_addr2seg));
+
+	    if (r->r_freed ||
+		(r->r_phys_set == 0) ||
+		IN_USER_RANGE(r->r_virt, r->r_virt + r->r_psize) ||
+		(r->r_thread != -1)) {
+		DEBUG_PRINTF(("first_time: r->r_virt %#018lx %d %d %d %d\n",
+			      r->r_virt,
+			      r->r_freed,
+			      (r->r_phys_set == 0),
+			      IN_USER_RANGE(r->r_virt, r->r_virt + r->r_psize),
+			      (r->r_thread != -1)));
+		continue;
+	    }
+	    r->r_seg = get_addr2seg(r->r_virt);
+	    DEBUG_PRINTF(("first_time: addr %#018lx => %#018lx\n", r->r_virt, r->r_seg));
+	}
+	DEBUG_PRINTF(("first_time: done\n"));
+	redo_hash();
     }
 
     if (exp = arg_list.cl_cnode.c_expr)
@@ -2447,19 +2630,10 @@ static long get_eaddr2real(long addr)
 	(void) mk_ident(&eaddr2real_cnode, eaddr2real_name);
 	mk_fcall(&fcall, &eaddr2real_cnode, &arg_list);
     }
+
+    DEBUG_PRINTF(("get_eaddr2real: calling with addr=%s\n", P(addr)));
     ret = l_fcall(fcall.c_expr);
     DEBUG_PRINTF(("get_eaddr2real: %s => %s\n", P(addr), P(ret)));
-#if 0
-    if (ret == 0xffffffffffffffffL) {
-	printf("eaddr2real for %#lx returned -1\n", addr);
-	if (map_jmp_ptr) {
-	    fault_addr = addr;
-	    longjmp(map_jmp_ptr, 1);
-	} else {
-	    printf("map_jmp_ptr not set\n");
-	}
-    }
-#endif
     return ret;
 }
 
@@ -2470,15 +2644,20 @@ static void rmap_dump(void)
     struct rmap *r_end = r + rmap_used;
 
     DEBUG_PRINTF(("rmap dump\n"));
-    DEBUG_PRINTF(("number %*s %*s %*s %*s thread    stage mfiptx\n",
-		  sizeof(long)*2, "phys",
-		  sizeof(long)*2, "size",
-		  sizeof(long)*2, " seg",
-		  sizeof(long)*2, "virt"));
+    DEBUG_PRINTF(("number %*s %*s %*s %*s thread    stage mhfiptx\n",
+		  sizeof(long)*2+2, "phys",
+		  sizeof(long)*2+2, "size",
+		  sizeof(long)*2+2, " seg",
+		  sizeof(long)*2+2, "virt"));
     for ( ; r < r_end; ++r, ++i)
-	DEBUG_PRINTF(("%6d %s %s %s %s %6d %8s %d%d%d%d%d%d\n",
+	DEBUG_PRINTF(("%6d %s %s %s %s %6d %8s %d%d%d%d%d%d%d\n",
 		      i, P(r->r_phys), P(r->r_psize), P(r->r_seg),
 		      P(r->r_virt), r->r_thread, s_strings[r->r_stage],
-		      r->r_mapped, r->r_freed, r->r_initialized,
-		      r->r_phys_set, r->r_true_segval, r->r_in_addr2seg));
+		      r->r_mapped,
+		      r->r_hashed,
+		      r->r_freed,
+		      r->r_initialized,
+		      r->r_phys_set,
+		      r->r_true_segval,
+		      r->r_in_addr2seg));
 }

@@ -203,7 +203,7 @@ int load(char *path, long text_base, long data_base)
 	       P(map_top + sbuf.st_size));
     m = mmap((void *)map_top, sbuf.st_size, PROT_READ,
 	     MAP_FILE|MAP_VARIABLE, fd, 0);
-    DEBUG_PRINTF(("load: map_top=0x%s m=0x%s\n", P(map_top), P(m)));
+    DEBUG_PRINTF(("load: map_top=%s m=%s\n", P(map_top), P(m)));
 
     if (m == (caddr_t)-1) {
 	perror("mmap3");

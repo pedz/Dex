@@ -176,7 +176,7 @@ large_t  atolarge (char *s) { return strtol (s, (char **)0, 0); }
 
 char *print_field(int size, ...)
 {
-    static char print_buf[20*32];
+    static char print_buf[22*32];
     static char *ptr = print_buf;
     char *ret = ptr;
     va_list Argp;
@@ -194,26 +194,26 @@ char *print_field(int size, ...)
     switch (size) {
     case sizeof(char):
 	ac = va_arg(Argp, unsigned char);
-	sprintf(ptr, "%0*x", size*2, ac);
+	sprintf(ptr, "%#0*x", size*2 + 2, ac);
 	break;
     case sizeof(short):
 	as = va_arg(Argp, unsigned short);
-	sprintf(ptr, "%0*x", size*2, as);
+	sprintf(ptr, "%#0*x", size*2 + 2, as);
 	break;
     case sizeof(int):
 	ai = va_arg(Argp, unsigned int);
-	sprintf(ptr, "%0*x", size*2, ai);
+	sprintf(ptr, "%#0*x", size*2 + 2, ai);
 	break;
     case sizeof(long long):
 	al = va_arg(Argp, unsigned long long);
-	sprintf(ptr, "%0*llx", size*2, al);
+	sprintf(ptr, "%#0*llx", size*2 + 2, al);
 	break;
     default:
 	fprintf(stderr, "Bad size in print_field %d\n", size);
 	exit(1);
     }
-    ptr += 20;
-    if ((ptr + 20) > (print_buf + sizeof(print_buf)))
+    ptr += 22;
+    if ((ptr + 22) > (print_buf + sizeof(print_buf)))
 	ptr = print_buf;
     return ret;
 }

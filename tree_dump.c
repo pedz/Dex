@@ -694,14 +694,14 @@ static void internal_tree_dump(FILE *f, expr *e)
 	 t < t_end && t->t_func != e->e_func.i;
 	 ++t);
     if (t == t_end) {			/* not found */
-	fprintf(f, "expr at 0x%s not found\n", P(e));
+	fprintf(f, "expr at %s not found\n", P(e));
 	return;
     }
 
     fprintf(f, "(%s ", t->t_name);
     switch (t->t_args) {
     case E_ADDR:
-	fprintf(f, " 0x%s", P(e->e_addr));
+	fprintf(f, " %s", P(e->e_addr));
 	break;
     case E_BOTH:
 	if (e->e_bsize)
@@ -750,7 +750,7 @@ static void internal_tree_dump(FILE *f, expr *e)
 	fprintf(f, " %d", e->e_s);
 	break;
     case E_ST:
-	fprintf(f, " 0x%s", P(e->e_st));
+	fprintf(f, " %s", P(e->e_st));
 	break;
     case E_UCHAR:
 	fprintf(f, " %u", e->e_uc);
@@ -770,7 +770,7 @@ static void internal_tree_dump(FILE *f, expr *e)
 
 void tree_dump(FILE *f, expr *e)
 {
-    fprintf(f, "expr 0x%s:", P(e));
+    fprintf(f, "expr %s:", P(e));
     internal_tree_dump(f, e);
     fprintf(f, "\n");
 }

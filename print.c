@@ -205,12 +205,12 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 		if (buf[i] < ' ' || buf[i] > 126)
 		    break;
 	    if (i == sizeof(buf) || buf[i] == '\0') {
-		printf(" = 0x%s => \"%.*s\"\n", P(pval), sizeof(buf), buf);
+		printf(" = %s => \"%.*s\"\n", P(pval), sizeof(buf), buf);
 		EXIT_PROTECT(break);
 	    }
 	    END_PROTECT();
 	}
-	printf(" = 0x%s\n", P(pval));
+	printf(" = %s\n", P(pval));
 	break;
 
     case ARRAY_TYPE:
@@ -224,7 +224,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	if (!lower_index && !upper_index) { /* 0 size array from & op */
 	    printf("%*s", indent, "");
 	    print_name(name, tptr);
-	    printf(" = 0x%s\n", P(addr));
+	    printf(" = %s\n", P(addr));
 	    break;
 	}
 	range = upper_index - lower_index + 1;
@@ -277,9 +277,9 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	while (size > 8 * sizeof(large_t)) {
 	    rval = get_field(addr, offset, 8 * sizeof(large_t));
 #ifdef _LONG_LONG
-	    printf("%lld(0x%s), ", rval, P(rval));
+	    printf("%lld(%s), ", rval, P(rval));
 #else
-	    printf("%d(0x%s), ", rval, P(rval));
+	    printf("%d(%s), ", rval, P(rval));
 #endif
 	    offset += 8 * sizeof(large_t);
 	    size -= 8 * sizeof(large_t);
@@ -320,7 +320,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
     case PROC_TYPE:
 	printf("%*s", indent, "");
 	print_name(name, tptr);
-	printf(" = 0x%s\n", P(addr));
+	printf(" = %s\n", P(addr));
 	break;
 
     case FLOAT_TYPE:
@@ -344,7 +344,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	    }
 	printf("%*s", indent, "");
 	print_name(name, tptr);
-	printf(" = %s(0x%s)\n", e_val, P(eval));
+	printf(" = %s(%s)\n", e_val, P(eval));
 	break;
 
     case STRINGPTR_TYPE:

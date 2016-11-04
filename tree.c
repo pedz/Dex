@@ -1124,7 +1124,7 @@ void print_expression(cnode *c)
     numbuf[0] = 0;
     if (c->c_base == struct_type) {
 	p = v2f_type(char *, value.st);
-	sprintf(numbuf, "0x%s", P(value.st));
+	sprintf(numbuf, "%s", P(value.st));
     } else if (c->c_type->t_type == ARRAY_TYPE) {
 	typeptr rtptr = tptr->t_val.val_a.a_typedef;
 

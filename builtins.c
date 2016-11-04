@@ -356,8 +356,6 @@ static void do_long_funcs(void)
 	long (*st_func)(expr *n);
     };
     struct table tab[] = {
-	{ "addr2seg",     int_addr2seg },
-	{ "addr2segtest", int_addr2segtest },
 	{ "esidfun",      int_esidfun },
 	{ "f2v",          int_f2v },
 	{ "name2userdef", int_name2userdef },

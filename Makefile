@@ -27,7 +27,8 @@ PROGRAMS	= \
 	base \
 	dex \
 	view-dump \
-	xcoff-view
+	xcoff-view \
+	consts.c
 
 ILIST		= ${PROGRAMS}
 
@@ -106,5 +107,8 @@ scan.o : gram.h
 scan.o : scan.c
 stab.o : stab.c
 tree.o : gram.h
+
+consts.c : base
+	base > consts.c
 
 .include <${RULES_MK}>
