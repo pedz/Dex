@@ -74,7 +74,7 @@ CFLAGS		= \
 		  -qinfo=pro \
 		  -D_AIX41
 LIBFLAGS	= -L${X}
-LIBS		= lib/readline.a -ll -lxcurses
+dex_LIBS	= lib/readline.a -ll -lxcurses
 
 #
 # New system: we no longer try and find ourselves.  Rather we compile
