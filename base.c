@@ -90,6 +90,7 @@ extern system_configuration_t _system_configuration;
 #include <net/netopt.h>
 #include <net/net_malloc.h>
 #include <sctp_var.h>
+#include <sys/specnode.h>
 
 typedef unsigned char   uint8;
 typedef unsigned short  uint16;
@@ -192,6 +193,7 @@ struct promote_frag_nmdbg *v40;
 ndd_t *v41;
 struct arptab *v42;
 struct ifnet *v43;
+struct hnode *v44;
 
 static int print_it(int multi_1tb_ksp_segs)
 {
