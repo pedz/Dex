@@ -126,6 +126,12 @@ int int_purge_all_pages(expr *n)
     return purge_all_pages();
 }
 
+int int_rmap_dump(expr *n)
+{
+    rmap_dump();
+    return 1;
+}
+
 int int_sprintf(expr *n)
 {
     long *f = v2f_type(long *, frame_ptr);
@@ -293,6 +299,7 @@ static void do_int_funcs(void)
 	{ "load",             int_load },
 	{ "printf",           int_printf },
 	{ "purge_all_pages",  int_purge_all_pages },
+	{ "rmap_dump",        int_rmap_dump },
 	{ "purge_user_pages", int_purge_user_pages },
 	{ "regs_instr",       int_regs_instr },
 	{ "return_range",     int_return_range },
@@ -480,7 +487,9 @@ static void do_ulong_vars(void)
 	unsigned long *st_func;
     };
     struct table tab[] = {
-	{ "debug_mask",   &debug_mask }
+	{ "bos_segval", &bos_segval },
+	{ "debug_mask", &debug_mask },
+	{ "inv_segval", &inv_segval }
     };
     struct table *tp, *tp_end;
 #ifdef __64BIT__

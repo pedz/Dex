@@ -92,6 +92,8 @@ extern size_t thread_max;
 extern long map_top;
 extern int fromdump;
 extern int real_mode;
+extern  unsigned long bos_segval;
+extern  unsigned long inv_segval;
 
 #define v2f_type(type, vaddr) ((type)V2F((p_ptr)vaddr))
 #define f2v_type(type, vaddr) ((type)F2V((v_ptr)vaddr))
@@ -111,6 +113,8 @@ typedef void *p_ptr;			/* A physical address */
 
 extern p_ptr v2f(v_ptr);
 extern v_ptr f2v(p_ptr);
+extern long get_addr2seg(long addr);
+extern void rmap_dump(void);
 int open_dump(char *path);
 int purge_user_pages(void);
 int purge_all_pages(void);
@@ -141,7 +145,5 @@ void trace_mappings(void);
 enum stages {
     STAGE0, STAGE1, STAGE2, FINAL_STAGE, PARTIAL_PAGE, REAL_STAGE
 };
-
-long get_addr2seg(long addr);
 
 #endif /* __MAP_H */

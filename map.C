@@ -309,6 +309,7 @@ struct dump_entry {
 extern "C" p_ptr v2f(v_ptr v);
 extern "C" v_ptr f2v(p_ptr p);
 extern "C" long get_addr2seg(long addr);
+extern "C" void rmap_dump(void);
 extern "C" int purge_all_pages(void);
 extern "C" int purge_user_pages(void);
 extern "C" int return_range(char *t_name, char *d_name, void **startp, int *lenp);
@@ -324,6 +325,7 @@ extern "C" int mk_ident(cnode*,char*);
 extern "C" void mk_fcall(cnode*,cnode*,cnode_list*);
 extern "C" long l_fcall(expr*);
 extern "C" void *safe_realloc(void*,unsigned long,unsigned long,char*,int);
+extern "C" void dump_stmt_stack(FILE *f);
 
 /* Local Prototypes */
 static struct rmap *rmap_find(long l);
@@ -384,9 +386,8 @@ static int setup_partial_page(unsigned long s,
 			      unsigned long addr);
 static int init_dump(void);
 long get_addr2seg(long addr);
-static long get_blah_blah(ulong_t start, ulong_t size);
+static ulong_t get_eaddr2cookie(ulong_t start, ulong_t size);
 static long get_eaddr2real(long addr);
-static void rmap_dump(void);
 
 /* Locals */
 static struct rmap *rmap;
@@ -403,9 +404,12 @@ static int dump_entry_cnt;
 static long no_page_start;
 static long no_page_end;
 static int quick_dump;
-static unsigned long bos_segval = -1;
+ulong_t bos_segval = -1;
+ulong_t inv_segval;
+static int first_time_done = 0;
 static unsigned long bos_addr_start;
 static unsigned long bos_addr_end;
+static ulong_t thread_minus_1_cookies[STAGE_SIZE];
 static char *s_strings[] = {
     "stage0", "stage1", "stage2", "final", "partial", "real"
 };
@@ -1257,6 +1261,7 @@ static int mult_seg_setup(struct stage0 *s,
 			  enum stages stage)
 {
     struct dump_entry *d_end = dump_entries + dump_entry_cnt;
+    initial_stage_t *S0 = 0;
     unsigned long top;
     int i;
 
@@ -1264,6 +1269,9 @@ static int mult_seg_setup(struct stage0 *s,
 		  __func__, s_strings[stage], P(s), thread));
     DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
 		  __func__, P(segval), P(addr), P(skip)));
+
+    if ((stage == INITIAL_STAGE_P1) && (thread_slot != -1))
+	S0 = page_table[-1];
 
     for (i = 0; i < STAGE_SIZE; ++i)
 	s->pte[i] = (struct stage1 *)no_page_start;
@@ -1314,6 +1322,16 @@ static int mult_seg_setup(struct stage0 *s,
 	if (real_mode) {
 	    ulong_t seg;
 
+	    if (S0) {
+		if (thread_minus_1_cookies[i] == bos_segval) {
+		    s->pte[i] = S0->pte[i];
+		    continue;
+		}
+
+		if (thread_minus_1_cookies[i] == inv_segval)
+		    continue;
+	    }
+
 	    /*
 	     * If the USER area has not been mapped yet, then we can't
 	     * call the pseudo code so we just use bos_segval.  This
@@ -1324,7 +1342,8 @@ static int mult_seg_setup(struct stage0 *s,
 	    if (addr < USER_END)
 		seg = bos_segval;
 	    else {
-		seg = get_blah_blah(addr, skip);
+		if (((seg = get_eaddr2cookie(addr, skip)) == inv_segval) && first_time_done)
+		    continue;
 	    }
 	    s->pte[i] = (struct stage1 *)allocate_map(thread, stage, skip, seg, addr);
 	    DEBUG_PRINTF(("%s: %s[%d]=%s real\n",
@@ -2490,22 +2509,22 @@ long get_addr2seg(long addr)
 }
 
 /*
- * Calls the blah_blah pseudo code routine passing it start and start+size.
+ * Calls the eaddr2cookie pseudo code routine passing it start and start+size.
  */
-static long get_blah_blah(ulong_t start, ulong_t size)
+static ulong_t get_eaddr2cookie(ulong_t start, ulong_t size)
 {
-    static char *blah_blah_name = "blah_blah";
-    static cnode blah_blah_cnode;
+    static char *eaddr2cookie_name = "eaddr2cookie";
+    static cnode eaddr2cookie_cnode;
     static cnode fcall;
     static cnode_list arg_list_1st;
     static cnode_list arg_list_2nd;
-    static symptr blah_blah_sym;
-    symptr stemp = name2userdef_all(blah_blah_name);
+    static symptr eaddr2cookie_sym;
+    symptr stemp = name2userdef_all(eaddr2cookie_name);
     long ret = 0;
     expr *exp;
 
     if (!stemp) {
-	DEBUG_PRINTF(("get_blah_blah: not defined returning %s\n", P(ret)));
+	DEBUG_PRINTF(("get_eaddr2cookie: not defined returning %s\n", P(ret)));
 	return ret;
     }
 
@@ -2526,14 +2545,14 @@ static long get_blah_blah(ulong_t start, ulong_t size)
 	arg_list_2nd.cl_next = &arg_list_1st;
     }
     
-    if (stemp != blah_blah_sym) {
-	(void) mk_ident(&blah_blah_cnode, blah_blah_name);
-	mk_fcall(&fcall, &blah_blah_cnode, &arg_list_2nd);
+    if (stemp != eaddr2cookie_sym) {
+	(void) mk_ident(&eaddr2cookie_cnode, eaddr2cookie_name);
+	mk_fcall(&fcall, &eaddr2cookie_cnode, &arg_list_2nd);
     }
 
-    DEBUG_PRINTF(("get_blah_blah: calling with start=%s end=%s\n", P(start), P(start + size - 1)));
+    DEBUG_PRINTF(("get_eaddr2cookie: calling with start=%s end=%s\n", P(start), P(start + size - 1)));
     ret = l_fcall(fcall.c_expr);
-    DEBUG_PRINTF(("get_blah_blah: %s, %s => %s\n", P(start), P(size), P(ret)));
+    DEBUG_PRINTF(("get_eaddr2cookie: %s, %s => %s\n", P(start), P(size), P(ret)));
     return ret;
 }
 
@@ -2569,6 +2588,9 @@ static long get_eaddr2real(long addr)
      * being able to find the rmap and we'll blow a gasket.
      */
     if (real_mode && first_time) {
+	initial_stage_t *S0 = page_table[-1];;
+	unsigned long addr = 0;
+	unsigned long skip = (((unsigned long)-1) >> STAGE_BITS) + 1;
 	struct rmap *r;
 	int i;
 
@@ -2585,8 +2607,6 @@ static long get_eaddr2real(long addr)
 	    get_addr2seg(r->r_virt);
 	}
 	    
-	bos_segval = get_addr2seg(0);
-	DEBUG_PRINTF(("first_time: bos_segval = %#018lx\n", bos_segval));
 	for (i = 0; i < rmap_used; ++i) {
 	    r = rmap + i;
 	    DEBUG_PRINTF(("first_time: %6d %s %s %s %s %6d %8s %d%d%d%d%d%d%d\n",
@@ -2617,6 +2637,18 @@ static long get_eaddr2real(long addr)
 	}
 	DEBUG_PRINTF(("first_time: done\n"));
 	redo_hash();
+
+	DEBUG_PRINTF(("first_time: thread_slot:%d; inv_segval:%#018lx; bos_segval:%#018lx\n",
+		      thread_slot, inv_segval, bos_segval));
+	for (i = 0; i < STAGE_SIZE; ++i) {
+	    thread_minus_1_cookies[i] = get_eaddr2cookie(addr, skip);
+	    if (thread_minus_1_cookies[i] == inv_segval)
+		S0->pte[i] = (struct stage1 *)no_page_start;
+	    DEBUG_PRINTF(("first_time: thread_minus_1_cookies[%d] = %#018lx\n", i, thread_minus_1_cookies[i]));
+	    addr += skip;
+	}
+
+	first_time_done = 1;
     }
 
     if (exp = arg_list.cl_cnode.c_expr)
@@ -2637,7 +2669,7 @@ static long get_eaddr2real(long addr)
     return ret;
 }
 
-static void rmap_dump(void)
+void rmap_dump(void)
 {
     int i = 0;
     struct rmap *r = rmap;

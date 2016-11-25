@@ -68,5 +68,6 @@ stmt_index link_conts(void);
 void dump_stmts(void);
 void set_alloc(stmt_index s, int alloc);
 void fail(int err);
+void dump_stmt_stack(FILE *f);
 
 #endif /* __STMT_H */

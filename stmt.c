@@ -413,6 +413,19 @@ void set_alloc(stmt_index s, int alloc)
     statements[s].stmt_alloc = alloc;
 }
 
+void dump_stmt_stack(FILE *f)
+{
+    struct stmt *s;
+
+    fprintf(f, "Failure trace back\n");
+    while (cur_stmt_index >= 0) {
+	s = statements + stmt_stack[cur_stmt_index];
+	--cur_stmt_index;
+	fprintf(f, "Line %d of %s: ", s->stmt_line, s->stmt_file);
+	print_stmt(f, s);
+    }
+}
+
 extern long frame_ptr;
 extern long stack_ptr;
 extern long last_v;
@@ -420,19 +433,12 @@ extern long last_v;
 void fail(int err)
 {
     static int in_fail;
-    struct stmt *s;
 
     if (in_fail)
 	exit(err);
 
     in_fail = 1;
-    fprintf(stderr, "Failure trace back\n");
-    while (cur_stmt_index >= 0) {
-	s = statements + stmt_stack[cur_stmt_index];
-	--cur_stmt_index;
-	fprintf(stderr, "Line %d of %s: ", s->stmt_line, s->stmt_file);
-	print_stmt(stderr, s);
-    }
+    dump_stmt_stack(stderr);
     fprintf(stderr, "frame=%s stack=%s\n", P(frame_ptr), P(stack_ptr));
     fprintf(stderr, "map_top = %s thread_slot = %d\n", P(map_top),
 	    thread_slot);
