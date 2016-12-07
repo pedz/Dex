@@ -799,7 +799,8 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
 	--count;
 	DEBUG_PRINTF(("map_catch: longjmp with paddr=%s to %s\n",
 		      P(paddr), P(map_jmp_ptr)));
-	fault_addr = paddr;	/* was vaddr */
+	fault_paddr = paddr;
+	fault_vaddr = (ulong_t)last_v; // not really what I want. :-(
 	longjmp(map_jmp_ptr, 1);
     }
 

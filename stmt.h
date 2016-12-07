@@ -69,5 +69,6 @@ void dump_stmts(void);
 void set_alloc(stmt_index s, int alloc);
 void fail(int err);
 void dump_stmt_stack(FILE *f);
+void print_fault(char *where);
 
 #endif /* __STMT_H */

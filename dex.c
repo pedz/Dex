@@ -16,6 +16,7 @@ static char sccs_id[] = "@(#)dex.c	1.11";
 #include "builtins.h"
 #include "fcall.h"
 #include "gram_pre.h"
+#include "stmt.h"
 
 #define DEBUG_BIT DEX_C_BIT
 

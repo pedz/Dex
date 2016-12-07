@@ -237,7 +237,7 @@ command
 	    (void) execute_statement($1);
 	    END_PROTECT();
 	    if (had_fault)
-		printf("hit a page fault at %s\n", P(fault_addr));
+		print_fault("data_def");
 	}
     | statement
 	{
@@ -248,7 +248,7 @@ command
 	    (void) execute_statement($1);
 	    END_PROTECT();
 	    if (had_fault)
-		printf("hit a page fault at %s\n", P(fault_addr));
+		print_fault("statement");
 	}
     ;
 

@@ -445,3 +445,11 @@ void fail(int err)
     trace_mappings();
     exit(err);
 }
+
+void print_fault(char *where)
+{
+    struct stmt *s = statements + stmt_stack[cur_stmt_index];
+
+    printf("%s at %s:%d hit a page fault. paddr=%s; last_v=%s\n",
+	   where, s->stmt_file, s->stmt_line, P(fault_paddr), P(fault_vaddr));
+}

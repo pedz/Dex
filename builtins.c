@@ -144,7 +144,7 @@ int int_sprintf(expr *n)
 		   (va_list)(f + 3));
     END_PROTECT();
     if (had_fault)
-	printf("sprintf hit a page fault at %s\n", P(fault_addr));
+	print_fault("sprintf");
     return ret;
 }
 
@@ -158,7 +158,7 @@ int int_printf(expr *n)
     ret = vprintf((const unsigned char *)(f[1]), (va_list)(f + 2));
     END_PROTECT();
     if (had_fault)
-	printf("printf hit a page fault at %s\n", P(fault_addr));
+	print_fault("printf");
     return ret;
 }
 
