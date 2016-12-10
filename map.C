@@ -266,39 +266,36 @@ struct rmap {
     uint r_in_addr2seg : 1;
 };
 
+/*
+ * This use to be a more complex structure with a union for a real
+ * entry and a virtual entry.  But I scrapped that because of all the
+ * overlap.  Everything is defined as unsigned long long but in theory
+ * the virtual address and segments are really just unsigned long.  In
+ * the 64 bit case, they are the same size.  In the 32 bit case, we'll
+ * just use the lower parts.
+ */
 struct dump_entry {
     unsigned int de_isreal : 1;
-    unsigned long de_len;		/* length of entry */
-    union {
-	struct {
-	    unsigned long dv_virt;	/* virtual address */
-	    unsigned long dv_segval;	/* segment register */
-	    unsigned long dv_end;	/* end of region */
-	    unsigned long dv_min;	/* see note just below */
-	} du_virt;
-	unsigned long long du_real;	/* real address */
-    } de_union;
+    unsigned long de_segval;
+    unsigned long long de_start;	/* start of entry */
+    unsigned long long de_len;		/* length of entry */
+    unsigned long long de_end;		/* end of region */
+    unsigned long long de_min;		/* see note just below */
     void *de_dump;			/* offset into dump */
 };
 
-#define de_virt   de_union.du_virt.dv_virt
-#define de_segval de_union.du_virt.dv_segval
-#define de_end    de_union.du_virt.dv_end
-#define de_min    de_union.du_virt.dv_min
-#define de_real   de_union.du_real
-
 /*
- * Note about dv_min: The dump entries are sorted by du_virt.dv_end
+ * Note about de_min: The dump entries are sorted by du_virt.dv_end
  * with the smaller du_virt.dv_end addresses at the lower end of the
  * dump_entries.  After the sort, the array is traversed from high to
- * low and dv_min is set to the lowest beginning address found so far.
+ * low and de_min is set to the lowest beginning address found so far.
  *
  * When we went to look for entries, we do a binary search using
  * du_virt.dv_end to find where in the array to start.  We will know
  * that all entries below the one we start at will have ending
  * addresses lower than the lowest address we are trying to fill and
  * so can not possibly be useful to look at.  We will look at entries
- * until dv_min is above the highest address that we are trying to
+ * until de_min is above the highest address that we are trying to
  * fill which will tell us that all entries above that point start
  * above the point we are trying to fill.
  *
@@ -1164,7 +1161,7 @@ static struct dump_entry *starting_d(unsigned long addr,
 	    mid = (low + high) / 2;
 	    de = dump_entries + mid;
 
-	    if (de->de_isreal && real_addr > (de->de_real + de->de_len))
+	    if (de->de_isreal && real_addr > (de->de_end))
 		low = mid + 1;
 	    else
 		high = mid - 1;
@@ -1246,7 +1243,7 @@ static int setup_stage(struct stage0 *s,
 static int invalid_d(struct dump_entry *d, unsigned long addr, unsigned long top)
 {
     return (d->de_isreal ||
-	    (d->de_virt > top) ||
+	    (d->de_start > top) ||
 	    (d->de_end < addr));
 
 }
@@ -1266,10 +1263,9 @@ static int mult_seg_setup(struct stage0 *s,
     unsigned long top;
     int i;
 
-    DEBUG_PRINTF(("%s: %s p=%s t=%d\n",
-		  __func__, s_strings[stage], P(s), thread));
-    DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
-		  __func__, P(segval), P(addr), P(skip)));
+    DEBUG_PRINTF(("%s: %s p=%s t=%d s=%s a=%s k=%s\n",
+		  __func__, s_strings[stage], P(s), thread,
+		  P(segval), P(addr), P(skip)));
 
     if ((stage == INITIAL_STAGE_P1) && (thread_slot != -1))
 	S0 = page_table[-1];
@@ -1358,8 +1354,8 @@ static int mult_seg_setup(struct stage0 *s,
 		      __func__, P(addr), P(top), P(segval)));
 	DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
 		      strlen(__func__), "starting_d",
-		      P(d->de_virt),
-		      P(d->de_virt+d->de_len),
+		      P(d->de_start),
+		      P(d->de_end),
 		      P(d->de_segval)));
 
 	/*
@@ -1368,7 +1364,7 @@ static int mult_seg_setup(struct stage0 *s,
 	 * I will need to hook up support for real segments someday
 	 * probably to make the vmm people happy.
 	 */
-	for ( ; d < d_end && d->de_min < top; ++d) {
+	for ( ; (d < d_end) && !d->de_isreal && (d->de_min < top); ++d) {
 	    if (invalid_d(d, addr, top))
 		continue;
 
@@ -1442,6 +1438,10 @@ static int span_seg_setup(struct stage0 *s,
     int pass;
     int i;
 
+    DEBUG_PRINTF(("%s: %s p=%s t=%d s=%s a=%s k=%s\n",
+		  __func__, s_strings[stage], P(s), thread,
+		  P(segval), P(addr), P(skip)));
+
     for (i = 0; i < STAGE_SIZE; ++i)
 	s->pte[i] = (struct stage1 *)no_page_start;
 
@@ -1508,11 +1508,11 @@ static int span_seg_setup(struct stage0 *s,
 			  __func__, P(addr), P(top), P(segval)));
 	    DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
 			  strlen(__func__), "starting_d",
-			  P(d->de_virt),
-			  P(d->de_virt+d->de_len),
+			  P(d->de_start),
+			  P(d->de_end),
 			  P(d->de_segval)));
 
-	    for ( ; d < d_end && d->de_min < top; ++d) {
+	    for ( ; (d < d_end) && !d->de_isreal && (d->de_min < top); ++d) {
 		if (invalid_d(d, addr, top))
 		    continue;
 
@@ -1711,10 +1711,9 @@ static int setup_final(struct final_stage *s,
     unsigned long segval_addr = addr & ~(SEGSIZE - 1);
     int i;
 
-    DEBUG_PRINTF(("%s: %s p=%s t=%d\n",
-		  __func__, s_strings[stage], P(s), thread));
-    DEBUG_PRINTF(("%s: s=%s a=%s k=%s\n",
-		  __func__, P(segval), P(addr), P(skip)));
+    DEBUG_PRINTF(("%s: %s p=%s t=%d s=%s a=%s k=%s\n",
+		  __func__, s_strings[stage], P(s), thread,
+		  P(segval), P(addr), P(skip)));
 
     for (i = 0; i < STAGE_SIZE; ++i)
 	s->pte[i] = no_page_start;
@@ -1741,19 +1740,25 @@ static int setup_final(struct final_stage *s,
 	DEBUG_PRINTF(("%s: v=%s-%s s=%s\n",
 		      __func__, P(addr), P(top), P(segval)));
 	DEBUG_PRINTF(("%*s: v=%s-%s s=%s\n",
-		      strlen(__func__), "starting_d", P(d->de_virt),
-		      P(d->de_virt+d->de_len),
+		      strlen(__func__), "starting_d", P(d->de_start),
+		      P(d->de_end),
 		      P(d->de_segval)));
 
 	if (real_mode) {
-	    if ((d->de_real <= real_addr) &&
-		((d->de_real + d->de_len - 1) >= (real_addr + skip - 1))) {
-		s->pte[i] = (long)d->de_dump + (real_addr - d->de_real);
-		DEBUG_PRINTF(("%s: de_real=%s de_len=%s\n",
-			      __func__, P(d->de_real), P(d->de_len)));
-		DEBUG_PRINTF(("%s: %s[%d]=%s match\n",
-			      __func__, P(s), i, P(s->pte[i])));
+	    char *match = "miss";
+	    ulong_t real_top = real_addr + skip - 1;
+	    
+	    for ( ; (d < d_end) && (d->de_min < real_top); ++d) {
+		if ((d->de_start <= real_addr) &&
+		    (d->de_end >= real_top)) {
+		    s->pte[i] = (long)d->de_dump + (real_addr - d->de_start);
+		    match = "match";
+		    break;
+		}
 	    }
+	    DEBUG_PRINTF(("%s: dump=%s real=%s len=%s %s[%d]=%s %s\n",
+			  __func__, P(d->de_dump), P(d->de_start), P(d->de_len), 
+			  P(s), i, P(s->pte[i]), match));
 	    continue;
 	}
 
@@ -1762,7 +1767,7 @@ static int setup_final(struct final_stage *s,
 	 * dump_entry and we stop when the minimum address in the
 	 * entry is above the last address we are looking for (top).
 	 */
-	for ( ; d < d_end && d->de_min < top; ++d) {
+	for ( ; (d < d_end) && !d->de_isreal && (d->de_min < top); ++d) {
 	    if (invalid_d(d, addr, top))
 		continue;
 
@@ -1785,11 +1790,11 @@ static int setup_final(struct final_stage *s,
 	    if (!invalid_segval_p(segval, addr) &&
 		segval != -thread &&
 		d->de_segval == segval &&
-		d->de_virt <= addr &&
-		(d->de_virt + d->de_len) >= top) {
-		s->pte[i] = (long)d->de_dump + (addr - d->de_virt);
+		d->de_start <= addr &&
+		d->de_end >= (top - 1)) {
+		s->pte[i] = (long)d->de_dump + (addr - d->de_start);
 		DEBUG_PRINTF(("%s: xxx de_segval=%s virt=%s len=%s top=%s\n",
-			      __func__, P(d->de_segval), P(d->de_virt),
+			      __func__, P(d->de_segval), P(d->de_start),
 			      P(d->de_len), P(top)));
 		DEBUG_PRINTF(("%s: %s[%d]=%s match\n",
 			      __func__, P(s), i, P(s->pte[i])));
@@ -1816,8 +1821,8 @@ static int setup_final(struct final_stage *s,
 		 * it must be better than first_d.
 		 */
 		if (invalid_segval_p(d->de_segval, addr) &&
-		    d->de_virt <= addr &&
-		    (d->de_virt + d->de_len) >= top) {
+		    d->de_start <= addr &&
+		    d->de_end >= (top - 1)) {
 		    first_d = d;
 		    DEBUG_PRINTF(("%s: Setting first_d to d special case\n"));
 		    continue;
@@ -1869,7 +1874,7 @@ static int setup_final(struct final_stage *s,
 
 	    if (d->de_segval == segval) {
 		if (d->de_len >= skip) {
-		    s->pte[i] = (long)d->de_dump + (addr - d->de_virt);
+		    s->pte[i] = (long)d->de_dump + (addr - d->de_start);
 		    DEBUG_PRINTF(("%s: %s[%d]=%s frog\n",
 				  __func__, P(s), i, P(s->pte[i])));
 		    goto cont_loop;
@@ -1882,7 +1887,7 @@ static int setup_final(struct final_stage *s,
 	if (one_hit && (first_d || partial_hit)) {
 	    if (first_d->de_len >= skip) {
 		s->pte[i] = (long)first_d->de_dump +
-		    (addr - first_d->de_virt);
+		    (addr - first_d->de_start);
 		DEBUG_PRINTF(("%s: %s[%d]=%s single\n",
 			      __func__, P(s), i, P(s->pte[i])));
 	    } else {
@@ -1919,7 +1924,7 @@ static int setup_partial_page(unsigned long s,
     DEBUG_PRINTF(("setup_partial_page: p=%s t=%d s=%s a=%s\n",
 		  P(s), thread, P(segval), P(addr)));
 
-    for ( ; d < d_end && d->de_min < top; ++d) {
+    for ( ; (d < d_end) && !d->de_isreal && (d->de_min < top); ++d) {
 	if (invalid_d(d, addr, top))
 	    continue;
 
@@ -1930,12 +1935,12 @@ static int setup_partial_page(unsigned long s,
 		fprintf(stderr, "s=%s segval=%s addr=%s\n", P(s), P(segval),
 			P(addr));
 		fprintf(stderr, "virt=%s len=%s end=%s\n",
-			P(d->de_virt), P(d->de_len),
+			P(d->de_start), P(d->de_len),
 			P(d->de_end));
 		fail(1);
 	    }
 	    bcopy((void *)d->de_dump,
-		  (void *)(s + (d->de_virt - addr)),
+		  (void *)(s + (d->de_start - addr)),
 		  d->de_len);
 	}
     }
@@ -1955,25 +1960,10 @@ static int de_compare_end(const void *a, const void *b)
     if (da->de_isreal != db->de_isreal)
 	return (da->de_isreal) ? 1 : -1;
 
-    if (da->de_isreal) {
-	unsigned long long da_end = da->de_real + da->de_len - 1;
-	unsigned long long db_end = db->de_real + db->de_len - 1;
-
-	return ((db_end == da_end) ?
-		((db->de_real == da->de_real) ?
-		 0 :
-		 (da->de_real > db->de_real) ?
-		 1 :
-		 -1) :
-		(da_end > db_end) ?
-		1 :
-		-1);
-    }
-
-    return ((db->de_end == da->de_end) ?
-	    ((db->de_virt == da->de_virt) ?
+    return ((da->de_end == db->de_end) ?
+	    ((da->de_start == db->de_start) ?
 	     0 :
-	     (da->de_virt > db->de_virt) ?
+	     (da->de_start > db->de_start) ?
 	     1 :
 	     -1) :
 	    (da->de_end > db->de_end) ?
@@ -2005,9 +1995,10 @@ static void setup_dump_entry(int *inmap,
 	if (isreal) {
 	    if (i == 1) {
 		dump_entries[cnt].de_isreal = isreal;
+		dump_entries[cnt].de_start = real;
 		dump_entries[cnt].de_len = total_size;
+		dump_entries[cnt].de_end = real + total_size - 1;
 		dump_entries[cnt].de_dump = pos;
-		dump_entries[cnt].de_real = real;
 	    }
 	    ++cnt;
 	} else {
@@ -2027,7 +2018,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_isreal = isreal;
 		    dump_entries[cnt].de_len = part_size;
 		    dump_entries[cnt].de_dump = pos;
-		    dump_entries[cnt].de_virt = virt;
+		    dump_entries[cnt].de_start = virt;
 		    dump_entries[cnt].de_segval = segval;
 		    dump_entries[cnt].de_end = virt + part_size - 1;
 
@@ -2046,7 +2037,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_isreal = isreal;
 		    dump_entries[cnt].de_len = part_size;
 		    dump_entries[cnt].de_dump = pos;
-		    dump_entries[cnt].de_virt = virt;
+		    dump_entries[cnt].de_start = virt;
 		    dump_entries[cnt].de_segval = segval;
 		    dump_entries[cnt].de_end = virt + part_size - 1;
 
@@ -2068,7 +2059,7 @@ static void setup_dump_entry(int *inmap,
 		    dump_entries[cnt].de_isreal = isreal;
 		    dump_entries[cnt].de_len = total_size;
 		    dump_entries[cnt].de_dump = pos;
-		    dump_entries[cnt].de_virt = virt;
+		    dump_entries[cnt].de_start = virt;
 		    dump_entries[cnt].de_segval = segval;
 		    dump_entries[cnt].de_end = virt + total_size - 1;
 
@@ -2320,7 +2311,8 @@ static int init_dump(void)
 	    if (real_mode) {
 		bos_addr_start = 0;
 		bos_addr_end = 256 * 1024 * 1024; // 256M
-		thread_max = 0x8000ul;		  // NTHREAD
+		thread_max = 100;
+		// thread_max = 0x8000ul;		  // NTHREAD
 	    } else {
 		++thread_max;
 		t_map = (char *)smalloc(thread_max);
@@ -2333,29 +2325,35 @@ static int init_dump(void)
     dump_entry_cnt = cnt;
     qsort(dump_entries, cnt, sizeof(struct dump_entry), de_compare_end);
     min = -1;
+    /*
+     * i is set to 1 as a flag that we are in the real entries.  When
+     * the first virtual entry is hit, i is turned off and min is
+     * reset to -1.
+     */
+    i = 1;			
     for (d = dump_entries + cnt; --d >= dump_entries; ) {
-	if (d->de_isreal)
-	    continue;
-
-	if (min > d->de_virt)
-	    min = d->de_virt;
+	if (i && !d->de_isreal) {
+	    i = 0;
+	    min = -1;
+	}
+	if (min > d->de_start)
+	    min = d->de_start;
 	d->de_min = min;
     }
     DEBUG_PRINTF(("init_dump: dump of dump_entries\n"));
     for (i = 0; i < cnt; ++i) {
 	DEBUG_PRINTF(("%s ", P(dump_entries[i].de_dump)));
-	if (dump_entries[i].de_isreal)
-	    DEBUG_PRINTF(("r=%s len=%s\n",
-			  P(dump_entries[i].de_real),
-			  P(dump_entries[i].de_len)));
-	else {
-	    DEBUG_PRINTF(("v=%s s=%s",
-			  P(dump_entries[i].de_virt),
+	if (dump_entries[i].de_isreal) {
+	    DEBUG_PRINTF(("r=%s ", P(dump_entries[i].de_start)));
+	} else {
+	    DEBUG_PRINTF(("v=%s s=%s ",
+			  P(dump_entries[i].de_start),
 			  P(dump_entries[i].de_segval)));
-	    DEBUG_PRINTF((" min=%s e=%s\n",
-			  P(dump_entries[i].de_min),
-			  P(dump_entries[i].de_end)));
 	}
+	DEBUG_PRINTF(("min=%s len=%s e=%s\n",
+		      P(dump_entries[i].de_min),
+		      P(dump_entries[i].de_len),
+		      P(dump_entries[i].de_end)));
     }
     quick_dump = 0;
 
@@ -2596,7 +2594,7 @@ static long get_eaddr2real(long addr)
 	int i;
 
 	first_time = 0;
-	DEBUG_PRINTF(("first_time: pretouch\n"));
+	DEBUG_PRINTF(("first_time: pretouch starting\n"));
 	for (i = 0; i < rmap_used; ++i) {
 	    r = rmap + i;
 	    if (r->r_freed ||
@@ -2607,6 +2605,7 @@ static long get_eaddr2real(long addr)
 	    }
 	    get_addr2seg(r->r_virt);
 	}
+	DEBUG_PRINTF(("first_time: pretouch done\n"));
 	    
 	for (i = 0; i < rmap_used; ++i) {
 	    r = rmap + i;
@@ -2636,7 +2635,7 @@ static long get_eaddr2real(long addr)
 	    r->r_seg = get_addr2seg(r->r_virt);
 	    DEBUG_PRINTF(("first_time: addr %#018lx => %#018lx\n", r->r_virt, r->r_seg));
 	}
-	DEBUG_PRINTF(("first_time: done\n"));
+	DEBUG_PRINTF(("first_time: rehashing\n"));
 	redo_hash();
 
 	DEBUG_PRINTF(("first_time: thread_slot:%d; inv_segval:%#018lx; bos_segval:%#018lx\n",
@@ -2676,7 +2675,7 @@ void rmap_dump(void)
     struct rmap *r = rmap;
     struct rmap *r_end = r + rmap_used;
 
-    DEBUG_PRINTF(("rmap dump\n"));
+    DEBUG_PRINTF(("rmap dump start\n"));
     DEBUG_PRINTF(("number %*s %*s %*s %*s thread    stage mhfiptx\n",
 		  sizeof(long)*2+2, "phys",
 		  sizeof(long)*2+2, "size",
@@ -2693,4 +2692,5 @@ void rmap_dump(void)
 		      r->r_phys_set,
 		      r->r_true_segval,
 		      r->r_in_addr2seg));
+    DEBUG_PRINTF(("rmap dump done\n"));
 }
