@@ -511,7 +511,7 @@ static void do_ulong_vars(void)
 	s->s_nesting = 0;
 	s->s_typed = 1;
 	s->s_global = 1;
-	s->s_size = sizeof(int);
+	s->s_size = sizeof(unsigned long);
 	s->s_offset = f2v(tp->st_func);
 	DEBUG_PRINTF(("do_ulong_vars: %s at 0x%0*lx\n", s->s_name,
 		      sizeof(s->s_offset)*2, s->s_offset));
