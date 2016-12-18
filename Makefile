@@ -20,6 +20,7 @@
 
 X=${MAKETOP}../obj/power/bos/usr/ccs/lib/libxcurses
 VPATH		= ${TARGET_MACHINE}:${X}
+YACC = hyacc
 
 SUBDIRS		= lib
 

@@ -52,6 +52,9 @@ static void bogus(int n);
 #define yyval STABval
 #define yytoks STABtoks
 #define yyreds STABreds
+#define yyerror_handler STABerror_handler
+#define yystack_capacity STABstack_capacity
+#define yyparse_file STABparse_file
 
 static ns *cur_ns;
 static symptr cur_sym;
@@ -62,6 +65,7 @@ static int yylex(void);
 static yyerror(char *s);
 static void bogus(int n);
 
+int yydebug;
 int yyparse(void);
 
 %}

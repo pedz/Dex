@@ -66,6 +66,9 @@ static arg_list *current_arg_list;
 #define yyval GRAMval
 #define yytoks GRAMtoks
 #define yyreds GRAMreds
+#define yyerror_handler GRAMerror_handler
+#define yystack_capacity GRAMstack_capacity
+#define yyparse_file GRAMparse_file
 
 static int nesting_level;
 static symptr current_function;
@@ -82,6 +85,9 @@ static void do_parameter_allocation(arg_list *old_list, arg_list *args);
 static void change_to_int(cnode *c);
 static char *save_as_string(int i);
 
+int yydebug;
+int yyparse(void);
+ 
 %}
 
 %union {
