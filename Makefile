@@ -88,6 +88,13 @@ base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g
 base.o_INCFLAGS = \
 	-I${MAKETOP}../export/power_64/kernel/include \
 	-I${MAKETOP}bos/kernext/sctp
+
+vmsslb.h : ${MAKETOP}../../export/power_64/kernel/include/vmm/vmsslb.h
+${MAKETOP}../../export/power_64/kernel/include/vmm/vmsslb.h :
+	@echo MAKETOP=${MAKETOP}
+	mkdir -p ${MAKETOP}../../export/power_64/kernel/include/vmm
+	ln -s ${MAKETOP}../link/src/bos/kernel/vmm/vmsslb.h $@
+
 play.o_INCFLAGS = \
 	-I${MAKETOP}../export/power_64/kernel/include \
 	-I${MAKETOP}bos/kernext/sctp
