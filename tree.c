@@ -176,13 +176,7 @@ int mk_dot(cnode *result, cnode *c, char *s)
      * entire int instead of just the bytes we are suppose to pick
      * up.  We added base_size_table and the second or test in the if
      * below to catch this.
-     */
-    result->c_type = f->f_typeptr;
-    result->c_base = base_type(result->c_type);
-    DEBUG_PRINTF(("mk_dot: numbits: %d, type: %d, true size: %d \n",
-		  f->f_numbits, result->c_base, base_size_table[result->c_base]));
-
-    /*
+     *
      * The bit field routines are designed to work with an address
      * that is word aligned.  The other routines, like to read and
      * write a short or a byte, can operate on any byte boundry.  The
@@ -192,10 +186,23 @@ int mk_dot(cnode *result, cnode *c, char *s)
      *
      * So in the case of a bit field, byte_offset will be forced to be
      * a multiple of sizeof(int).
+     *
+     * Mon Jul 11 11:43:30 CDT 2016 - I discovered that sa_data in a
+     * sockaddr was given an offset of 0 when it should have an offset
+     * of 2.  sa_data is an array of 14 characters.  My first attempt
+     * didn't work.  My second attempt was to add the t_type != ARRAY
+     * as a condition for the second part of the if statement below.
+     * Removing the second part results in print_csa not working.  I
+     * didn 't figure out exactly.
      */
+    result->c_type = f->f_typeptr;
+    result->c_base = base_type(result->c_type);
+    DEBUG_PRINTF(("mk_dot: numbits: %d, type: %d, true size: %d \n",
+		  f->f_numbits, result->c_base, base_size_table[result->c_base]));
     byte_offset = f->f_offset / 8;
     if (((f->f_offset | f->f_numbits) & 7) ||
-	(base_size_table[result->c_base] * 8 != f->f_numbits)) {
+	(result->c_type->t_type != ARRAY_TYPE &&
+	 (base_size_table[result->c_base] * 8 != f->f_numbits))) {
 	byte_offset &= ~(sizeof(int) - 1); /* make it word aligned */
 	bit_offset = f->f_offset - (byte_offset * 8);
 	byte_size = sizeof(int);
