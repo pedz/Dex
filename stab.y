@@ -281,6 +281,7 @@ typenum
 	{
 	    $$ = $1;
 	}
+    ;
 
 typeattrs
     : '@' typeattrlist ';'
