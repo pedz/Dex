@@ -312,7 +312,7 @@ extern "C" int purge_user_pages(void);
 extern "C" int return_range(char *t_name, char *d_name, void **startp, int *lenp);
 extern "C" void trace_mappings(void);
 extern "C" int open_dump(char *path);
-extern "C" int map_init(void);
+extern "C" int map_init(char *dumpname);
 extern "C" char *print_field(int,...);
 extern "C" void fail(int);
 extern "C" void *safe_malloc(unsigned long,char*,int);
@@ -381,7 +381,7 @@ static int setup_partial_page(unsigned long s,
 			      int thread,
 			      unsigned long segval,
 			      unsigned long addr);
-static int init_dump(void);
+static int init_dump(char *dumpname);
 long get_addr2seg(long addr);
 static ulong_t get_eaddr2cookie(ulong_t start, ulong_t size);
 static long get_eaddr2real(long addr);
@@ -806,7 +806,7 @@ static void map_catch(int sig, int code, struct sigcontext *scp)
     fail(1);
 }
 
-int map_init(void)
+int map_init(char *dumpname)
 {
     struct sigaction s;
     long first_map;
@@ -876,7 +876,7 @@ int map_init(void)
     /*
      * init_dump discovers and sets thread_max.
      */
-    if (init_dump())
+    if (dumpname && init_dump(dumpname))
 	return 1;
 
     DEBUG_PRINTF(("thread_max=%d\n", thread_max));
@@ -2075,7 +2075,7 @@ static void setup_dump_entry(int *inmap,
     }
 }
 
-static int init_dump(void)
+static int init_dump(char *dumpname)
 {
     struct stat64 stat_buf;
     char *cur_pos;

@@ -6,8 +6,6 @@
 
 /* globals */
 extern char *progname;
-extern char *dumpname;
-extern char *unixname;
 extern void *stack_top;
 extern unsigned long debug_mask;
 

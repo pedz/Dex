@@ -21,19 +21,31 @@ static char sccs_id[] = "@(#)dex.c	1.11";
 #define DEBUG_BIT DEX_C_BIT
 
 char *progname;
-char *dumpname = "/dev/mem";
-char *unixname = "/unix";
+static char *dumpname;
+static char *unixname;
 void *stack_top;
 unsigned long debug_mask;
 extern int GRAMdebug;
 extern int STABdebug;
 
 #include <setjmp.h>
+#include "lib/getopt.h"
+
 static jmp_buf GRAMcatch;
 
 void sigint_catch(int sig)
 {
     longjmp(GRAMcatch, 1);
+}
+
+static int usage(void)
+{
+    fprintf(stderr, "Usage: %s [options] [src_file_list]\n", progname);
+    fprintf(stderr, "        -D, --debug mask     Set debug mask\n");
+    fprintf(stderr, "        -d, --dump dumpfile  Specify the dump file\n");
+    fprintf(stderr, "        -u, --unix unixfile  Specify the unix file\n");
+    fprintf(stderr, "        src_file_list        List of source files\n");
+    return 1;
 }
 
 int main(int argc, char *argv[])
@@ -49,9 +61,51 @@ int main(int argc, char *argv[])
 	++progname;
     else
 	progname = argv[0];
-    --argc;
-    ++argv;
 
+    while (1) {
+	int c;
+	int option_index;
+	static struct option long_options[] = {
+	    { "debug", required_argument, 0, 'D' },
+	    { "dump",  required_argument, 0, 'd' },
+	    { "help",  no_argument,       0, '?' },
+	    { "unix",  required_argument, 0, 'u' },
+	    { 0, 0, 0, 0}
+	};
+	
+	if ((c = getopt_long(argc, argv, "D:d:u:?", long_options, &option_index)) == -1)
+	    break;
+	switch (c) {
+	case 'd':
+	    dumpname = optarg;
+	    break;
+	    
+	case 'D':
+	    debug_mask = strtoul(optarg, (char **)0, 0);
+	    break;
+	    
+	case 'u':
+	    unixname = optarg;
+	    break;
+
+	case '?':
+	default:
+	    return(usage());
+	}
+    }
+
+    if (debug_mask & DEBUG_BIT) {
+	if (dumpname)
+	    printf("dumpname = %s\n", dumpname);
+	if (unixname)
+	    printf("unixname = %s\n", unixname);
+	if (debug_mask)
+	    printf("debug_mask = %#018lx\n", debug_mask);
+	while (optind < argc)
+	    printf("source %s\n", argv[optind++]);
+    }
+
+#if 0
     /* optional -d flag */
     if (argc && !strncmp(argv[0], "-d", 2)) {
 	if (strlen(argv[0]) > 2) {
@@ -88,12 +142,18 @@ int main(int argc, char *argv[])
 	++argv;
 	--argc;
     }
+#endif
 
+    if (unixname && load(unixname, 0, 0))
+	return 1;		/* no error message? */
+    
     ns_inter = ns_create((ns *)0, progname);
     load_base_types(ns_inter);
     tree_init();
-    if (map_init())
+
+    if (map_init(dumpname))
 	return 1;
+
     DEBUG_PRINTF(("main: map_init done\n"));
     builtin_init();
     if (setup_pseudos())

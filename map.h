@@ -107,7 +107,7 @@ typedef int jmp_type;
 jmp_type *map_jmp_ptr;
 ulong_t fault_paddr;
 ulong_t fault_vaddr;
-int map_init(void);
+int map_init(char *dumpname);
 
 typedef void *v_ptr;			/* A virtual address */
 typedef void *p_ptr;			/* A physical address */
