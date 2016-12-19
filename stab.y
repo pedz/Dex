@@ -54,6 +54,7 @@ static void bogus(int n);
 #define yyreds STABreds
 #define yyerror_handler STABerror_handler
 #define yystack_capacity STABstack_capacity
+#define yyparse_fp STABparse_fp
 #define yyparse_file STABparse_file
 
 static ns *cur_ns;
@@ -67,6 +68,27 @@ static void bogus(int n);
 
 int yydebug;
 int yyparse(void);
+
+#define YYDEBUG 1
+#define DEBUG_BIT STAB_Y_BIT
+
+static void reset_buf(int where)
+{
+    nextp = buf;
+    DEBUG_PRINTF(("reset buf %d\n", where));
+}
+
+static void end_buf(int where)
+{
+    *nextp = 0;
+    DEBUG_PRINTF(("end buf: %s %d\n", buf, where));
+}
+
+static void add_char(char c, int where)
+{
+    *nextp++ = c;
+    DEBUG_PRINTF(("add %c %d\n", c, where));
+}
 
 %}
 
@@ -974,9 +996,9 @@ CPAREN : ')' ;
  */
 
 NAME
-    : { nextp = buf; } name
+    : { reset_buf(__LINE__); } name
 	{
-	    *nextp = 0;
+	    end_buf(__LINE__);
 	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     ;
@@ -984,47 +1006,47 @@ NAME
 INTEGER
     : DIGITSTRING
 	{
-	    *nextp = 0;
+	    end_buf(__LINE__);
 	    $$ = atoi($1);
 	}
     ;
 
 DIGITSTRING
-    : { nextp = buf; } '-' { *nextp++ = $<val>2; } digits
+    : { reset_buf(__LINE__); } '-' { add_char($<val>2, __LINE__); } digits
 	{
-	    *nextp = 0;
+	    end_buf(__LINE__);
 	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
-    | { nextp = buf; } digits
+    | { reset_buf(__LINE__); } digits
 	{
-	    *nextp = 0;
+	    end_buf(__LINE__);
 	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
     ;
 
 HEXINTEGER
-    : { nextp = buf; } hexinteger
+    : { reset_buf(__LINE__); } hexinteger
 	{
-	    *nextp = 0;
+	    end_buf(__LINE__);
 	    sscanf(buf, "%x", &$$);
 	}
     ;
 
 REAL
-    : { nextp = buf; } real
+    : { reset_buf(__LINE__); } real
 	{
-	    *nextp = 0;
+	    end_buf(__LINE__);
 	    sscanf(buf, "%f", &$$);
 	}
     ;
 
 STRING
-    : { nextp = buf; } '\"' str '\"'
+    : { reset_buf(__LINE__); } '\"' str '\"'
 	{
 	    *nextp = '\0';
 	    $$ = store_string(cur_ns, buf, 0, (char *)0);
 	}
-    | { nextp = buf; } '\'' str '\''
+    | { reset_buf(__LINE__); } '\'' str '\''
 	{
 	    *nextp = '\0';
 	    $$ = store_string(cur_ns, buf, 0, (char *)0);
@@ -1044,27 +1066,27 @@ hexinteger
 
 real
     : opsign digits opexp
-    | opsign digits '.' { *nextp++ = $<val>3; } opexp
-    | opsign digits '.' { *nextp++ = $<val>3; } digits opexp
+    | opsign digits '.' { add_char($<val>3, __LINE__); } opexp
+    | opsign digits '.' { add_char($<val>3, __LINE__); } digits opexp
     | opsign 'I' 'N' 'F'
 	{
-	    *nextp++ = 'I';
-	    *nextp++ = 'N';
-	    *nextp++ = 'F';
+	    add_char('I', __LINE__);
+	    add_char('N', __LINE__);
+	    add_char('F', __LINE__);
 	}
     | 'Q' 'N' 'A' 'N'
 	{
-	    *nextp++ = 'Q';
-	    *nextp++ = 'N';
-	    *nextp++ = 'A';
-	    *nextp++ = 'N';
+	    add_char('Q', __LINE__);
+	    add_char('N', __LINE__);
+	    add_char('A', __LINE__);
+	    add_char('N', __LINE__);
 	}
     | 'S' 'N' 'A' 'N'
 	{
-	    *nextp++ = 'S';
-	    *nextp++ = 'N';
-	    *nextp++ = 'A';
-	    *nextp++ = 'N';
+	    add_char('S', __LINE__);
+	    add_char('N', __LINE__);
+	    add_char('A', __LINE__);
+	    add_char('N', __LINE__);
 	}
     ;
 
@@ -1074,14 +1096,14 @@ str : strchar
 
 opexp
     : /* empty */
-    | 'e' { *nextp++ = $<val>1; } opsign digits
-    | 'E' { *nextp++ = $<val>1; } opsign digits
+    | 'e' { add_char($<val>1, __LINE__); } opsign digits
+    | 'E' { add_char($<val>1, __LINE__); } opsign digits
     ;
 
 opsign
     : /* empty */
-    | '+' { *nextp++ = $<val>1; }
-    | '-' { *nextp++ = $<val>1; }
+    | '+' { add_char($<val>1, __LINE__); }
+    | '-' { add_char($<val>1, __LINE__); }
     ;
 
 digits
@@ -1092,7 +1114,7 @@ digits
 strchar
     : STRCHAR
 	{
-	    *nextp++ = $<val>1;
+	    add_char($<val>1, __LINE__);
 	}
     ;
 
@@ -1102,7 +1124,7 @@ STRCHAR
 digit
     : DIGIT
 	{
-	    *nextp++ = $<val>1;
+	    add_char($<val>1, __LINE__);
 	}
     ;
 
@@ -1111,7 +1133,7 @@ DIGIT : '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
 hexdigit
     : HEXDIGIT
 	{
-	    *nextp++ = $<val>1;
+	    add_char($<val>1, __LINE__);
 	}
     ;
 
@@ -1124,14 +1146,14 @@ HEXDIGIT
 lead_letter
     : LEAD_LETTER
 	{
-	    *nextp++ = $<val>1;
+	    add_char($<val>1, __LINE__);
 	}
     ;
 
 letter
     : LETTER
 	{
-	    *nextp++ = $<val>1;
+	    add_char($<val>1, __LINE__);
 	}
     ;
 
@@ -1151,7 +1173,6 @@ LEAD_LETTER
     | '\177'
     ;
 %%
-#define DEBUG_BIT STAB_Y_BIT
 
 /*
  * This grammer and parser is set up so that a null terminated string
@@ -1195,6 +1216,7 @@ static void bogus(int n)
     exit(1);
 }
 
+extern FILE *yyparse_fp;
 int parse_stab(ns *ns, char *s, int len, symptr *s_out)
 {
     int ret;

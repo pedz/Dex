@@ -274,7 +274,7 @@ void add_typedef(typeptr t, char *name)
     int hash_val = hash(name);
 
     if (!t) {
-	fprintf(stderr, "Null typedef pointer %s:%d\n", __FILE__, __LINE__);
+	fprintf(stderr, "Null typedef pointer %s\n", name);
 	return;
     }
 
@@ -300,7 +300,7 @@ void add_namedef(typeptr t, char *name)
     int hash_val = hash(name);
 
     if (!t) {
-	fprintf(stderr, "Null namedef pointer %s:%d\n", __FILE__, __LINE__);
+	fprintf(stderr, "Null namedef pointer %s\n", name);
 	return;
     }
 
@@ -563,8 +563,10 @@ void load_base_types(ns *nspace)
     nspace->ns_typedefs = 0;
     nspace->ns_namedefs = 0;
     nspace->ns_tids = 0;
-    for (tpp_end = (tpp = tp_array) + A_SIZE(tp_array); tpp < tpp_end; ++tpp)
+    for (tpp_end = (tpp = tp_array) + A_SIZE(tp_array); tpp < tpp_end; ++tpp) {
 	parse_stab(nspace, *tpp, 0, (symptr *)0);
+	break;
+    }
 }
 
 void new_symbols(ns *nspace)

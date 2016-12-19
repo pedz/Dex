@@ -21,7 +21,7 @@ static char sccs_id[] = "@(#)gram.y	1.11";
 #include "gram_pre.h"
 #include "scan_pre.h"
 
-#define YYDEBUG 1
+/* #define YYDEBUG 1 */
 #define DEBUG_BIT GRAM_Y_BIT
 
 ns *ns_inter;
