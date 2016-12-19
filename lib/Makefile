@@ -1,9 +1,33 @@
 LIBRARIES	= readline.a
 
+# OFILES	= \
+# bind.o complete.o display.o emacs_keymap.o funmap.o history.o
+# isearch.o keymaps.o parens.o readline.o rltty.o search.o
+# signals.o tilde.o vi_keymap.o vi_mode.o xmalloc.o getopt.o
+# getopt1.o
+# getopt_int.o
+
 OFILES	= \
-	bind.o complete.o display.o emacs_keymap.o funmap.o history.o \
-	isearch.o keymaps.o parens.o readline.o rltty.o search.o \
-	signals.o tilde.o vi_keymap.o vi_mode.o xmalloc.o
+	bind.o \
+	complete.o \
+	display.o \
+	emacs_keymap.o \
+	funmap.o \
+	getopt.o \
+	getopt1.o \
+	history.o \
+	isearch.o \
+	keymaps.o \
+	parens.o \
+	readline.o \
+	rltty.o \
+	search.o \
+	signals.o \
+	tilde.o \
+	vi_keymap.o \
+	vi_mode.o \
+	xmalloc.o \
+
 
 CFLAGS	= \
 	-q64 \
