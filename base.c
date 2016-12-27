@@ -77,6 +77,7 @@ extern system_configuration_t _system_configuration;
 #endif
 #include <sys/selpoll.h>
 
+#include <vmm/vmcmem.h>
 #include <vmm/vmdefs.h>
 #include <vmm/vmpft.h>
 #include <vmm/vmscb.h>
