@@ -16,29 +16,32 @@ static char sccs_id[] = "@(#)stab.y	1.11";
 #include "dex.h"
 #include "stab_pre.h"
 
-static char buf[128];			/* buf for names and stuff */
-static char *nextp = buf;		/* pointer into aclbuf */
-
-static void bogus(int n);
+/* #define YYDEBUG 1 */
+#define DEBUG_BIT STAB_Y_BIT
 
 /*
- * The following defines attempt to redefine everything that yacc
- * craetes as global so that we can have two yacc's in the same
- * program.
+ * These six symbols are what old school yacc and new school bison
+ * (when called as yacc) both define as global.  This is even
+ * documented in the Bison documentation.
  */
-#define yyact STABact
 #define yychar STABchar
-#define yychk STABchk
 #define yydebug STABdebug
-#define yydef STABdef
-#define yyerrflag STABerrflag
 #define yyerror STABerror
-#define yyexca STABexca
-#define yylex STABlex
 #define yylval STABlval
 #define yynerrs STABnerrs
-#define yypact STABpact
 #define yyparse STABparse
+
+/*
+ * These symbols is what old school yacc declared as global.  For both
+ * sets of symbols, we put these #defines so that the symbols from
+ * gram.y do not collide with the symbols from stab.y
+ */
+#define yyact STABact
+#define yychk STABchk
+#define yydef STABdef
+#define yyerrflag STABerrflag
+#define yyexca STABexca
+#define yypact STABpact
 #define yypgo STABpgo
 #define yyps STABps
 #define yypv STABpv
@@ -50,27 +53,28 @@ static void bogus(int n);
 #define yytmp STABtmp
 #define yyv STABv
 #define yyval STABval
-#define yytoks STABtoks
-#define yyreds STABreds
-#define yyerror_handler STABerror_handler
-#define yystack_capacity STABstack_capacity
-#define yyparse_fp STABparse_fp
-#define yyparse_file STABparse_file
 
+/*
+ *  Last, we change yylex (the sole dependency that yyparse has) so we
+ *  can have two scanners.
+ */
+#define yylex STABlex
+
+static char buf[128];			/* buf for names and stuff */
+static char *nextp = buf;		/* pointer into aclbuf */
+static void bogus(int n);
 static ns *cur_ns;
 static symptr cur_sym;
 static char *parse_line;
 static char *parse_position;
 static char small_buf[32];
+
 static int yylex(void);
 static yyerror(char *s);
 static void bogus(int n);
 
 int yydebug;
 int yyparse(void);
-
-#define YYDEBUG 1
-#define DEBUG_BIT STAB_Y_BIT
 
 static void reset_buf(int where)
 {

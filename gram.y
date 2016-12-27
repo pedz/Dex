@@ -24,35 +24,29 @@ static char sccs_id[] = "@(#)gram.y	1.11";
 /* #define YYDEBUG 1 */
 #define DEBUG_BIT GRAM_Y_BIT
 
-ns *ns_inter;
-static anode anode_stack[8];
-static int anode_index = -1;
-#define current_attributes (anode_stack[anode_index])
-
-#define push_attributes(anode) (anode_stack[++anode_index] = (anode))
-#define pop_attributes (--anode_index)
-
-static int param_count;
-static arg_list *current_arg_list;
-
 /*
- * The following defines attempt to redefine everything that yacc
- * craetes as global so that we can have two yacc's in the same
- * program.
+ * These six symbols are what old school yacc and new school bison
+ * (when called as yacc) both define as global.  This is even
+ * documented in the Bison documentation.
  */
-#define yyact GRAMact
 #define yychar GRAMchar
-#define yychk GRAMchk
 #define yydebug GRAMdebug
-#define yydef GRAMdef
-#define yyerrflag GRAMerrflag
 #define yyerror GRAMerror
-#define yyexca GRAMexca
-#define yylex GRAMlex
 #define yylval GRAMlval
 #define yynerrs GRAMnerrs
-#define yypact GRAMpact
 #define yyparse GRAMparse
+
+/*
+ * These symbols is what old school yacc declared as global.  For both
+ * sets of symbols, we put these #defines so that the symbols from
+ * gram.y do not collide with the symbols from stab.y
+ */
+#define yyact GRAMact
+#define yychk GRAMchk
+#define yydef GRAMdef
+#define yyerrflag GRAMerrflag
+#define yyexca GRAMexca
+#define yypact GRAMpact
 #define yypgo GRAMpgo
 #define yyps GRAMps
 #define yypv GRAMpv
@@ -64,12 +58,23 @@ static arg_list *current_arg_list;
 #define yytmp GRAMtmp
 #define yyv GRAMv
 #define yyval GRAMval
-#define yytoks GRAMtoks
-#define yyreds GRAMreds
-#define yyerror_handler GRAMerror_handler
-#define yystack_capacity GRAMstack_capacity
-#define yyparse_file GRAMparse_file
+ 
+/*
+ *  Last, we change yylex (the sole dependency that yyparse has) so we
+ *  can have two scanners.
+ */
+#define yylex GRAMlex
 
+ns *ns_inter;
+static anode anode_stack[8];
+static int anode_index = -1;
+#define current_attributes (anode_stack[anode_index])
+
+#define push_attributes(anode) (anode_stack[++anode_index] = (anode))
+#define pop_attributes (--anode_index)
+
+static int param_count;
+static arg_list *current_arg_list;
 static int nesting_level;
 static symptr current_function;
 static int param_index;
