@@ -18,6 +18,8 @@
 # LEVEL 1,5 Years Bull Confidential Information
 #
 
+CCVER=compilers/xlc/11109A
+
 X=${MAKETOP}../obj/power/bos/usr/ccs/lib/libxcurses
 VPATH		= ${TARGET_MACHINE}:${X}
 YACC = hyacc
@@ -84,8 +86,8 @@ dex_LIBS	= lib/readline.a -ll -lxcurses
 # gives us some flexibility.
 LDFLAGS		= -bloadmap:dex.map
 
-# base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra
-base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g
+base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra -qlist -qsource
+# base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g
 base.o_INCFLAGS = \
 	-I${MAKETOP}../export/power_64/kernel/include \
 	-I${MAKETOP}bos/kernext/sctp
