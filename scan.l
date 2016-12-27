@@ -80,8 +80,11 @@ large_t ltemp;
 int yylook(void);
 extern int yywrap(void);
 int yywinput(void);
+void add_char(int c);
+char *trim_str(char *s, char *e);
 
 %}
+
 
 %start normal string comment
 
@@ -357,6 +360,22 @@ int yywinput(void);
     BEGIN comment;
 }
 
+<normal>";"(" "|"\t")*"|".* {
+    char *s = trim_str(strchr(yytext, '|') + 1, yytext + yyleng - 1);
+
+    printf("open pipe to '%s'\n", s);
+    yylval.ival = ';';
+    return ';';
+}
+
+<normal>";"(" "|"\t")*">".* {
+    char *s = trim_str(strchr(yytext, '>') + 1, yytext + yyleng - 1);
+
+    printf("open file to '%s'\n", s);
+    yylval.ival = ';';
+    return ';';
+}
+
 <comment>. {
 }
 
@@ -369,7 +388,7 @@ int yywinput(void);
 
 <string>"\"" {
     BEGIN normal;
-    *str_ptr++ = 0;
+    add_char('\0');
     yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
     return STRING;
 }
@@ -378,7 +397,7 @@ int yywinput(void);
     fprintf(stderr, "%s: newline in string at line %d of %s\n",
 	    progname, yyfilename ? yyfilename : "<stdin>", yylineno);
     BEGIN normal;
-    *str_ptr++ = 0;
+    add_char('\0');
     yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
     return STRING;
 }
@@ -394,17 +413,17 @@ int yywinput(void);
 	    i *= 8;
 	    i += *p - '0';
 	}
-	*str_ptr++ = i;
+	add_char(i);
 	break;
-    case '"': *str_ptr++ = '"'; break;
-    case '\'': *str_ptr++ = '\''; break;
-    case '\\': *str_ptr++ = '\\'; break;
-    case 'b': *str_ptr++ = '\b'; break;
-    case 'f': *str_ptr++ = '\f'; break;
-    case 'n': *str_ptr++ = '\n'; break;
-    case 'r': *str_ptr++ = '\r'; break;
-    case 't': *str_ptr++ = '\t'; break;
-    default: *str_ptr++ = yytext[1]; break;
+    case '"':  add_char('"'); break;
+    case '\'': add_char('\''); break;
+    case '\\': add_char('\\'); break;
+    case 'b':  add_char('\b'); break;
+    case 'f':  add_char('\f'); break;
+    case 'n':  add_char('\n'); break;
+    case 'r':  add_char('\r'); break;
+    case 't':  add_char('\t'); break;
+    default:   add_char(yytext[1]); break;
     }
 }
 
@@ -414,13 +433,12 @@ int yywinput(void);
 
     if (!t)
 	t = yytext;
-    len = strlen(t);
-    strcpy(str_ptr, t);
-    str_ptr += len;
+    while (*t)
+	add_char(*t++);
 }
 
 <string>. {
-    *str_ptr++ = yytext[0];
+    add_char(yytext[0]);
 }
 
 <normal>"\"" {
@@ -433,18 +451,26 @@ int yywinput(void);
 
 <normal>" "|"\t" ;
 
-<normal>"\n" {
+<normal>\n {
 #define xxx(a) # a
     DEBUG_PRINTF(("%s: %s:%d\n", xxx(yylex),
 		  yyfilename ? yyfilename : "<stdin>", yylineno));
 }
 
 <normal>. {
+    /*
+     * Any other character like . or ; is returned.
+     */
     yylval.ival = yytext[0];
     return yytext[0];
 }
 
 .|"\n" {
+    /*
+     * There is no mechanism to start off in a particular state so
+     * this rule is here just to get us from the start state to the
+     * normal state on the first character we see.
+     */
     BEGIN normal;
     unput(yytext[0]);
 }
@@ -508,14 +534,29 @@ static char *do_fgets(FILE *in)
 }
 #endif
 
+/*
+ * fgets and readline both eat the ending new line.  This makes the
+ * scanner harder to write for SHELL_COMMAND and PATH since they are
+ * going to end with a new line.  It also screws with the one
+ * character look ahead.
+ *
+ * if ptr is NULL, we call do_fgets.
+ * else if *ptr is '\0', ptr is set to NULL and we return '\n'
+ * else we return *ptr++;
+ */
 static int do_getc(FILE *in)
 {
     static char *ptr;
-    int c;
 
-    while (!ptr || !*ptr)
-	if (!(ptr = do_fgets(in)))
-	    return EOF;
+    if (ptr == NULL &&
+	((ptr = do_fgets(in))) == NULL)
+	return EOF;
+
+    if (*ptr == '\0') {
+	ptr = NULL;
+	return '\n';
+    }
+
     return *ptr++;
 }
 
@@ -557,4 +598,31 @@ void add_source(char *s)
     yyin = temp;
     yylineno = 1;
     yyfilename = s;
+}
+
+void add_char(int c)
+{
+    static int warned = 0;
+
+    if (str_ptr >= (string_buf + sizeof(string_buf))) {
+	if (warned == 0) {
+	    fprintf(stderr, "%s: string too long at line %d of %s\n",
+		    progname, yyfilename ? yyfilename : "<stdin>", yylineno);
+	    warned = 1;
+	}
+    } else {
+	warned = 0;
+	*str_ptr++ = c;
+    }
+}
+
+char *trim_str(char *s, char *e)
+{
+    while (*s == ' ' || *s == '\t')
+	++s;
+    
+    while (*e == ' ' || *e == '\t')
+	*e-- = '\0';
+
+    return s;
 }
