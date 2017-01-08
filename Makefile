@@ -49,7 +49,6 @@ dex_OFILES	= \
 	gram.o \
 	load.o \
 	map.o \
-	play.o \
 	print.o \
 	scan.o \
 	stab.o \
@@ -98,9 +97,6 @@ ${MAKETOP}../../export/power_64/kernel/include/vmm/vmsslb.h :
 	mkdir -p ${MAKETOP}../../export/power_64/kernel/include/vmm
 	ln -s ${MAKETOP}../link/src/bos/kernel/vmm/vmsslb.h $@
 
-play.o_INCFLAGS = \
-	-I${MAKETOP}../export/power_64/kernel/include \
-	-I${MAKETOP}bos/kernext/sctp
 scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE -I/usr/local/include
 asgn_expr.o : asgn_expr.c
 
