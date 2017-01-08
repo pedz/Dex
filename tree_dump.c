@@ -11,7 +11,6 @@ static char sccs_id[] = "@(#)tree_dump.c	1.8";
 #include "cast_expr.h"
 #include "unary_expr.h"
 #include "fcall.h"
-#include "builtins.h"
 #define DEBUG_BIT TREE_DUMP_C_BIT
 
 enum args {
@@ -164,6 +163,11 @@ static struct tab name_tab[] = {
     E(i_timesasgn), E_BOTH,
     E(i_umin), E_LEFT,
     E(i_xor), E_BOTH,
+    /*
+     * I took these out as an experiment to see if the routines in
+     * builtins.h could be made static.
+     */
+#if 0
     E(int_dis), E_INT,
     E(int_find), E_INT,
     E(int_instr), E_INT,
@@ -182,6 +186,7 @@ static struct tab name_tab[] = {
     E(int_strncmp), E_INT,
     E(int_strncpy), E_INT,
     E(int_strrchr), E_INT,
+#endif
     E(l__d), E_LEFT,
     E(l__f), E_LEFT,
     E(l__i), E_LEFT,
