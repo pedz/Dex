@@ -465,7 +465,7 @@ static void do_char_ptr_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.l = (long (*)())tp->st_func;
-	DEBUG_PRINTF(("do_char_ptr_vars: %s at %d\n", s->s_name,
+	DEBUG_PRINTF(("do_char_ptr_funcs: %s at %d\n", s->s_name,
 		      s->s_stmt));
     }
 }
@@ -520,7 +520,7 @@ static void do_int_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.i = tp->st_func;
-	DEBUG_PRINTF(("do_int_vars: %s at %d\n", s->s_name,
+	DEBUG_PRINTF(("do_int_funcs: %s at %d\n", s->s_name,
 		      s->s_stmt));
     }
 }
@@ -562,7 +562,7 @@ static void do_long_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.l = tp->st_func;
-	DEBUG_PRINTF(("do_long funcs: %s at %d\n", s->s_name,
+	DEBUG_PRINTF(("do_long_funcs: %s at %d\n", s->s_name,
 		      s->s_stmt));
     }
 }
@@ -599,7 +599,7 @@ static void do_void_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.v = tp->st_func;
-	DEBUG_PRINTF(("do_int_vars: %s at %d\n", s->s_name,
+	DEBUG_PRINTF(("do_void_funcs: %s at %d\n", s->s_name,
 		      s->s_stmt));
     }
 }
@@ -640,7 +640,7 @@ static void do_void_ptr_funcs(void)
 	s->s_size = 0;
 	s->s_stmt = mk_return_stmt(e);
 	e->e_func.l = (long (*)())tp->st_func;
-	DEBUG_PRINTF(("do_char_ptr_vars: %s at %d\n", s->s_name,
+	DEBUG_PRINTF(("do_void_ptr_funcs: %s at %d\n", s->s_name,
 		      s->s_stmt));
     }
 }
@@ -757,11 +757,12 @@ static void do_void_ptr_vars(void)
 
 void builtin_init(void)
 {
+    do_char_ptr_funcs();
     do_int_funcs();
     do_long_funcs();
-    do_char_ptr_funcs();
+    do_void_funcs();
+    do_void_ptr_funcs();
     do_int_vars();
     do_ulong_vars();
-    do_void_ptr_funcs();
     do_void_ptr_vars();
 }
