@@ -9,6 +9,7 @@ static char sccs_id[] = "@(#)print.c	1.7";
 #include "dex.h"
 #include "tree.h"
 #include "base_expr.h"
+#include "builtins.h"
 #define DEBUG_BIT PRINT_C_BIT
 
 static int sym_compare(void *v1, void *v2);
@@ -56,19 +57,19 @@ void print_name(char *name, typeptr tptr)
     char *lname;
 
     if (!tptr)
-	printf("%s", name);
+	fprintf(dexout, "%s", name);
 
     switch (tptr->t_type) {
     case STRUCT_TYPE:
     case UNION_TYPE:
 	if (tptr->t_typedef) {
-	    printf("%s %s", tptr->t_name, name);
+	    fprintf(dexout, "%s %s", tptr->t_name, name);
 	} else {
 	    char *u_or_s = tptr->t_type == STRUCT_TYPE ? "struct" : "union";
 	    if (tptr->t_name)
-		printf("%s %s %s", u_or_s, tptr->t_name, name);
+		fprintf(dexout, "%s %s %s", u_or_s, tptr->t_name, name);
 	    else
-		printf("%s %s", u_or_s, name);
+		fprintf(dexout, "%s %s", u_or_s, name);
 	}
 	break;
 
@@ -94,7 +95,7 @@ void print_name(char *name, typeptr tptr)
 	    (!(ltptr = tptr->t_val.val_r.r_typeptr) ||
 	     !(lname = ltptr->t_name)))
 	    lname = "";
-	printf("%s %s", lname, name);
+	fprintf(dexout, "%s %s", lname, name);
 	break;
 
     case PROC_TYPE:
@@ -104,27 +105,27 @@ void print_name(char *name, typeptr tptr)
 	break;
 
     case FLOAT_TYPE:
-	printf("%s %s", tptr->t_name, name);
+	fprintf(dexout, "%s %s", tptr->t_name, name);
 	break;
 
     case ENUM_TYPE:
 	if (tptr->t_name)
-	    printf("enum %s %s", tptr->t_name, name);
+	    fprintf(dexout, "enum %s %s", tptr->t_name, name);
 	else
-	    printf("enum %s", name);
+	    fprintf(dexout, "enum %s", name);
 	break;
 
     case STRINGPTR_TYPE:
-	printf("strptr %s", name);
+	fprintf(dexout, "strptr %s", name);
 	break;
     case COMPLEX_TYPE:
-	printf("complex %s", name);
+	fprintf(dexout, "complex %s", name);
 	break;
     case CONSTANT_TYPE:
-	printf("const %s", name);
+	fprintf(dexout, "const %s", name);
 	break;
     default:
-	printf("unknown type %s", name);
+	fprintf(dexout, "unknown type %s", name);
 	break;
     }
 }
@@ -166,18 +167,18 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
     switch (tptr->t_type) {
     case UNION_TYPE:
     case STRUCT_TYPE:
-	printf("%*s", indent, "");
+	fprintf(dexout, "%*s", indent, "");
 	print_name("", tptr);
-	printf("{\n");
+	fprintf(dexout, "{\n");
 
 	for (f = tptr->t_val.val_s.s_fields; f; f = f->f_next)
 	    print_out(f->f_typeptr, addr, offset + f->f_offset,
 		      f->f_numbits, indent + 2, f->f_name);
 
 	if (name)
-	    printf("%*s} %s;\n", indent, "", name);
+	    fprintf(dexout, "%*s} %s;\n", indent, "", name);
 	else
-	    printf("%*s};", indent, "");
+	    fprintf(dexout, "%*s};", indent, "");
 	break;
 
     case PTR_TYPE: /* pointer to some type but who cares what type it is */
@@ -189,7 +190,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	item_size = get_size(tptr->t_val.val_p);
 
 	pval = (void *)get_field(addr, offset, size);
-	printf("%*s", indent, "");
+	fprintf(dexout, "%*s", indent, "");
 	print_name(name, tptr);
 	/*
 	 * Special case for non-null pointers to char
@@ -205,26 +206,26 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 		if (buf[i] < ' ' || buf[i] > 126)
 		    break;
 	    if (i == sizeof(buf) || buf[i] == '\0') {
-		printf(" = %s => \"%.*s\"\n", P(pval), sizeof(buf), buf);
+		fprintf(dexout, " = %s => \"%.*s\"\n", P(pval), sizeof(buf), buf);
 		EXIT_PROTECT(break);
 	    }
 	    END_PROTECT();
 	}
-	printf(" = %s\n", P(pval));
+	fprintf(dexout, " = %s\n", P(pval));
 	break;
 
     case ARRAY_TYPE:
 	ltptr = tptr->t_val.val_a.a_typeptr;
 	if ((rtptr = tptr->t_val.val_a.a_typedef)->t_type != RANGE_TYPE) {
-	    printf("bogus typedef for array for %s\n", name);
+	    fprintf(dexout, "bogus typedef for array for %s\n", name);
 	    return;
 	}
 	lower_index = atolarge(lower = rtptr->t_val.val_r.r_lower);
 	upper_index = atolarge(upper = rtptr->t_val.val_r.r_upper);
 	if (!lower_index && !upper_index) { /* 0 size array from & op */
-	    printf("%*s", indent, "");
+	    fprintf(dexout, "%*s", indent, "");
 	    print_name(name, tptr);
-	    printf(" = %s\n", P(addr));
+	    fprintf(dexout, " = %s\n", P(addr));
 	    break;
 	}
 	range = upper_index - lower_index + 1;
@@ -236,19 +237,19 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 		break;
 	    }
 	if (item_size * range != size) {
-	    printf("bogus sizes, item_size = %d, count = %d, size = %d\n",
+	    fprintf(dexout, "bogus sizes, item_size = %d, count = %d, size = %d\n",
 		   item_size, range, size);
 	    return;
 	}
 
 	if (item_size == 8) {		/* assume array of char => string */
 	    if (offset % 8) {
-		printf("bogus offset for string of characters for %s\n", name);
+		fprintf(dexout, "bogus offset for string of characters for %s\n", name);
 		return;
 	    }
-	    printf("%*s", indent, "");
+	    fprintf(dexout, "%*s", indent, "");
 	    print_name(name, tptr);
-	    printf(" = \"%.*s\"\n", range, addr + (offset / 8));
+	    fprintf(dexout, " = \"%.*s\"\n", range, addr + (offset / 8));
 	    break;
 	}
 
@@ -270,16 +271,16 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	break;
 
     case RANGE_TYPE:
-	printf("%*s", indent, "");
+	fprintf(dexout, "%*s", indent, "");
 	print_name(name, tptr);
-	printf(" = ");
+	fprintf(dexout, " = ");
 
 	while (size > 8 * sizeof(large_t)) {
 	    rval = get_field(addr, offset, 8 * sizeof(large_t));
 #ifdef _LONG_LONG
-	    printf("%lld(%s), ", rval, P(rval));
+	    fprintf(dexout, "%lld(%s), ", rval, P(rval));
 #else
-	    printf("%d(%s), ", rval, P(rval));
+	    fprintf(dexout, "%d(%s), ", rval, P(rval));
 #endif
 	    offset += 8 * sizeof(large_t);
 	    size -= 8 * sizeof(large_t);
@@ -301,26 +302,26 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	 * get tons of leadings 0xf's for negative numbers.
 	 */
 	if (size == 8)
-	    printf("%lld(0x%0*llx)'%c'\n", rval_signed, (size + 3) / 4, rval,
+	    fprintf(dexout, "%lld(0x%0*llx)'%c'\n", rval_signed, (size + 3) / 4, rval,
 		   (int)rval);
 	else
-	    printf("%lld(0x%0*llx)\n", rval_signed, (size + 3) / 4, rval);
+	    fprintf(dexout, "%lld(0x%0*llx)\n", rval_signed, (size + 3) / 4, rval);
 #else
 	/*
 	 * I don't have a platform to test this on so I'll won't
 	 * change it -- but it appears broken to me.
 	 */
 	if (size == 8)
-	    printf("%d(0x%0*x)'%c'\n", rval, (size + 3) / 4, rval, rval);
+	    fprintf(dexout, "%d(0x%0*x)'%c'\n", rval, (size + 3) / 4, rval, rval);
 	else
-	    printf("%d(0x%0*x)\n", rval, (size + 3) / 4, rval);
+	    fprintf(dexout, "%d(0x%0*x)\n", rval, (size + 3) / 4, rval);
 #endif
 	break;
 
     case PROC_TYPE:
-	printf("%*s", indent, "");
+	fprintf(dexout, "%*s", indent, "");
 	print_name(name, tptr);
-	printf(" = %s\n", P(addr));
+	fprintf(dexout, " = %s\n", P(addr));
 	break;
 
     case FLOAT_TYPE:
@@ -329,9 +330,9 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 	else
 	    d = *(double *)addr;
 
-	printf("%*s", indent, "");
+	fprintf(dexout, "%*s", indent, "");
 	print_name(name, tptr);
-	printf(" = %f\n", d);
+	fprintf(dexout, " = %f\n", d);
 	break;
 
     case ENUM_TYPE:
@@ -342,29 +343,29 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
 		e_val = eptr->e_name;
 		break;
 	    }
-	printf("%*s", indent, "");
+	fprintf(dexout, "%*s", indent, "");
 	print_name(name, tptr);
-	printf(" = %s(%s)\n", e_val, P(eval));
+	fprintf(dexout, " = %s(%s)\n", e_val, P(eval));
 	break;
 
     case STRINGPTR_TYPE:
-	printf("%s bogus stringptr\n", name);
+	fprintf(dexout, "%s bogus stringptr\n", name);
 	break;
     case COMPLEX_TYPE:
-	printf("%s bogus complex\n", name);
+	fprintf(dexout, "%s bogus complex\n", name);
 	break;
     case CONSTANT_TYPE:
-	printf("%*s", indent, "");
-	printf("const ");
+	fprintf(dexout, "%*s", indent, "");
+	fprintf(dexout, "const ");
 	print_out(tptr->t_val.val_k, addr, offset, size, 0, name);
 	break;
     case VOLATILE:
-	printf("%*s", indent, "");
-	printf("volatile ");
+	fprintf(dexout, "%*s", indent, "");
+	fprintf(dexout, "volatile ");
 	print_out(tptr->t_val.val_v, addr, offset, size, 0, name);
 	break;
     default:
-	printf("%s bogus default %d\n", name, tptr->t_type);
+	fprintf(dexout, "%s bogus default %d\n", name, tptr->t_type);
 	break;
     }
 }
@@ -374,9 +375,9 @@ void print_sym(symptr s)
     typeptr t = s->s_type;
     typeptr oldt;
 
-    printf("%s: ", s->s_name);
+    fprintf(dexout, "%s: ", s->s_name);
     while (t) {
-	printf("%s%s", (t == s->s_type) ? "" : "->", stab_name(t->t_type));
+	fprintf(dexout, "%s%s", (t == s->s_type) ? "" : "->", stab_name(t->t_type));
 	oldt = t;
 	switch (t->t_type) {
 	case PTR_TYPE:
@@ -399,10 +400,10 @@ void print_sym(symptr s)
 	    break;
     }
     if (s->s_base > LAST_TYPE || s->s_base < 0)
-	printf("(%s:%d), addr=%s, size=%d, nesting=%d\n",
+	fprintf(dexout, "(%s:%d), addr=%s, size=%d, nesting=%d\n",
 	       "bad", s->s_base, P(s->s_offset), s->s_size, s->s_nesting);
     else
-	printf("(%s), addr=%s, size=%d, nesting=%d\n",
+	fprintf(dexout, "(%s), addr=%s, size=%d, nesting=%d\n",
 	       type_2_string[s->s_base], P(s->s_offset), s->s_size,
 	       s->s_nesting);
 }
@@ -417,15 +418,15 @@ void _dump_symtable(ns *nspace, symtabptr old_sytp)
 
     if (sytp) {
 	if (sytp == old_sytp)
-	    printf("Symbols for %s point to the parent\n", nspace->ns_name);
+	    fprintf(dexout, "Symbols for %s point to the parent\n", nspace->ns_name);
 	else {
-	    printf("Symbols for %s\n", nspace->ns_name);
+	    fprintf(dexout, "Symbols for %s\n", nspace->ns_name);
 	    a = all = (symptr *)smalloc(sizeof(symptr) * sytp->sy_count);
 	    a_end = a + sytp->sy_count;
 	    for (i = 0; i < HASH_SIZE; i++)
 		for (s = sytp->sy_hash[i]; s; s = s->s_hash)
 		    if (a == a_end)
-			printf("nspace->ns_symcount is off\n");
+			fprintf(dexout, "nspace->ns_symcount is off\n");
 		    else
 			*a++ = s;
 	    qsort(all, sytp->sy_count, sizeof(symptr), sym_compare);
@@ -445,13 +446,13 @@ void _dump_type(typeptr t)
     if (t->t_attrs) {
 	struct attr *a;
 
-	printf("attrs:");
+	fprintf(dexout, "attrs:");
 	for (a = t->t_attrs; a; a = a->a_next)
-	    printf(" %s:%d", attr_name(a->a_type), a->a_val);
+	    fprintf(dexout, " %s:%d", attr_name(a->a_type), a->a_val);
     }
     if (t->t_type == RANGE_TYPE)
-	printf("%s->%s", t->t_val.val_r.r_lower, t->t_val.val_r.r_upper);
-    printf("\n");
+	fprintf(dexout, "%s->%s", t->t_val.val_r.r_lower, t->t_val.val_r.r_upper);
+    fprintf(dexout, "\n");
 }
 
 void _dump_types(ns *nspace)
@@ -461,7 +462,7 @@ void _dump_types(ns *nspace)
     int i;
 
     if (ttp = nspace->ns_typedefs) {
-	printf("Typedefs from %s\n", nspace->ns_name);
+	fprintf(dexout, "Typedefs from %s\n", nspace->ns_name);
 	for (i = 0; i < HASH_SIZE; ++i) {
 	    t = ttp->tt_hash[i];
 	    while (t) {
@@ -472,7 +473,7 @@ void _dump_types(ns *nspace)
     }
 
     if (ttp = nspace->ns_namedefs) {
-	printf("Structure names from %s\n", nspace->ns_name);
+	fprintf(dexout, "Structure names from %s\n", nspace->ns_name);
 	for (i = 0; i < HASH_SIZE; ++i) {
 	    t = ttp->tt_hash[i];
 	    while (t) {

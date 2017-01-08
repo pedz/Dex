@@ -15,6 +15,7 @@ static char sccs_id[] = "@(#)scan.l	1.9";
 #include "gram.h"
 #include "inter.h"
 #include "scan_pre.h"
+#include "builtins.h"
 #if USE_READLINE
 #define READLINE_LIBRARY
 #include "lib/history.h"
@@ -72,6 +73,7 @@ struct keywords {
 char string_buf[1024];
 char *str_ptr;
 large_t ltemp;
+static int write_pipe_open = 0;
 
 #ifdef getc
 #undef getc
@@ -363,7 +365,15 @@ char *trim_str(char *s, char *e);
 <normal>";"(" "|"\t")*"|".* {
     char *s = trim_str(strchr(yytext, '|') + 1, yytext + yyleng - 1);
 
-    printf("open pipe to '%s'\n", s);
+    if (!isatty(fileno(yyin))) {
+      fprintf(stderr, "%s: \"; | command\" construct found at line %d of %s\n",
+	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+      fprintf(stderr, "The \"; | command\" construct can only be done interactively\n");
+      exit(1);
+    }
+
+    write_pipe_open = 1;
+    dexout = popen(s, "w");
     yylval.ival = ';';
     return ';';
 }
@@ -371,7 +381,14 @@ char *trim_str(char *s, char *e);
 <normal>";"(" "|"\t")*">".* {
     char *s = trim_str(strchr(yytext, '>') + 1, yytext + yyleng - 1);
 
-    printf("open file to '%s'\n", s);
+    if (!isatty(fileno(yyin))) {
+      fprintf(stderr, "%s: \"; > file\" construct found at line %d of %s\n",
+	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+      fprintf(stderr, "The \"; > file\" construct can only be done interactively\n");
+      exit(1);
+    }
+
+    dexout = fopen(s, "w");
     yylval.ival = ';';
     return ';';
 }
@@ -395,7 +412,7 @@ char *trim_str(char *s, char *e);
 
 <string>"\n" {
     fprintf(stderr, "%s: newline in string at line %d of %s\n",
-	    progname, yyfilename ? yyfilename : "<stdin>", yylineno);
+	    progname, yylineno, yyfilename ? yyfilename : "<stdin>");
     BEGIN normal;
     add_char('\0');
     yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
@@ -528,11 +545,42 @@ static char *do_fgets(FILE *in)
 {
     static char buf[1024];
 
-    printf("> ");
+    printf("HERE!!!! > ");
     fflush(stdout);
     return fgets(buf, sizeof(buf), in);
 }
 #endif
+
+/*
+ * This routine can not really fail but it returns 1 so it can be used
+ * inside the if clause.
+ */
+static int reset_files(void)
+{
+    if (dexin != stdin) {
+	printf("closing dexin\n");
+	fclose(dexin);
+	dexin = stdin;
+    }
+
+    if (dexout != stdout) {
+	printf("closing dexout\n");
+	if (write_pipe_open) {
+	    write_pipe_open = 0;
+	    pclose(dexout);
+	} else {
+	    fclose(dexout);
+	}
+	dexout = stdout;
+    }
+
+    if (dexerr != stderr) {
+	printf("closing dexerr\n");
+	fclose(dexerr);
+	dexerr = stderr;
+    }
+    return 1;
+}
 
 /*
  * fgets and readline both eat the ending new line.  This makes the
@@ -549,6 +597,7 @@ static int do_getc(FILE *in)
     static char *ptr;
 
     if (ptr == NULL &&
+	reset_files() &&
 	((ptr = do_fgets(in))) == NULL)
 	return EOF;
 
@@ -607,7 +656,7 @@ void add_char(int c)
     if (str_ptr >= (string_buf + sizeof(string_buf))) {
 	if (warned == 0) {
 	    fprintf(stderr, "%s: string too long at line %d of %s\n",
-		    progname, yyfilename ? yyfilename : "<stdin>", yylineno);
+		    progname, yylineno, yyfilename ? yyfilename : "<stdin>");
 	    warned = 1;
 	}
     } else {
