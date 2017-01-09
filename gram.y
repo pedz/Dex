@@ -66,11 +66,12 @@ static char sccs_id[] = "@(#)gram.y	1.11";
 #define yylex GRAMlex
 
 ns *ns_inter;
-static anode anode_stack[8];
+#define ANODE_STACK_SIZE 8
+static anode anode_stack[ANODE_STACK_SIZE];
 static int anode_index = -1;
-#define current_attributes (anode_stack[anode_index])
-
-#define push_attributes(anode) (anode_stack[++anode_index] = (anode))
+static anode null_anode;
+#define current_attributes (anode_stack[get_anode_index()])
+#define push_attributes(anode) ((anode_stack[increment_anode_index()]) = (anode))
 #define pop_attributes (--anode_index)
 
 static int param_count;
@@ -89,7 +90,10 @@ static void end_function(void);
 static void do_parameter_allocation(arg_list *old_list, arg_list *args);
 static void change_to_int(cnode *c);
 static char *save_as_string(int i);
-
+static int increment_anode_index(void);
+static int get_anode_index(void);
+static void append_type(anode *a, typeptr t);
+ 
 int yydebug;
 int yyparse(void);
  
@@ -187,7 +191,7 @@ int yyparse(void);
 %type <anode> type simple_type struct_declaration enum_declaration
 %type <anode> type_name class_name class non_function_declarator
 %type <anode> function_declarator ptr_function_declarator null_decl
-%type <anode> non_empty_decl str_head enum_head
+%type <anode> non_empty_decl str_head enum_head non_function_declarator_specs
 
 %type <cnode> constant name lvalue pvalue expression
 %type <cnode> opt_expression nce
@@ -720,7 +724,13 @@ str_head
 
 struct_union
     : STRUCT
+        {
+	    DEBUG_PRINTF(("got struct\n"));
+	}
     | UNION
+        {
+	    DEBUG_PRINTF(("got union\n"));
+	}
     ;
 
 /*
@@ -799,54 +809,85 @@ declarator			/* a single field in a struct */
     ;
 
 non_function_declarator		/* argument, var, or field */
-    : '*' non_function_declarator
+    : non_function_declarator_specs
+        {
+	    $$ = $1;
+	    if ($$.a_valid_type = current_attributes.a_valid_type) {
+		append_type(&$$, current_attributes.a_type);
+	    }
+	    if ($$.a_valid_class = current_attributes.a_valid_class)
+		$$.a_class = current_attributes.a_class;
+	    if (!$$.a_valid_base &&
+		($$.a_valid_base = current_attributes.a_valid_base))
+		$$.a_base = current_attributes.a_base;
+	}
+    ;
+
+non_function_declarator_specs
+    : '*' non_function_declarator_specs
 	{
-	    typeptr t = newtype($2.a_type->t_ns, PTR_TYPE);
+	    typeptr t = newtype(current_attributes.a_type->t_ns, PTR_TYPE);
 
 	    $$ = $2;
-	    $$.a_type = t;
+	    $$.a_valid_base = 1;
 	    $$.a_base = ulong_type;
-	    t->t_val.val_p = $2.a_type;
+	    append_type(&$$, t);
+
 	}
-    | '(' '*' non_function_declarator ')' arg_list
+    | '(' '*' non_function_declarator_specs ')'
 	{
-	    typeptr t1 = newtype($3.a_type->t_ns, PTR_TYPE);
-	    typeptr t2 = newtype($3.a_type->t_ns, PROC_TYPE);
+	    typeptr t = newtype(current_attributes.a_type->t_ns, PTR_TYPE);
 
 	    $$ = $3;
-	    $$.a_type = t1;
+	    $$.a_valid_base = 1;
 	    $$.a_base = ulong_type;
+	    append_type(&$$, t);
+	}
+    | '(' '*' non_function_declarator_specs ')' arg_list
+	{
+	    typeptr t1 = newtype(current_attributes.a_type->t_ns, PTR_TYPE);
+	    typeptr t2 = newtype(current_attributes.a_type->t_ns, PROC_TYPE);
+
 	    t1->t_val.val_p = t2;
-	    t2->t_val.val_f.f_typeptr = $3.a_type;
 	    t2->t_val.val_f.f_params = -1;
 	    t2->t_val.val_f.f_paramlist = 0;
+	    $$ = $3;
+	    $$.a_valid_base = 1;
+	    $$.a_base = ulong_type;
+	    append_type(&$$, t1);
 	}
-    | non_function_declarator '[' opt_constant_expression ']'
+    | non_function_declarator_specs '[' opt_constant_expression ']'
 	{
-	    typeptr t1 = newtype($1.a_type->t_ns, RANGE_TYPE);
-	    typeptr t2 = newtype($1.a_type->t_ns, ARRAY_TYPE);
+	    typeptr t1 = newtype(current_attributes.a_type->t_ns, RANGE_TYPE);
+	    typeptr t2 = newtype(current_attributes.a_type->t_ns, ARRAY_TYPE);
 
-	    $$ = $1;
 	    t1->t_val.val_r.r_typeptr = 0;
 	    t1->t_val.val_r.r_lower = 0;
 	    t1->t_val.val_r.r_upper = save_as_string($3 - 1);
 	    t2->t_val.val_a.a_typedef = t1;
-	    t2->t_val.val_a.a_typeptr = $1.a_type;
-	    $$.a_type = t2;
+	    $$ = $1;
+	    $$.a_valid_base = 1;
 	    $$.a_base = ulong_type;
+	    append_type(&$$, t2);
 	}
-    | '(' non_function_declarator ')'
+    | '(' non_function_declarator_specs ')'
 	{
 	    $$ = $2;
 	}
     | IDENTIFIER
 	{
-	    $$ = current_attributes;
+	    $$ = null_anode;
 	    $$.a_name = $1;
 	    $$.a_valid_name = 1;
 	}
     ;
 
+/*
+ * I bet this has the same errors that non_function_declarator had.
+ * Look for changes on Jan  9, 2017 when append_type was added.  I
+ * have not had problems with function declarators and I need to do
+ * other things so I'm going to leave them as they are for now.
+ */
 function_declarator		/* function name */
     : '*' function_declarator
 	{
@@ -1215,7 +1256,6 @@ statement
     | PRINT expression ';'
 	{
 	    $$ = mk_print_stmt(&$2);
-	    DEBUG_PRINTF(("did statement\n"));
 	}
     | error
 	{
@@ -1421,7 +1461,6 @@ asgn_op
 pvalue
     : lvalue				%prec DOSHIFT
 	{
-	    DEBUG_PRINTF(("hit this %d\n", $1.c_expr->e_size));
 	    mk_l2p(&$$, &$1);
 	}
     | '(' expression ')'
@@ -1534,11 +1573,7 @@ lvalue
 	     * address).  So I changed it to be the size of a
 	     * pointer.  Lets see what that breaks now...
 	     */
-#if 0
-	    $$.c_expr->e_size = get_size($$.c_type) / 8;
-#else
 	    $$.c_expr->e_size = sizeof(void *);
-#endif
 	    DEBUG_PRINTF(("* %s %d\n", P($$.c_expr),
 			 $$.c_expr->e_size));
 	    $$.c_const = 0;
@@ -1920,15 +1955,14 @@ static void do_parameter_allocation(arg_list *old_list, arg_list *args)
 	for (p = args; p; p = p->a_next)
 	    if (!strcmp(p->a_anode.a_name, a1->a_anode.a_name)) {
 		if (p->a_anode.a_type)
-		    fprintf(stderr, "Double declaration for argument %s\n",
+		    yyerror("Double declaration for argument %s\n",
 			    a1->a_anode.a_name);
 		else
 		    p->a_anode = a1->a_anode;
 		break;
 	    }
 	if (!p)				/* not found */
-	    fprintf(stderr,
-		    "Arg %s declarated but not in argument list\n",
+	    yyerror("Arg %s declarated but not in argument list\n",
 		    a1->a_anode.a_name);
     }
 
@@ -1941,19 +1975,6 @@ static void do_parameter_allocation(arg_list *old_list, arg_list *args)
 	(void) gram_enter_sym(&a1->a_anode, __LINE__, (cnode_list *)0);
     }
 }
-
-#if 0
-static void prompt(void)
-{
-    extern FILE *yyin;
-
-    if (isatty(fileno(yyin))) {
-	putchar('>');
-	putchar(' ');
-	fflush(stdout);
-    }
-}
-#endif
 
 static void change_to_int(cnode *c)
 {
@@ -1968,4 +1989,64 @@ static char *save_as_string(int i)
 
     sprintf(buf, "%d", i);
     return store_string(ns_inter, buf, 0, (char *)0);
+}
+
+static int increment_anode_index(void)
+{
+    ++anode_index;
+    if ((anode_index < 0) || (anode_index >= ANODE_STACK_SIZE)) {
+	yyerror("get_anode_index: anode_index out of range %d\n", anode_index);
+	exit(1);
+    }
+    return anode_index;
+}
+
+static int get_anode_index(void)
+{
+    if ((anode_index < 0) || (anode_index >= ANODE_STACK_SIZE)) {
+	yyerror("get_anode_index: anode_index out of range %d\n", anode_index);
+	exit(1);
+    }
+    return anode_index;
+}
+
+static void append_type(anode *a, typeptr t)
+{
+    typeptr last = a->a_type;
+
+    if (!last) {
+	a->a_type = t;
+	return;
+    }
+    for ( ; ; ) {
+	switch (last->t_type) {
+	case PTR_TYPE:
+	    if (last->t_val.val_p) {
+		last = last->t_val.val_p;
+		break;
+	    }
+	    last->t_val.val_p = t;
+	    return;
+
+	case ARRAY_TYPE:
+	    if (last->t_val.val_a.a_typeptr) {
+		last = last->t_val.val_a.a_typeptr;
+		break;
+	    }
+	    last->t_val.val_a.a_typeptr = t;
+	    return;
+
+	case PROC_TYPE:
+	    if (last->t_val.val_f.f_typeptr) {
+		last = last->t_val.val_f.f_typeptr;
+		break;
+	    }
+	    last->t_val.val_f.f_typeptr = t;
+	    return;
+
+	default:
+	    yyerror("Unnown stab type in append_type: %d\n", last->t_type);
+	    exit(1);
+	}
+    }
 }

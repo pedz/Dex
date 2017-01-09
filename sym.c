@@ -333,6 +333,7 @@ typeptr find_type(ns *nspace, int type_id)
     typeptr ret = 0;
     tidtabptr tid;
 
+    DEBUG_PRINTF(("find_type: nspace:%#018lx type_id:%d\n", nspace, type_id));
     if (type_id == 0)
 	return 0;
 
@@ -350,10 +351,13 @@ typeptr find_type(ns *nspace, int type_id)
      * type node and then fill it in whenever it gets defined.
      */
     if (!ret) {
+	DEBUG_PRINTF(("find_type: forward reference\n"));
 	ret = new(struct type);
 	ret->t_ns = nspace;
 	insert_type(type_id, ret);
     }
+    
+    DEBUG_PRINTF(("find_type: return:%#018lx\n", ret));
     return ret;
 }
 
@@ -560,12 +564,12 @@ void load_base_types(ns *nspace)
     char **tpp;
     char **tpp_end;
 
+    DEBUG_PRINTF(("loading base types\n"));
     nspace->ns_typedefs = 0;
     nspace->ns_namedefs = 0;
     nspace->ns_tids = 0;
     for (tpp_end = (tpp = tp_array) + A_SIZE(tp_array); tpp < tpp_end; ++tpp) {
 	parse_stab(nspace, *tpp, 0, (symptr *)0);
-	break;
     }
 }
 

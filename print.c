@@ -59,6 +59,7 @@ void print_name(char *name, typeptr tptr)
     if (!tptr)
 	fprintf(dexout, "%s", name);
 
+    DEBUG_PRINTF(("print_name: type = %s(%d)\n", stab_name(tptr->t_type), tptr->t_type));
     switch (tptr->t_type) {
     case STRUCT_TYPE:
     case UNION_TYPE:
@@ -164,6 +165,7 @@ void print_out(typeptr tptr, char *addr, int offset, int size, int indent,
     if (!size)
 	size = get_size(tptr);
 
+    DEBUG_PRINTF(("print_out: type = %s(%d)\n", stab_name(tptr->t_type), tptr->t_type));
     switch (tptr->t_type) {
     case UNION_TYPE:
     case STRUCT_TYPE:
