@@ -432,7 +432,9 @@ static void do_char_ptr_funcs(void)
     };
     struct table tab[] = {
 	{ "fgets",   int_fgets },
+	{ "index",   int_strchr },
 	{ "instr",   int_instr },
+	{ "rindex",  int_strrchr },
 	{ "strcat",  int_strcat },
 	{ "strchr",  int_strchr },
 	{ "strcpy",  int_strcpy },
