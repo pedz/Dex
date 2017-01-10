@@ -558,13 +558,11 @@ static char *do_fgets(FILE *in)
 static int reset_files(void)
 {
     if (dexin != stdin) {
-	printf("closing dexin\n");
 	fclose(dexin);
 	dexin = stdin;
     }
 
     if (dexout != stdout) {
-	printf("closing dexout\n");
 	if (write_pipe_open) {
 	    write_pipe_open = 0;
 	    pclose(dexout);
@@ -575,7 +573,6 @@ static int reset_files(void)
     }
 
     if (dexerr != stderr) {
-	printf("closing dexerr\n");
 	fclose(dexerr);
 	dexerr = stderr;
     }
