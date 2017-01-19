@@ -378,6 +378,22 @@ char *trim_str(char *s, char *e);
     return ';';
 }
 
+<normal>"}"(" "|"\t")*"|".* {
+    char *s = trim_str(strchr(yytext, '|') + 1, yytext + yyleng - 1);
+
+    if (!isatty(fileno(yyin))) {
+      fprintf(stderr, "%s: \"; | command\" construct found at line %d of %s\n",
+	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+      fprintf(stderr, "The \"} | command\" construct can only be done interactively\n");
+      exit(1);
+    }
+
+    write_pipe_open = 1;
+    dexout = popen(s, "w");
+    yylval.ival = '"';
+    return '"';
+}
+
 <normal>";"(" "|"\t")*">".* {
     char *s = trim_str(strchr(yytext, '>') + 1, yytext + yyleng - 1);
 
@@ -391,6 +407,21 @@ char *trim_str(char *s, char *e);
     dexout = fopen(s, "w");
     yylval.ival = ';';
     return ';';
+}
+
+<normal>"}"(" "|"\t")*">".* {
+    char *s = trim_str(strchr(yytext, '>') + 1, yytext + yyleng - 1);
+
+    if (!isatty(fileno(yyin))) {
+      fprintf(stderr, "%s: \"; > file\" construct found at line %d of %s\n",
+	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+      fprintf(stderr, "The \"} > file\" construct can only be done interactively\n");
+      exit(1);
+    }
+
+    dexout = fopen(s, "w");
+    yylval.ival = '}';
+    return '}';
 }
 
 <comment>. {
