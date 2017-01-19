@@ -45,6 +45,7 @@ static int usage(void)
     fprintf(stderr, "Usage: %s [options] [src_file_list]\n", progname);
     fprintf(stderr, "        -D, --debug mask     Set debug mask\n");
     fprintf(stderr, "        -d, --dump dumpfile  Specify the dump file\n");
+    fprintf(stderr, "        -i, --interactive    Run dex interactively\n");
     fprintf(stderr, "        -u, --unix unixfile  Specify the unix file\n");
     fprintf(stderr, "        src_file_list        List of source files\n");
     return 1;
