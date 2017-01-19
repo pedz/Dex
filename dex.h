@@ -8,6 +8,7 @@
 extern char *progname;
 extern void *stack_top;
 extern unsigned long debug_mask;
+extern int interactive;
 
 void *safe_malloc(size_t size, char *file, int lineno);
 void *safe_realloc(void *old, size_t size, size_t old_size, char *file, int lineno);

@@ -17,6 +17,7 @@ static char sccs_id[] = "@(#)dex.c	1.11";
 #include "fcall.h"
 #include "gram_pre.h"
 #include "stmt.h"
+#include "scan_pre.h"
 
 #define DEBUG_BIT DEX_C_BIT
 
@@ -27,6 +28,7 @@ void *stack_top;
 unsigned long debug_mask;
 extern int GRAMdebug;
 extern int STABdebug;
+int interactive;
 
 #include <setjmp.h>
 #include "lib/getopt.h"
@@ -48,6 +50,8 @@ static int usage(void)
     return 1;
 }
 
+extern FILE *yyin;
+
 int main(int argc, char *argv[])
 {
     typeptr t;
@@ -66,22 +70,29 @@ int main(int argc, char *argv[])
 	int c;
 	int option_index;
 	static struct option long_options[] = {
-	    { "debug", required_argument, 0, 'D' },
-	    { "dump",  required_argument, 0, 'd' },
-	    { "help",  no_argument,       0, '?' },
-	    { "unix",  required_argument, 0, 'u' },
+	    { "debug",       required_argument, 0, 'D' },
+	    { "dump",        required_argument, 0, 'd' },
+	    { "help",        no_argument,       0, '?' },
+	    { "interactive", no_argument,       0, 'i' },
+	    { "unix",        required_argument, 0, 'u' },
 	    { 0, 0, 0, 0}
 	};
 	
 	if ((c = getopt_long(argc, argv, "D:d:u:?", long_options, &option_index)) == -1)
 	    break;
 	switch (c) {
+	case 'i':
+	    interactive = 1;
+	    break;
+	    
 	case 'd':
 	    dumpname = optarg;
 	    break;
 	    
 	case 'D':
 	    debug_mask = strtoul(optarg, (char **)0, 0);
+	    GRAMdebug = debug_mask & GRAM_Y_BIT;
+	    STABdebug = debug_mask & STAB_Y_BIT;
 	    break;
 	    
 	case 'u':
@@ -105,45 +116,6 @@ int main(int argc, char *argv[])
 	    printf("source %s\n", argv[optind++]);
     }
 
-#if 0
-    /* optional -d flag */
-    if (argc && !strncmp(argv[0], "-d", 2)) {
-	if (strlen(argv[0]) > 2) {
-	    debug_mask = strtoul(argv[0]+2, (char **)0, 0);
-	    --argc;
-	    ++argv;
-	} else {
-	    --argc;
-	    ++argv;
-	    if (debug_mask = strtoul(argv[0], (char **)0, 0)) {
-		--argc;
-		++argv;
-	    } else {
-		debug_mask = -1;
-	    }
-	}
-	GRAMdebug = debug_mask & GRAM_Y_BIT;
-	STABdebug = debug_mask & STAB_Y_BIT;
-    }
-
-    if (argc) {				/* First arg: dump */
-	dumpname = argv[0];
-	++argv;
-	--argc;
-    } else {
-	fprintf(stderr, "Usage: %s [-d] dump [unix]\n", progname);
-	return 1;
-    }
-
-    if (argc) {				/* Optional second arg: unix */
-	unixname = argv[0];
-	if (load(unixname, 0, 0))
-	    return 1;
-	++argv;
-	--argc;
-    }
-#endif
-
     if (unixname && load(unixname, 0, 0))
 	return 1;		/* no error message? */
     
@@ -158,13 +130,25 @@ int main(int argc, char *argv[])
     builtin_init();
     if (setup_pseudos())
 	return 1;
-    while (1) {
-	signal(SIGINT, sigint_catch);
-	if (setjmp(GRAMcatch) == 0) {
-	    GRAMparse();
-	    break;
+    
+    while (optind < argc) {
+	if ((yyin = fopen(argv[optind], "r")) == 0) {
+	    fprintf(stderr, "%s: %s not found\n", progname, argv[optind]);
+	    exit(1);
 	}
+	optind++;
+	GRAMparse();
     }
+
+    if (interactive)
+	yyin = stdin;
+	while (1) {
+	    signal(SIGINT, sigint_catch);
+	    if (setjmp(GRAMcatch) == 0) {
+		GRAMparse();
+		break;
+	    }
+	}
     return 0;
 }
 
