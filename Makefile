@@ -18,7 +18,8 @@
 # LEVEL 1,5 Years Bull Confidential Information
 #
 
-CCVER=compilers/xlc/11109A
+# CCVER=compilers/xlc/11108A
+# C++VER=compilers/xlC/9000
 
 X=${MAKETOP}../obj/power/bos/usr/ccs/lib/libxcurses
 VPATH		= ${TARGET_MACHINE}:${X}
