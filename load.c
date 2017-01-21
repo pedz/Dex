@@ -744,6 +744,9 @@ int load(char *path, long text_base, long data_base)
 						&ptr_func_int_type);
 		    break;
 
+		case MAP(XMC_PR, XTY_ER): /* New type that appeared in 7.2 */
+		    break;
+			
 		default:
 		    fprintf(stderr,
 			    "Unknown class/type pair of %d/%d for %s\n",
