@@ -89,7 +89,8 @@ base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g -qdbxextra -qlist -qsource
 # base.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -g
 base.o_INCFLAGS = \
 	-I${MAKETOP}../export/power_64/kernel/include \
-	-I${MAKETOP}bos/kernext/sctp
+	-I${MAKETOP}bos/kernel \
+	-I${MAKETOP}bos/kernext/sctp \
 
 vmsslb.h : ${MAKETOP}../../export/power_64/kernel/include/vmm/vmsslb.h
 ${MAKETOP}../../export/power_64/kernel/include/vmm/vmsslb.h :

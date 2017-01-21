@@ -41,6 +41,7 @@ extern system_configuration_t _system_configuration;
 
 #include <a.out.h>
 #include <sys/ldr/ld_data.h>
+#include <ldr/ld_private.h>
 #include <pse/str_stream.h>
 #ifdef ALIGN
 #undef ALIGN
