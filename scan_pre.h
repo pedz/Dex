@@ -10,9 +10,11 @@
  * they may change.
  */
 
+extern FILE *yyin;
 extern int yylineno;
 extern char *yyfilename;
 
+void set_source(FILE *f, int lineno, char *filename);
 void add_source(char *s);
 int GRAMlex(void);
 

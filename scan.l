@@ -367,7 +367,7 @@ char *trim_str(char *s, char *e);
 
     if (!isatty(fileno(yyin))) {
       fprintf(stderr, "%s: \"; | command\" construct found at line %d of %s\n",
-	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+	      progname, yylineno, yyfilename ? yyfilename : "<badness>");
       fprintf(stderr, "The \"; | command\" construct can only be done interactively\n");
       exit(1);
     }
@@ -383,7 +383,7 @@ char *trim_str(char *s, char *e);
 
     if (!isatty(fileno(yyin))) {
       fprintf(stderr, "%s: \"; | command\" construct found at line %d of %s\n",
-	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+	      progname, yylineno, yyfilename ? yyfilename : "<badness>");
       fprintf(stderr, "The \"} | command\" construct can only be done interactively\n");
       exit(1);
     }
@@ -399,7 +399,7 @@ char *trim_str(char *s, char *e);
 
     if (!isatty(fileno(yyin))) {
       fprintf(stderr, "%s: \"; > file\" construct found at line %d of %s\n",
-	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+	      progname, yylineno, yyfilename ? yyfilename : "<badness>");
       fprintf(stderr, "The \"; > file\" construct can only be done interactively\n");
       exit(1);
     }
@@ -414,7 +414,7 @@ char *trim_str(char *s, char *e);
 
     if (!isatty(fileno(yyin))) {
       fprintf(stderr, "%s: \"; > file\" construct found at line %d of %s\n",
-	      progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+	      progname, yylineno, yyfilename ? yyfilename : "<badness>");
       fprintf(stderr, "The \"} > file\" construct can only be done interactively\n");
       exit(1);
     }
@@ -443,7 +443,7 @@ char *trim_str(char *s, char *e);
 
 <string>"\n" {
     fprintf(stderr, "%s: newline in string at line %d of %s\n",
-	    progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+	    progname, yylineno, yyfilename ? yyfilename : "<badness>");
     BEGIN normal;
     add_char('\0');
     yylval.str = store_string(ns_inter, string_buf, 0, (char *)0);
@@ -502,7 +502,7 @@ char *trim_str(char *s, char *e);
 <normal>\n {
 #define xxx(a) # a
     DEBUG_PRINTF(("%s: %s:%d\n", xxx(yylex),
-		  yyfilename ? yyfilename : "<stdin>", yylineno));
+		  yyfilename ? yyfilename : "<badness>", yylineno));
 }
 
 <normal>. {
@@ -531,7 +531,7 @@ struct fs {
     int fs_line;
 };
 static struct fs *file_stack;
-char *yyfilename = "<stdin>";
+char *yyfilename;
 
 #if USE_READLINE
 
@@ -553,7 +553,7 @@ static char *do_fgets(FILE *in)
 	    free(last);
 	    last = expand;
 	    if (rc)
-		printf("%s\n", last);
+		fprintf(stderr, "error from history_expand for '%s'\n", last);
 	    if (rc < 0)
 		continue;
 	    if (!strcmp(last, "history")) {
@@ -576,7 +576,6 @@ static char *do_fgets(FILE *in)
 {
     static char buf[1024];
 
-    printf("HERE!!!! > ");
     fflush(stdout);
     return fgets(buf, sizeof(buf), in);
 }
@@ -637,9 +636,19 @@ static int do_getc(FILE *in)
     return *ptr++;
 }
 
+void set_source(FILE *f, int lineno, char *filename)
+{
+    yyin = f;
+    yylineno = lineno;
+    yyfilename = filename;
+}
+
 static int getc(FILE *in)
 {
     int ret;
+
+    if (yyin == (FILE *)-1)
+	return EOF;
 
     while ((ret = isatty(fileno(yyin)) ? do_getc(yyin) : fgetc(yyin)) == EOF) {
 	struct fs *f;
@@ -647,9 +656,7 @@ static int getc(FILE *in)
 	if (!(f = file_stack))
 	    break;
 	fclose(yyin);
-	yyin = file_stack->fs_file;
-	yylineno = file_stack->fs_line;
-	yyfilename = file_stack->fs_name;
+	set_source(file_stack->fs_file, file_stack->fs_line, file_stack->fs_name);
 	file_stack = file_stack->fs_next;
 	free(f);
     }
@@ -672,9 +679,7 @@ void add_source(char *s)
     f->fs_file = yyin;
     f->fs_line = yylineno;
     f->fs_name = yyfilename;
-    yyin = temp;
-    yylineno = 1;
-    yyfilename = s;
+    set_source(temp, 1, s);
 }
 
 void add_char(int c)
@@ -684,7 +689,7 @@ void add_char(int c)
     if (str_ptr >= (string_buf + sizeof(string_buf))) {
 	if (warned == 0) {
 	    fprintf(stderr, "%s: string too long at line %d of %s\n",
-		    progname, yylineno, yyfilename ? yyfilename : "<stdin>");
+		    progname, yylineno, yyfilename ? yyfilename : "<badness>");
 	    warned = 1;
 	}
     } else {

@@ -51,8 +51,6 @@ static int usage(void)
     return 1;
 }
 
-extern FILE *yyin;
-
 int main(int argc, char *argv[])
 {
     typeptr t;
@@ -79,7 +77,7 @@ int main(int argc, char *argv[])
 	    { 0, 0, 0, 0}
 	};
 	
-	if ((c = getopt_long(argc, argv, "D:d:u:?", long_options, &option_index)) == -1)
+	if ((c = getopt_long(argc, argv, "iD:d:u:?", long_options, &option_index)) == -1)
 	    break;
 	switch (c) {
 	case 'i':
@@ -132,24 +130,29 @@ int main(int argc, char *argv[])
     if (setup_pseudos())
 	return 1;
     
-    while (optind < argc) {
-	if ((yyin = fopen(argv[optind], "r")) == 0) {
-	    fprintf(stderr, "%s: %s not found\n", progname, argv[optind]);
+    if (interactive) {
+	set_source(stdin, 1, "<stdin>");
+    } else if (optind < argc) {
+	FILE *f;
+
+	if ((f = fopen(argv[--argc], "r")) == 0) {
+	    perror(argv[argc]);
 	    exit(1);
 	}
-	optind++;
-	GRAMparse();
+	set_source(f, 1, argv[argc]);
     }
 
-    if (interactive)
-	yyin = stdin;
-	while (1) {
-	    signal(SIGINT, sigint_catch);
-	    if (setjmp(GRAMcatch) == 0) {
-		GRAMparse();
-		break;
-	    }
+    while (optind < argc) {
+	add_source(argv[--argc]);
+    }
+
+    while (1) {
+	signal(SIGINT, sigint_catch);
+	if (setjmp(GRAMcatch) == 0) {
+	    GRAMparse();
+	    break;
 	}
+    }
     return 0;
 }
 

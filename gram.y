@@ -1831,7 +1831,7 @@ void yyerror(char *s, ...)
 {
     va_list Argp;
     char smallbuf[256];
-    char *f = yyfilename ? yyfilename : "<stdin>";
+    char *f = yyfilename ? yyfilename : "<badness>";
 
     va_start(Argp, s);
     vsprintf(smallbuf, s, Argp);
