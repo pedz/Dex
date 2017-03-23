@@ -150,8 +150,11 @@ int mk_dot(cnode *result, cnode *c, char *s)
     int bit_offset;
     int bit_size;
 
+    if (t->t_type == VOLATILE)
+	t = t->t_val.val_v;
+    
     if (t->t_type != STRUCT_TYPE && t->t_type != UNION_TYPE) {
-	GRAMerror("struct or union expected");
+	GRAMerror("struct or union expected: %d", t->t_type);
 	return 1;
     }
     nspace = t->t_ns;
