@@ -207,6 +207,21 @@ static int print_it(int multi_1tb_ksp_segs)
     else
 	s = "";
 
+    ul = PSX_4K;
+    printf("%sPSX_4K = %#018lxul; /* %ld */\n", s, ul, ul);
+    
+    ul = PSX_64K;
+    printf("%sPSX_64K = %#018lxul; /* %ld */\n", s, ul, ul);
+    
+    ul = PSX_16M;
+    printf("%sPSX_16M = %#018lxul; /* %ld */\n", s, ul, ul);
+    
+    ul = PSX_16G;
+    printf("%sPSX_16G = %#018lxul; /* %ld */\n", s, ul, ul);
+    
+    ul = NUM_PSIZE;
+    printf("%sNUM_PSIZE = %#018lxul; /* %ld */\n", s, ul, ul);
+    
 #ifdef AMESIDX_F
     ul = AMESIDX_F;
     printf("%sAMESIDX_F = %#018lxul; /* %ld */\n", s, ul, ul);
