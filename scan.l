@@ -390,8 +390,8 @@ char *trim_str(char *s, char *e);
 
     write_pipe_open = 1;
     dexout = popen(s, "w");
-    yylval.ival = '"';
-    return '"';
+    yylval.ival = '}';
+    return '}';
 }
 
 <normal>";"(" "|"\t")*">".* {
