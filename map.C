@@ -2311,8 +2311,7 @@ static int init_dump(char *dumpname)
 	    if (real_mode) {
 		bos_addr_start = 0;
 		bos_addr_end = 256 * 1024 * 1024; // 256M
-		thread_max = 100;
-		// thread_max = 0x8000ul;		  // NTHREAD
+		thread_max = 0x8000ul;		  // NTHREAD
 	    } else {
 		++thread_max;
 		t_map = (char *)smalloc(thread_max);
