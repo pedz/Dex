@@ -212,7 +212,9 @@ struct name_space {
     int ns_text_size;			/* Size */
     int ns_data_start;
     int ns_data_size;
-    struct lineno *ns_lines;
+    int ns_line_size;		 	/* size of ns_lines and ns_header_file_names */
+    struct lineno *ns_lines;		/* line numbers */
+    char **ns_header_file_names;	/* use by C_BINCL and C_EINCL */
     int ns_lineoffset;
     int ns_lastdup;			/* used to make unique names */
 };

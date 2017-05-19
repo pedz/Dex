@@ -164,7 +164,7 @@ int load(char *path, long text_base, long data_base)
     ns *load_ns;
     char *name;
     int size;
-    long lnnoptr_base;
+    long lnnoptr_base = 0;
     typeptr char_type = 0;
     typeptr short_type = 0;
     typeptr int_type = 0;
@@ -240,6 +240,7 @@ int load(char *path, long text_base, long data_base)
 		    size_t size = sizeof(LINENO) * cnt;
 		    caddr_t from, to;
 
+		    load_ns->ns_line_size = cnt;
 		    load_ns->ns_lines = smalloc(size);
 		    from = m + shdr->s_lnnoptr;
 		    to = (caddr_t)load_ns->ns_lines;
@@ -487,6 +488,9 @@ int load(char *path, long text_base, long data_base)
 	int need_load = 0;
 	int end_func = -1;
 	struct syment *s;
+	struct syment *c_bincl = 0;
+	char *c_bincl_name = 0;
+	int c_bincl_name_size = 0;
 	symptr sptr, dbx_sptr;
 	symptr last_csect = 0;
 	int last_csect_index = -1;
@@ -914,24 +918,30 @@ int load(char *path, long text_base, long data_base)
 #ifdef __XCOFF64__
 		    if (load_ns->ns_lines &&
 			a1->x_fcn.x_lnnoptr) {
+			int offset = ((a1->x_fcn.x_lnnoptr - lnnoptr_base) / LINESZ);
+
 			Set_cur_block(cur_func = ns_create(cur_file, name));
 			new_symbols(cur_func);
 			cur_func->ns_text_start = text_base + s->n_value;
-			cur_func->ns_lines = load_ns->ns_lines +
-			    ((a1->x_fcn.x_lnnoptr - lnnoptr_base)
-			     / LINESZ);
+			cur_func->ns_lines = load_ns->ns_lines + offset;
+			if (load_ns->ns_header_file_names) {
+			    cur_func->ns_header_file_names = load_ns->ns_header_file_names + offset;
+			}
 			end_func = a1->x_fcn.x_endndx;
 			cur_func->ns_text_size = a1->x_fcn.x_fsize;
 		    }
 #else
 		    if (load_ns->ns_lines &&
 			a1->x_sym.x_fcnary.x_fcn.x_lnnoptr) {
+			int offset = ((a1->x_fcn.x_lnnoptr - lnnoptr_base) / LINESZ);
+
 			Set_cur_block(cur_func = ns_create(cur_file, name));
 			new_symbols(cur_func);
 			cur_func->ns_text_start = text_base + s->n_value;
-			cur_func->ns_lines = load_ns->ns_lines +
-			    ((a1->x_sym.x_fcnary.x_fcn.x_lnnoptr -
-			      lnnoptr_base) / LINESZ);
+			cur_func->ns_lines = load_ns->ns_lines + offset;
+			if (load_ns->ns_header_file_names) {
+			    cur_func->ns_header_file_names = load_ns->ns_header_file_names + offset;
+			}
 			end_func = a1->x_sym.x_fcnary.x_fcn.x_endndx;
 			cur_func->ns_text_size =
 			    a1->x_sym.x_misc.x_lnsz.x_size;
@@ -1132,8 +1142,59 @@ int load(char *path, long text_base, long data_base)
 		}
 		break;
 
-	    case C_BINCL:		/* Don't care about include files */
+	    case C_BINCL:
+		if (c_bincl) {
+		    fprintf(stderr, "Found second C_BINCL before C_EINCL\n");
+		    break;
+		}
+		if (load_ns->ns_line_size == 0) {
+		    fprintf(stderr, "C_BINCL ignored because file has no line numbers\n");
+		    break;
+		}
+		c_bincl = s;
+		c_bincl_name = name;
+		c_bincl_name_size = size;
+		break;
+
 	    case C_EINCL:
+		if (!c_bincl && load_ns->ns_line_size) {
+		    fprintf(stderr, "Found C_EINCL with no C_BINCL\n");
+		    break;
+		}
+		if ((size != c_bincl_name_size) ||
+		    ((size ? strncmp(name, c_bincl_name, size) : strcmp(name, c_bincl_name)) != 0)) {
+		    fprintf(stderr, "C_BINCL name of ");
+		    if (c_bincl_name_size)
+			fprintf(stderr, "%*.*s", c_bincl_name_size, c_bincl_name_size, c_bincl_name);
+		    else
+			fprintf(stderr, "%s", c_bincl_name);
+		    fprintf(stderr, " does not match C_EINCL name of ");
+		    if (size)
+			fprintf(stderr, "%*.*s", size, size, name);
+		    else
+			fprintf(stderr, "%s", name);
+		    fprintf(stderr, "\n");
+		    c_bincl = 0;
+		    c_bincl_name = 0;
+		    c_bincl_name_size = 0;
+		    break;
+		}
+		if (load_ns->ns_header_file_names == 0) {
+		    load_ns->ns_header_file_names = smalloc(sizeof(char *) * load_ns->ns_line_size);
+		}
+		{
+		    int start_offset = (c_bincl->n_value - lnnoptr_base) / LINESZ;
+		    int end_offset = (s->n_value -  lnnoptr_base) / LINESZ;
+		    int offset;
+
+		    name = store_string(load_ns, name, size, 0);
+		    for (offset = start_offset; offset <= end_offset; ++offset) {
+			load_ns->ns_header_file_names[offset] = name;
+		    }
+		}
+		c_bincl = 0;
+		c_bincl_name = 0;
+		c_bincl_name_size = 0;
 		break;
 
 	    default:

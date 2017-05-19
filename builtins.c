@@ -203,7 +203,16 @@ static int int_find(expr *n)
 	    for (++lines; lines->l_lnno; ++lines)
 		if (lines->l_addr.l_paddr > (ulong)qaddr)
 		    break;
-	    *lineno_p = nspace->ns_lineoffset + lines[-1].l_lnno - 1;
+	    --lines;
+	    *lineno_p = nspace->ns_lineoffset + lines->l_lnno - 1;
+	    if (nspace->ns_header_file_names && file_name_p) {
+		int offset = lines - nspace->ns_lines;
+
+		if (nspace->ns_header_file_names[offset]) {
+		    *file_name_p = nspace->ns_header_file_names[offset];
+		    *lineno_p = lines->l_lnno - 1;
+		}
+	    }
 	}
     }
     if (func_name_p)
@@ -249,7 +258,16 @@ static int int_find_name(expr *n)
 	    for (++lines; lines->l_lnno; ++lines)
 		if (lines->l_addr.l_paddr > target_addr)
 		    break;
-	    *lineno_p = nspace->ns_lineoffset + lines[-1].l_lnno - 1;
+	    --lines;
+	    *lineno_p = nspace->ns_lineoffset + lines->l_lnno - 1;
+	    if (nspace->ns_header_file_names && file_name_p) {
+		int offset = lines - nspace->ns_lines;
+
+		if (nspace->ns_header_file_names[offset]) {
+		    *file_name_p = nspace->ns_header_file_names[offset];
+		    *lineno_p = lines->l_lnno;
+		}
+	    }
 	}
     }
     return 1;
