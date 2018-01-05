@@ -502,6 +502,16 @@ p_ptr v2f(v_ptr v)
 #endif /* __64BIT__ */
 #endif /* FAST_MAP */
 
+/*
+ * Currently f2v doet not work if p points into a firmware assisted
+ * dump.  Part of the reason is init_dump calls setup_dump_entry which
+ * sets up an rmap for non-real pieces of the dump.  This part may be
+ * easy to fix... but it might cause other problems somewhere.  That
+ * would make rmap_find work.  But it would return an address in real
+ * space and then that would need to be converted to an effective
+ * address.  I don't wanna think about that right now.
+ * 
+ */
 v_ptr f2v(p_ptr p)
 {
     long l = (long)p;
@@ -1824,7 +1834,7 @@ static int setup_final(struct final_stage *s,
 		    d->de_start <= addr &&
 		    d->de_end >= (top - 1)) {
 		    first_d = d;
-		    DEBUG_PRINTF(("%s: Setting first_d to d special case\n"));
+		    DEBUG_PRINTF(("%s: Setting first_d to d special case\n", __func__));
 		    continue;
 		}
 
