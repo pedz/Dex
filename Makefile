@@ -99,7 +99,7 @@ ${MAKETOP}../../export/power_64/kernel/include/vmm/vmsslb.h :
 	mkdir -p ${MAKETOP}../../export/power_64/kernel/include/vmm
 	ln -s ${MAKETOP}../link/src/bos/kernel/vmm/vmsslb.h $@
 
-scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE -I/usr/local/include
+scan.o_CC_OPT_LEVEL = $(CC_OPT_LEVEL) -DUSE_READLINE -Ilib
 asgn_expr.o : asgn_expr.c
 
 asgn_expr.c : pre-asgn_expr.c

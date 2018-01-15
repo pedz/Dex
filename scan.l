@@ -18,6 +18,7 @@ static char sccs_id[] = "@(#)scan.l	1.9";
 #include "builtins.h"
 #if USE_READLINE
 #define READLINE_LIBRARY
+#define __GNUC__ 1
 #include "lib/history.h"
 #include "lib/readline.h"
 #endif
@@ -535,9 +536,33 @@ char *yyfilename;
 
 #if USE_READLINE
 
+static char *history_file_path = ".dex_history";
+
+static void write_history_file(void)
+{
+    if (history_file_path)
+	write_history(history_file_path);
+}
+
+static void read_history_file(void)
+{
+    char *env = getenv("DEX_HISTFILE");
+
+    if (env)
+	history_file_path = env;
+    read_history(history_file_path);
+    atexit(write_history_file);
+}
+
 static char *do_fgets(FILE *in)
 {
     static char *last;
+    static int first_time = 1;
+
+    if (first_time) {
+      first_time = 0;
+      read_history_file();
+    }
 
     for ( ; ; ) {
 	if (last)
