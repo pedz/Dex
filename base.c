@@ -2530,6 +2530,11 @@ static int print_it(int multi_1tb_ksp_segs)
     printf("%sKSP_SIDX_BASE = %#018lxul; /* %ld */\n", s, ul, ul);
 #endif
 
+#ifdef OPEN_MAX
+    ul = OPEN_MAX;
+    printf("%sOPEN_MAX = %#018lxul; /* %ld */\n", s, ul, ul);
+#endif
+
     return 0;
 }
 
